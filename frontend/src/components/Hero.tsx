@@ -31,7 +31,7 @@ const Hero: React.FC = () => {
         <div className="text-center">
           {/* Main Title */}
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
-            <span className="bg-gradient-to-r from-primary-400 via-accent-purple to-accent-teal bg-clip-text text-transparent animate-gradient">
+            <span className="bg-gradient-to-r from-primary-400 via-accent-purple to-accent-teal bg-clip-text text-transparent">
               {t('hero.title')}
             </span>
           </h1>
