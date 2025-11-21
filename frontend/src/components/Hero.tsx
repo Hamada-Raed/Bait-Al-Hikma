@@ -5,12 +5,26 @@ const Hero: React.FC = () => {
   const { t } = useLanguage();
 
   return (
-    <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-dark-50 via-dark-100 to-dark-200">
-      {/* Animated Background Elements */}
+    <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden bg-dark-50">
+      {/* Mesh Gradient Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-dark-50 via-dark-100 to-dark-200">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(14,165,233,0.15),transparent_50%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(139,92,246,0.15),transparent_50%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_20%,rgba(20,184,166,0.1),transparent_50%)]"></div>
+      </div>
+
+      {/* Grid Pattern Overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+
+      {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-primary-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-accent-purple/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-accent-teal/10 rounded-full blur-3xl"></div>
+        <div className="absolute top-20 left-10 w-96 h-96 bg-primary-500/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-10 w-[32rem] h-[32rem] bg-accent-purple/30 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[28rem] h-[28rem] bg-accent-teal/20 rounded-full blur-3xl"></div>
+        
+        {/* Geometric Shapes */}
+        <div className="absolute top-1/4 right-1/4 w-64 h-64 border border-primary-500/20 rounded-3xl rotate-45"></div>
+        <div className="absolute bottom-1/4 left-1/4 w-48 h-48 border border-accent-purple/20 rounded-full"></div>
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
