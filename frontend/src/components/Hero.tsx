@@ -1,12 +1,53 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface HeroProps {
   onSignUpClick?: () => void;
 }
 
+const API_BASE_URL = 'http://localhost:8000/api';
+
+interface HeroData {
+  title_en: string;
+  title_ar: string;
+  subtitle_en: string;
+  subtitle_ar: string;
+  description_en: string;
+  description_ar: string;
+  cta_button_text_en: string;
+  cta_button_text_ar: string;
+}
+
 const Hero: React.FC<HeroProps> = ({ onSignUpClick }) => {
-  const { t } = useLanguage();
+  const { language, platformName, t } = useLanguage();
+  const [heroData, setHeroData] = useState<HeroData | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/hero-section/current/`)
+      .then(res => res.json())
+      .then(data => setHeroData(data))
+      .catch(err => {
+        console.error('Error fetching hero data:', err);
+        // Use defaults
+        setHeroData({
+          title_en: 'Transform Your Learning Journey',
+          title_ar: 'حوّل رحلتك التعليمية',
+          subtitle_en: `${platformName} is your gateway to quality education, connecting students with expert teachers in a personalized learning environment.`,
+          subtitle_ar: `${platformName} هو بوابتك للتعليم الجيد، يربط الطلاب بالمعلمين الخبراء في بيئة تعليمية مخصصة.`,
+          description_en: 'Whether you are a school student, university student, or an educator, our platform provides the tools and resources you need to excel in your academic journey.',
+          description_ar: 'سواء كنت طالب مدرسة، طالب جامعة، أو معلم، منصتنا توفر الأدوات والموارد التي تحتاجها للتفوق في رحلتك الأكاديمية.',
+          cta_button_text_en: 'Get Started',
+          cta_button_text_ar: 'ابدأ الآن',
+        });
+      });
+  }, [platformName]);
+
+  if (!heroData) {
+    return <div className="min-h-screen"></div>; // Loading state
+  }
+
+  const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+  const replacePlatformName = (text: string) => text.replace(/{PLATFORM_NAME}/g, platformName);
 
   return (
     <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden bg-dark-50">
@@ -36,18 +77,18 @@ const Hero: React.FC<HeroProps> = ({ onSignUpClick }) => {
           {/* Main Title */}
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
             <span className="bg-gradient-to-r from-primary-400 via-accent-purple to-accent-teal bg-clip-text text-transparent">
-              {t('hero.title')}
+              {getText(heroData.title_en, heroData.title_ar)}
             </span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-xl md:text-2xl text-gray-300 mb-4 max-w-3xl mx-auto leading-relaxed">
-            {t('hero.subtitle')}
+            {replacePlatformName(getText(heroData.subtitle_en, heroData.subtitle_ar))}
           </p>
 
           {/* Description */}
           <p className="text-lg text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            {t('hero.description')}
+            {getText(heroData.description_en, heroData.description_ar)}
           </p>
 
           {/* CTA Buttons */}
@@ -56,7 +97,7 @@ const Hero: React.FC<HeroProps> = ({ onSignUpClick }) => {
               onClick={onSignUpClick}
               className="px-8 py-4 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 transform hover:scale-105 text-lg"
             >
-              {t('hero.cta')}
+              {getText(heroData.cta_button_text_en, heroData.cta_button_text_ar)}
             </button>
             <button 
               className="px-8 py-4 border-2 border-primary-500 text-primary-400 font-semibold rounded-xl hover:bg-primary-500/10 transition-all duration-300 text-lg"

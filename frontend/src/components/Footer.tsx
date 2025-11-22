@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const Footer: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, platformName } = useLanguage();
 
   return (
     <footer className="bg-dark-100 border-t border-dark-300">
@@ -27,7 +27,7 @@ const Footer: React.FC = () => {
                 </svg>
               </div>
               <h3 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-purple bg-clip-text text-transparent">
-                {t('platform.name')}
+                {platformName}
               </h3>
             </div>
             <p className="text-gray-400 mb-4 max-w-md">
@@ -98,7 +98,7 @@ const Footer: React.FC = () => {
         {/* Copyright */}
         <div className="mt-8 pt-8 border-t border-dark-300 text-center">
           <p className="text-gray-400">
-            © {new Date().getFullYear()} {t('platform.name')}. {t('footer.rights')}
+            © {new Date().getFullYear()} {platformName}. {t('footer.rights')}
           </p>
         </div>
       </div>

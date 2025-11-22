@@ -72,11 +72,11 @@ class User(AbstractUser):
         ('teacher', 'Teacher'),
     ]
     
-    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES)
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
+    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, null=True, blank=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
     email = models.EmailField(unique=True)
-    birth_date = models.DateField()
+    birth_date = models.DateField(null=True, blank=True)
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True)
     
     # School Student fields
@@ -109,7 +109,7 @@ class User(AbstractUser):
     )
     
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+    REQUIRED_FIELDS = ['username']
     
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
@@ -124,3 +124,144 @@ class TeacherSubject(models.Model):
     
     def __str__(self):
         return f"{self.teacher.email} - {self.subject.name_en}"
+
+
+class PlatformSettings(models.Model):
+    name_en = models.CharField(max_length=100, default='Bait Al-Hikma')
+    name_ar = models.CharField(max_length=100, default='بيت الحكمة')
+    logo_url = models.URLField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Platform Settings'
+        verbose_name_plural = 'Platform Settings'
+    
+    def __str__(self):
+        return self.name_en
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one instance exists
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1, defaults={
+            'name_en': 'Bait Al-Hikma',
+            'name_ar': 'بيت الحكمة'
+        })
+        return obj
+
+
+class HeroSection(models.Model):
+    title_en = models.CharField(max_length=200, default='Transform Your Learning Journey')
+    title_ar = models.CharField(max_length=200, default='حوّل رحلتك التعليمية')
+    subtitle_en = models.TextField(default='{PLATFORM_NAME} is your gateway to quality education, connecting students with expert teachers in a personalized learning environment.')
+    subtitle_ar = models.TextField(default='{PLATFORM_NAME} هو بوابتك للتعليم الجيد، يربط الطلاب بالمعلمين الخبراء في بيئة تعليمية مخصصة.')
+    description_en = models.TextField(default='Whether you are a school student, university student, or an educator, our platform provides the tools and resources you need to excel in your academic journey.')
+    description_ar = models.TextField(default='سواء كنت طالب مدرسة، طالب جامعة، أو معلم، منصتنا توفر الأدوات والموارد التي تحتاجها للتفوق في رحلتك الأكاديمية.')
+    cta_button_text_en = models.CharField(max_length=50, default='Get Started')
+    cta_button_text_ar = models.CharField(max_length=50, default='ابدأ الآن')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Hero Section'
+        verbose_name_plural = 'Hero Section'
+    
+    def __str__(self):
+        return 'Hero Section'
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class Feature(models.Model):
+    title_en = models.CharField(max_length=200)
+    title_ar = models.CharField(max_length=200)
+    description_en = models.TextField()
+    description_ar = models.TextField()
+    icon_code = models.CharField(max_length=50, help_text='Icon identifier (e.g., feature1, feature2)')
+    gradient = models.CharField(max_length=50, default='from-primary-500 to-primary-600', help_text='Tailwind gradient classes')
+    order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = 'Feature'
+        verbose_name_plural = 'Features'
+    
+    def __str__(self):
+        return self.title_en
+
+
+class FeaturesSection(models.Model):
+    title_en = models.CharField(max_length=200, default='Features We Provide')
+    title_ar = models.CharField(max_length=200, default='المميزات التي نقدمها')
+    subtitle_en = models.TextField(default='Everything you need for a complete learning experience')
+    subtitle_ar = models.TextField(default='كل ما تحتاجه لتجربة تعليمية كاملة')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Features Section'
+        verbose_name_plural = 'Features Section'
+    
+    def __str__(self):
+        return 'Features Section'
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class WhyChooseUsReason(models.Model):
+    title_en = models.CharField(max_length=200)
+    title_ar = models.CharField(max_length=200)
+    description_en = models.TextField()
+    description_ar = models.TextField()
+    icon_code = models.CharField(max_length=50, help_text='Icon identifier')
+    gradient = models.CharField(max_length=50, default='from-primary-500 to-primary-600')
+    order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = 'Why Choose Us Reason'
+        verbose_name_plural = 'Why Choose Us Reasons'
+    
+    def __str__(self):
+        return self.title_en
+
+
+class WhyChooseUsSection(models.Model):
+    title_en = models.CharField(max_length=200, default='Why Choose Us')
+    title_ar = models.CharField(max_length=200, default='لماذا تختارنا')
+    subtitle_en = models.TextField(default='Join thousands of students and teachers who trust {PLATFORM_NAME}')
+    subtitle_ar = models.TextField(default='انضم إلى آلاف الطلاب والمعلمين الذين يثقون بـ {PLATFORM_NAME}')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Why Choose Us Section'
+        verbose_name_plural = 'Why Choose Us Section'
+    
+    def __str__(self):
+        return 'Why Choose Us Section'
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj

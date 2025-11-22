@@ -7,20 +7,22 @@ interface LanguageContextType {
   setLanguage: (lang: Language) => void;
   t: (key: string) => string;
   isRTL: boolean;
+  platformName: string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const API_BASE_URL = 'http://localhost:8000/api';
+
 const translations: Record<Language, Record<string, string>> = {
   en: {
-    'platform.name': 'DAR-AL-ILL',
     'nav.courses': 'Courses',
     'nav.teachers': 'Teachers',
     'nav.about': 'About Us',
     'auth.login': 'Log In',
     'auth.signup': 'Sign Up',
     'hero.title': 'Transform Your Learning Journey',
-    'hero.subtitle': 'DAR-AL-ILL is your gateway to quality education, connecting students with expert teachers in a personalized learning environment.',
+    'hero.subtitle': '{PLATFORM_NAME} is your gateway to quality education, connecting students with expert teachers in a personalized learning environment.',
     'hero.description': 'Whether you are a school student, university student, or an educator, our platform provides the tools and resources you need to excel in your academic journey.',
     'hero.cta': 'Get Started',
     'features.title': 'Features We Provide',
@@ -38,7 +40,7 @@ const translations: Record<Language, Record<string, string>> = {
     'feature6.title': 'Community Support',
     'feature6.desc': 'Connect with fellow students and teachers in a supportive learning community.',
     'why.title': 'Why Choose Us',
-    'why.subtitle': 'Join thousands of students and teachers who trust DAR-AL-ILL',
+    'why.subtitle': 'Join thousands of students and teachers who trust {PLATFORM_NAME}',
     'why1.title': 'Quality Education',
     'why1.desc': 'We ensure all courses meet high educational standards and are taught by qualified instructors.',
     'why2.title': 'Diverse Learning Paths',
@@ -47,7 +49,7 @@ const translations: Record<Language, Record<string, string>> = {
     'why3.desc': 'Our platform is designed with students in mind, focusing on their success and learning outcomes.',
     'why4.title': 'Teacher Empowerment',
     'why4.desc': 'We provide teachers with the tools and platform to share their knowledge and make an impact.',
-    'footer.description': 'DAR-AL-ILL - Your gateway to quality education and academic excellence.',
+    'footer.description': '{PLATFORM_NAME} - Your gateway to quality education and academic excellence.',
     'footer.quickLinks': 'Quick Links',
     'footer.contact': 'Contact Us',
     'footer.follow': 'Follow Us',
@@ -82,14 +84,13 @@ const translations: Record<Language, Record<string, string>> = {
     'signup.passwordMismatch': 'Passwords do not match',
   },
   ar: {
-    'platform.name': 'دار العلم',
     'nav.courses': 'الدورات',
     'nav.teachers': 'المعلمون',
     'nav.about': 'من نحن',
     'auth.login': 'تسجيل الدخول',
     'auth.signup': 'إنشاء حساب',
     'hero.title': 'حوّل رحلتك التعليمية',
-    'hero.subtitle': 'دار العلم هو بوابتك للتعليم الجيد، يربط الطلاب بالمعلمين الخبراء في بيئة تعليمية مخصصة.',
+    'hero.subtitle': '{PLATFORM_NAME} هو بوابتك للتعليم الجيد، يربط الطلاب بالمعلمين الخبراء في بيئة تعليمية مخصصة.',
     'hero.description': 'سواء كنت طالب مدرسة، طالب جامعة، أو معلم، منصتنا توفر الأدوات والموارد التي تحتاجها للتفوق في رحلتك الأكاديمية.',
     'hero.cta': 'ابدأ الآن',
     'features.title': 'المميزات التي نقدمها',
@@ -107,7 +108,7 @@ const translations: Record<Language, Record<string, string>> = {
     'feature6.title': 'دعم المجتمع',
     'feature6.desc': 'تواصل مع زملائك الطلاب والمعلمين في مجتمع تعليمي داعم.',
     'why.title': 'لماذا تختارنا',
-    'why.subtitle': 'انضم إلى آلاف الطلاب والمعلمين الذين يثقون بدار العلم',
+    'why.subtitle': 'انضم إلى آلاف الطلاب والمعلمين الذين يثقون بـ {PLATFORM_NAME}',
     'why1.title': 'تعليم عالي الجودة',
     'why1.desc': 'نضمن أن جميع الدورات تلبي معايير تعليمية عالية ويتم تدريسها من قبل معلمين مؤهلين.',
     'why2.title': 'مسارات تعليمية متنوعة',
@@ -116,7 +117,7 @@ const translations: Record<Language, Record<string, string>> = {
     'why3.desc': 'تم تصميم منصتنا مع التركيز على الطلاب، مع التركيز على نجاحهم ونتائج تعلمهم.',
     'why4.title': 'تمكين المعلمين',
     'why4.desc': 'نوفر للمعلمين الأدوات والمنصة لمشاركة معرفتهم وإحداث تأثير.',
-    'footer.description': 'دار العلم - بوابتك للتعليم الجيد والتميز الأكاديمي.',
+    'footer.description': '{PLATFORM_NAME} - بوابتك للتعليم الجيد والتميز الأكاديمي.',
     'footer.quickLinks': 'روابط سريعة',
     'footer.contact': 'اتصل بنا',
     'footer.follow': 'تابعنا',
@@ -157,6 +158,25 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const saved = localStorage.getItem('language') as Language;
     return saved || 'en';
   });
+  
+  const [platformName, setPlatformName] = useState<string>('Bait Al-Hikma');
+  const [platformNameAr, setPlatformNameAr] = useState<string>('بيت الحكمة');
+
+  useEffect(() => {
+    // Fetch platform name from API
+    fetch(`${API_BASE_URL}/platform-settings/current/`)
+      .then(res => res.json())
+      .then(data => {
+        setPlatformName(data.name_en || 'Bait Al-Hikma');
+        setPlatformNameAr(data.name_ar || 'بيت الحكمة');
+      })
+      .catch(err => {
+        console.error('Error fetching platform name:', err);
+        // Use defaults on error
+        setPlatformName('Bait Al-Hikma');
+        setPlatformNameAr('بيت الحكمة');
+      });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('language', language);
@@ -168,14 +188,19 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLanguageState(lang);
   };
 
+  const currentPlatformName = language === 'ar' ? platformNameAr : platformName;
+
   const t = (key: string): string => {
-    return translations[language][key] || key;
+    let text = translations[language][key] || key;
+    // Replace platform name placeholder
+    text = text.replace(/{PLATFORM_NAME}/g, currentPlatformName);
+    return text;
   };
 
   const isRTL = language === 'ar';
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, isRTL }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, isRTL, platformName: currentPlatformName }}>
       {children}
     </LanguageContext.Provider>
   );

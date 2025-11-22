@@ -1,55 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getIcon } from '../utils/iconHelper';
+
+const API_BASE_URL = 'http://localhost:8000/api';
+
+interface WhyChooseUsReason {
+  id: number;
+  title_en: string;
+  title_ar: string;
+  description_en: string;
+  description_ar: string;
+  icon_code: string;
+  gradient: string;
+}
+
+interface WhyChooseUsSectionData {
+  title_en: string;
+  title_ar: string;
+  subtitle_en: string;
+  subtitle_ar: string;
+  reasons: WhyChooseUsReason[];
+}
 
 interface WhyChooseUsProps {
   onSignUpClick?: () => void;
 }
 
 const WhyChooseUs: React.FC<WhyChooseUsProps> = ({ onSignUpClick }) => {
-  const { t } = useLanguage();
+  const { language, platformName } = useLanguage();
+  const [sectionData, setSectionData] = useState<WhyChooseUsSectionData | null>(null);
 
-  const reasons = [
-    {
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      title: t('why1.title'),
-      description: t('why1.desc'),
-      gradient: 'from-primary-500 to-primary-600',
-    },
-    {
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      ),
-      title: t('why2.title'),
-      description: t('why2.desc'),
-      gradient: 'from-accent-purple to-purple-600',
-    },
-    {
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ),
-      title: t('why3.title'),
-      description: t('why3.desc'),
-      gradient: 'from-accent-teal to-teal-600',
-    },
-    {
-      icon: (
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      ),
-      title: t('why4.title'),
-      description: t('why4.desc'),
-      gradient: 'from-primary-500 to-accent-purple',
-    },
-  ];
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/why-choose-us-section/current/`)
+      .then(res => res.json())
+      .then(data => setSectionData(data))
+      .catch(err => {
+        console.error('Error fetching why choose us data:', err);
+      });
+  }, []);
+
+  if (!sectionData) {
+    return <div className="py-20 bg-gradient-to-br from-dark-50 to-dark-100"></div>; // Loading state
+  }
+
+  const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+  const replacePlatformName = (text: string) => text.replace(/{PLATFORM_NAME}/g, platformName);
+
+  const reasons = sectionData.reasons || [];
 
   return (
     <section id="why" className="py-20 bg-gradient-to-br from-dark-50 to-dark-100 relative overflow-hidden">
@@ -64,11 +61,11 @@ const WhyChooseUs: React.FC<WhyChooseUsProps> = ({ onSignUpClick }) => {
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             <span className="bg-gradient-to-r from-primary-400 to-accent-purple bg-clip-text text-transparent">
-              {t('why.title')}
+              {getText(sectionData.title_en, sectionData.title_ar)}
             </span>
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            {t('why.subtitle')}
+            {replacePlatformName(getText(sectionData.subtitle_en, sectionData.subtitle_ar))}
           </p>
         </div>
 
@@ -81,15 +78,15 @@ const WhyChooseUs: React.FC<WhyChooseUsProps> = ({ onSignUpClick }) => {
             >
               {/* Icon */}
               <div className={`w-16 h-16 bg-gradient-to-br ${reason.gradient} rounded-xl flex items-center justify-center mb-6 text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                {reason.icon}
+                {getIcon(reason.icon_code)}
               </div>
 
               {/* Content */}
               <h3 className="text-2xl font-semibold text-white mb-4 group-hover:text-primary-400 transition-colors">
-                {reason.title}
+                {getText(reason.title_en, reason.title_ar)}
               </h3>
               <p className="text-gray-400 leading-relaxed text-lg">
-                {reason.description}
+                {getText(reason.description_en, reason.description_ar)}
               </p>
 
               {/* Decorative Line */}
@@ -103,7 +100,7 @@ const WhyChooseUs: React.FC<WhyChooseUsProps> = ({ onSignUpClick }) => {
           <button 
             onClick={onSignUpClick}
             className="px-10 py-4 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 transform hover:scale-105 text-lg">
-            {t('auth.signup')}
+            {language === 'ar' ? 'إنشاء حساب' : 'Sign Up'}
           </button>
         </div>
       </div>

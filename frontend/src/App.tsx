@@ -1,34 +1,83 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Features from './components/Features';
 import WhyChooseUs from './components/WhyChooseUs';
 import Footer from './components/Footer';
 import SignUp from './components/SignUp';
+import Login from './components/Login';
+import Dashboard from './components/Dashboard';
 import './App.css';
 
-const App: React.FC = () => {
+const HomePage: React.FC = () => {
   const [showSignUp, setShowSignUp] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   return (
-    <LanguageProvider>
-      <div className="min-h-screen bg-dark-50 text-gray-100">
-        {showSignUp ? (
-          <SignUp onBack={() => setShowSignUp(false)} />
-        ) : (
-          <>
-            <Header onSignUpClick={() => setShowSignUp(true)} />
-            <main>
-              <Hero onSignUpClick={() => setShowSignUp(true)} />
-              <Features />
-              <WhyChooseUs onSignUpClick={() => setShowSignUp(true)} />
-            </main>
-            <Footer />
-          </>
-        )}
+    <div className="min-h-screen bg-dark-50 text-gray-100">
+      {showSignUp ? (
+        <SignUp onBack={() => setShowSignUp(false)} />
+      ) : showLogin ? (
+        <Login onBack={() => setShowLogin(false)} />
+      ) : (
+        <>
+          <Header 
+            onSignUpClick={() => setShowSignUp(true)} 
+            onLoginClick={() => setShowLogin(true)}
+          />
+          <main>
+            <Hero onSignUpClick={() => setShowSignUp(true)} />
+            <Features />
+            <WhyChooseUs onSignUpClick={() => setShowSignUp(true)} />
+          </main>
+          <Footer />
+        </>
+      )}
+    </div>
+  );
+};
+
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-dark-50 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
       </div>
-    </LanguageProvider>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const App: React.FC = () => {
+  return (
+    <Router>
+      <LanguageProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthProvider>
+      </LanguageProvider>
+    </Router>
   );
 };
 

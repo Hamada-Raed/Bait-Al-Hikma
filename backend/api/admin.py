@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Country, Grade, Track, Major, Subject, User, TeacherSubject
+from .models import (
+    Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection
+)
 
 
 @admin.register(Country)
@@ -45,3 +48,64 @@ class UserAdmin(admin.ModelAdmin):
 class TeacherSubjectAdmin(admin.ModelAdmin):
     list_display = ['teacher', 'subject']
     list_filter = ['subject']
+
+
+@admin.register(PlatformSettings)
+class PlatformSettingsAdmin(admin.ModelAdmin):
+    list_display = ['name_en', 'name_ar', 'updated_at']
+    
+    def has_add_permission(self, request):
+        # Only allow one instance
+        return not PlatformSettings.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(HeroSection)
+class HeroSectionAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'updated_at']
+    
+    def has_add_permission(self, request):
+        return not HeroSection.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Feature)
+class FeatureAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'order', 'is_active']
+    list_editable = ['order', 'is_active']
+    list_filter = ['is_active']
+    ordering = ['order', 'id']
+
+
+@admin.register(FeaturesSection)
+class FeaturesSectionAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'updated_at']
+    
+    def has_add_permission(self, request):
+        return not FeaturesSection.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(WhyChooseUsReason)
+class WhyChooseUsReasonAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'order', 'is_active']
+    list_editable = ['order', 'is_active']
+    list_filter = ['is_active']
+    ordering = ['order', 'id']
+
+
+@admin.register(WhyChooseUsSection)
+class WhyChooseUsSectionAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'updated_at']
+    
+    def has_add_permission(self, request):
+        return not WhyChooseUsSection.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False

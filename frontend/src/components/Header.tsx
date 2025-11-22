@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
   onSignUpClick?: () => void;
+  onLoginClick?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onSignUpClick }) => {
-  const { language, setLanguage, t, isRTL } = useLanguage();
+const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
+  const { language, setLanguage, t, isRTL, platformName } = useLanguage();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  const handleDashboardClick = () => {
+    navigate('/dashboard');
+  };
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'ar' : 'en');
@@ -44,7 +58,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick }) => {
               </div>
             </div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-purple bg-clip-text text-transparent">
-              {t('platform.name')}
+              {platformName}
             </h1>
           </a>
 
@@ -95,17 +109,37 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick }) => {
             </button>
 
             {/* Auth Buttons - Desktop */}
-            <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
-              <button className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200">
-                {t('auth.login')}
-              </button>
-              <button 
-                onClick={onSignUpClick}
-                className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                {t('auth.signup')}
-              </button>
-            </div>
+            {user ? (
+              <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
+                <button
+                  onClick={handleDashboardClick}
+                  className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200"
+                >
+                  {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
+                >
+                  {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
+                </button>
+              </div>
+            ) : (
+              <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
+                <button
+                  onClick={onLoginClick}
+                  className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200"
+                >
+                  {t('auth.login')}
+                </button>
+                <button 
+                  onClick={onSignUpClick}
+                  className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  {t('auth.signup')}
+                </button>
+              </div>
+            )}
 
             {/* Mobile Menu Button */}
             <button
@@ -165,15 +199,37 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick }) => {
                 {t('nav.about')}
               </a>
               <div className="pt-4 border-t border-dark-300 flex flex-col space-y-3">
-                <button className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right">
-                  {t('auth.login')}
-                </button>
-                <button 
-                  onClick={onSignUpClick}
-                  className="w-full px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200"
-                >
-                  {t('auth.signup')}
-                </button>
+                {user ? (
+                  <>
+                    <button
+                      onClick={handleDashboardClick}
+                      className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right"
+                    >
+                      {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
+                    >
+                      {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={onLoginClick}
+                      className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right"
+                    >
+                      {t('auth.login')}
+                    </button>
+                    <button 
+                      onClick={onSignUpClick}
+                      className="w-full px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200"
+                    >
+                      {t('auth.signup')}
+                    </button>
+                  </>
+                )}
               </div>
             </nav>
           </div>
