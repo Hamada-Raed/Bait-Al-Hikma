@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  onSignUpClick?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onSignUpClick }) => {
   const { language, setLanguage, t, isRTL } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -95,7 +99,10 @@ const Header: React.FC = () => {
               <button className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200">
                 {t('auth.login')}
               </button>
-              <button className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105">
+              <button 
+                onClick={onSignUpClick}
+                className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
                 {t('auth.signup')}
               </button>
             </div>
@@ -161,7 +168,10 @@ const Header: React.FC = () => {
                 <button className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right">
                   {t('auth.login')}
                 </button>
-                <button className="w-full px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200">
+                <button 
+                  onClick={onSignUpClick}
+                  className="w-full px-4 py-2.5 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-medium rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200"
+                >
                   {t('auth.signup')}
                 </button>
               </div>

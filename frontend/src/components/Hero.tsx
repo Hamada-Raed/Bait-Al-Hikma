@@ -1,7 +1,11 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
-const Hero: React.FC = () => {
+interface HeroProps {
+  onSignUpClick?: () => void;
+}
+
+const Hero: React.FC<HeroProps> = ({ onSignUpClick }) => {
   const { t } = useLanguage();
 
   return (
@@ -48,10 +52,15 @@ const Hero: React.FC = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button className="px-8 py-4 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 transform hover:scale-105 text-lg">
+            <button 
+              onClick={onSignUpClick}
+              className="px-8 py-4 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 transform hover:scale-105 text-lg"
+            >
               {t('hero.cta')}
             </button>
-            <button className="px-8 py-4 border-2 border-primary-500 text-primary-400 font-semibold rounded-xl hover:bg-primary-500/10 transition-all duration-300 text-lg">
+            <button 
+              className="px-8 py-4 border-2 border-primary-500 text-primary-400 font-semibold rounded-xl hover:bg-primary-500/10 transition-all duration-300 text-lg"
+            >
               {t('nav.courses')}
             </button>
           </div>

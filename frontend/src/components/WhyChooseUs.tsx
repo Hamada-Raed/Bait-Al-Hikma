@@ -1,7 +1,11 @@
 import React from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
-const WhyChooseUs: React.FC = () => {
+interface WhyChooseUsProps {
+  onSignUpClick?: () => void;
+}
+
+const WhyChooseUs: React.FC<WhyChooseUsProps> = ({ onSignUpClick }) => {
   const { t } = useLanguage();
 
   const reasons = [
@@ -96,7 +100,9 @@ const WhyChooseUs: React.FC = () => {
 
         {/* Call to Action */}
         <div className="mt-16 text-center">
-          <button className="px-10 py-4 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 transform hover:scale-105 text-lg">
+          <button 
+            onClick={onSignUpClick}
+            className="px-10 py-4 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-300 shadow-2xl hover:shadow-primary-500/50 transform hover:scale-105 text-lg">
             {t('auth.signup')}
           </button>
         </div>
