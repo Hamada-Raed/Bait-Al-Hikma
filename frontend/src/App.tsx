@@ -40,6 +40,14 @@ const HomePage: React.FC = () => {
   );
 };
 
+const LoginPage: React.FC = () => {
+  return <Login />;
+};
+
+const SignUpPage: React.FC = () => {
+  return <SignUp />;
+};
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -65,6 +73,8 @@ const App: React.FC = () => {
         <AuthProvider>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignUpPage />} />
             <Route
               path="/dashboard"
               element={

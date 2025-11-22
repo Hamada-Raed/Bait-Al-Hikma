@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNavigate } from 'react-router-dom';
 
 interface SignUpProps {
   onBack?: () => void;
@@ -45,6 +46,7 @@ const API_BASE_URL = 'http://localhost:8000/api';
 
 const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [userType, setUserType] = useState<'school_student' | 'university_student' | 'teacher' | null>(null);
   
@@ -240,6 +242,20 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
   };
 
+  const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+
+  const handleGoToLogin = () => {
+    if (onBack) {
+      onBack();
+      // Small delay to ensure state updates
+      setTimeout(() => {
+        navigate('/login');
+      }, 100);
+    } else {
+      navigate('/login');
+    }
+  };
+
   if (success) {
     return (
       <div className="min-h-screen bg-dark-50 flex items-center justify-center px-4">
@@ -250,8 +266,26 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">{t('signup.success')}</h2>
-          {userType === 'teacher' && (
-            <p className="text-gray-400">{t('signup.teacherPending')}</p>
+          {userType === 'teacher' ? (
+            <p className="text-gray-400 mb-6">{t('signup.teacherPending')}</p>
+          ) : (
+            <p className="text-gray-400 mb-6">
+              {getText('You can now log in to your account.', 'يمكنك الآن تسجيل الدخول إلى حسابك.')}
+            </p>
+          )}
+          <button
+            onClick={handleGoToLogin}
+            className="w-full py-3 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+          >
+            {getText('Log In', 'تسجيل الدخول')}
+          </button>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="mt-4 text-gray-400 hover:text-white transition-colors"
+            >
+              {getText('Back to Home', 'العودة إلى الصفحة الرئيسية')}
+            </button>
           )}
         </div>
       </div>
@@ -570,6 +604,19 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
               </div>
             )}
           </form>
+
+          {/* Login Link */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-400">
+              {getText('Already have an account? ', 'لديك حساب بالفعل؟ ')}
+              <button
+                onClick={handleGoToLogin}
+                className="text-primary-400 hover:text-primary-300 font-medium transition-colors"
+              >
+                {getText('Log In', 'تسجيل الدخول')}
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     </div>
