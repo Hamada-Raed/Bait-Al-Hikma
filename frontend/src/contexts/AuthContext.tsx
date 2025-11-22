@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { ensureCsrfToken } from '../utils/csrf';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -34,6 +35,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,12 +65,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const login = async (email: string, password: string) => {
+    // Get CSRF token before making POST request
+    const csrfToken = await ensureCsrfToken();
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
+
     const response = await fetch(`${API_BASE_URL}/users/login/`, {
       method: 'POST',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ email, password }),
     });
 
@@ -85,12 +96,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
+      const csrfToken = await ensureCsrfToken();
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
       await fetch(`${API_BASE_URL}/users/logout/`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
       });
     } catch (error) {
       console.error('Error logging out:', error);
@@ -100,7 +119,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    checkAuth();
+    // Fetch CSRF token on mount to ensure it's available
+    const initialize = async () => {
+      // First, ensure CSRF token is available
+      await ensureCsrfToken();
+      // Then check auth
+      await checkAuth();
+    };
+    initialize();
   }, []);
 
   return (

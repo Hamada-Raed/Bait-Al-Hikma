@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
+import { ensureCsrfToken } from '../utils/csrf';
 
 interface SignUpProps {
   onBack?: () => void;
@@ -211,11 +212,20 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     }
 
     try {
+      // Get CSRF token before making POST request
+      const csrfToken = await ensureCsrfToken();
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
       const response = await fetch(`${API_BASE_URL}/users/signup/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(submitData),
       });
 

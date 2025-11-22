@@ -1,9 +1,12 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
 from django.contrib.auth import login as django_login
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection
@@ -62,6 +65,15 @@ class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    
+    @action(detail=False, methods=['get'])
+    def csrf_token(self, request):
+        """Get CSRF token for the current session"""
+        token = get_token(request)
+        response = Response({'csrfToken': token})
+        # Ensure CSRF cookie is set
+        response.set_cookie('csrftoken', token, httponly=False, samesite='Lax')
+        return response
     
     @action(detail=False, methods=['post'])
     def signup(self, request):
