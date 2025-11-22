@@ -17,6 +17,8 @@ interface User {
   birth_date?: string;
   country?: number;
   years_of_experience?: number;
+  is_staff?: boolean;
+  is_superuser?: boolean;
 }
 
 interface AuthContextType {

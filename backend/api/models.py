@@ -168,6 +168,38 @@ class Course(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.teacher.email}"
+
+
+class CourseApprovalRequest(models.Model):
+    REQUEST_TYPE_CHOICES = [
+        ('publish', 'Publish'),
+        ('unpublish', 'Unpublish'),
+        ('delete', 'Delete'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='approval_requests')
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reason = models.TextField(blank=True, null=True, help_text='Reason provided by teacher')
+    admin_note = models.TextField(blank=True, null=True, help_text='Admin note/reason for decision')
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_approval_requests')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_approval_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Course Approval Request'
+        verbose_name_plural = 'Course Approval Requests'
+    
+    def __str__(self):
+        return f"{self.get_request_type_display()} request for {self.course.name} - {self.get_status_display()}"
     
 
 

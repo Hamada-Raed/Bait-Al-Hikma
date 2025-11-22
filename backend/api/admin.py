@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest
 )
 
 
@@ -109,3 +109,23 @@ class WhyChooseUsSectionAdmin(admin.ModelAdmin):
     
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ['name', 'teacher', 'status', 'course_type', 'created_at']
+    list_filter = ['status', 'course_type', 'created_at']
+    search_fields = ['name', 'teacher__email', 'teacher__first_name', 'teacher__last_name']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(CourseApprovalRequest)
+class CourseApprovalRequestAdmin(admin.ModelAdmin):
+    list_display = ['course', 'request_type', 'status', 'requested_by', 'created_at', 'reviewed_by', 'reviewed_at']
+    list_filter = ['status', 'request_type', 'created_at']
+    search_fields = ['course__name', 'requested_by__email']
+    readonly_fields = ['created_at', 'reviewed_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('course', 'requested_by', 'reviewed_by')

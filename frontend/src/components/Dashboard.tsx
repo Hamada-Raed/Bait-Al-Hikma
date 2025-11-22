@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import StudentDashboard from './StudentDashboard';
 import TeacherDashboard from './TeacherDashboard';
+import AdminDashboard from './AdminDashboard';
 
 const Dashboard: React.FC = () => {
   const { user, loading, logout } = useAuth();
@@ -106,8 +107,10 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Dashboard Content */}
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${user.user_type === 'teacher' ? '' : 'py-8'}`}>
-        {user.user_type === 'school_student' || user.user_type === 'university_student' ? (
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${user.user_type === 'teacher' || user.is_staff ? '' : 'py-8'}`}>
+        {user.is_staff || user.is_superuser ? (
+          <AdminDashboard />
+        ) : user.user_type === 'school_student' || user.user_type === 'university_student' ? (
           <StudentDashboard user={user} />
         ) : user.user_type === 'teacher' ? (
           <TeacherDashboard user={user} />

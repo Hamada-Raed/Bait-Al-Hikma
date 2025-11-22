@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from './Header';
 import { ensureCsrfToken } from '../utils/csrf';
 
@@ -39,7 +39,11 @@ const CreateCourse: React.FC = () => {
   const { user } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const courseId = searchParams.get('id');
+  const isEditMode = !!courseId;
   
   const [countries, setCountries] = useState<Country[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -77,22 +81,43 @@ const CreateCourse: React.FC = () => {
 
     const fetchData = async () => {
       try {
-        const [countriesRes, subjectsRes, gradesRes, tracksRes] = await Promise.all([
+        // Fetch all required data including teacher's profile to get their subjects
+        const [countriesRes, allSubjectsRes, gradesRes, tracksRes, teacherRes] = await Promise.all([
           fetch(`${API_BASE_URL}/countries/`),
           fetch(`${API_BASE_URL}/subjects/`),
           fetch(`${API_BASE_URL}/grades/`),
           fetch(`${API_BASE_URL}/tracks/`),
+          fetch(`${API_BASE_URL}/users/me/`, {
+            credentials: 'include',
+          }),
         ]);
 
         const countriesData = await countriesRes.json();
-        const subjectsData = await subjectsRes.json();
+        const allSubjectsData = await allSubjectsRes.json();
         const gradesData = await gradesRes.json();
         const tracksData = await tracksRes.json();
+        const teacherData = await teacherRes.json();
 
         setCountries(countriesData.results || countriesData);
-        setSubjects(subjectsData.results || subjectsData);
         setAllGrades(gradesData.results || gradesData);
         setTracks(tracksData.results || tracksData);
+
+        // Filter subjects to only show teacher's selected subjects
+        const allSubjects = allSubjectsData.results || allSubjectsData;
+        
+        if (teacherData && teacherData.subjects && Array.isArray(teacherData.subjects)) {
+          const teacherSubjectIds = teacherData.subjects; // Array of subject IDs
+          
+          // Filter to only include subjects the teacher has selected
+          const teacherSubjects = allSubjects.filter((subject: Subject) => 
+            teacherSubjectIds.includes(subject.id)
+          );
+          
+          setSubjects(teacherSubjects);
+        } else {
+          // Fallback: if no subjects found, show empty array
+          setSubjects([]);
+        }
       } catch (err) {
         console.error('Error fetching data:', err);
       } finally {
@@ -102,6 +127,81 @@ const CreateCourse: React.FC = () => {
 
     fetchData();
   }, [user, navigate]);
+
+  // Fetch course data when in edit mode
+  useEffect(() => {
+    if (isEditMode && courseId) {
+      const fetchCourse = async () => {
+        try {
+          setLoading(true);
+          const response = await fetch(`${API_BASE_URL}/courses/${courseId}/`, {
+            credentials: 'include',
+          });
+          
+          if (response.ok) {
+            const course = await response.json();
+            
+            // Set form data with course data
+            setFormData({
+              name: course.name || '',
+              description: course.description || '',
+              language: course.language || 'ar',
+              price: course.price?.toString() || '0',
+              course_type: course.course_type || 'school',
+              country: course.country?.toString() || '',
+              subject: course.subject?.toString() || '',
+              grade: course.grade?.toString() || '',
+              track: course.track?.toString() || '',
+            });
+
+            // Set preview image if exists
+            if (course.image_url) {
+              setPreviewImage(course.image_url);
+            }
+
+            // Ensure the current course's subject is available in the subjects list
+            // even if teacher removed it from their profile
+            if (course.subject) {
+              const currentSubjectId = parseInt(course.subject.toString());
+              // Fetch all subjects to find the current one
+              try {
+                const allSubjectsRes = await fetch(`${API_BASE_URL}/subjects/`);
+                const allSubjectsData = await allSubjectsRes.json();
+                const allSubjects = allSubjectsData.results || allSubjectsData;
+                const currentSubject = allSubjects.find((s: Subject) => s.id === currentSubjectId);
+                
+                if (currentSubject) {
+                  // Check if it's already in the subjects list
+                  setSubjects(prev => {
+                    const exists = prev.some(s => s.id === currentSubjectId);
+                    if (!exists) {
+                      return [...prev, currentSubject];
+                    }
+                    return prev;
+                  });
+                }
+              } catch (err) {
+                console.error('Error fetching subject details:', err);
+              }
+            }
+          } else {
+            const errorText = language === 'ar' ? 'فشل تحميل بيانات الدورة.' : 'Failed to load course data.';
+            setError(errorText);
+            navigate('/dashboard');
+          }
+        } catch (err) {
+          console.error('Error fetching course:', err);
+          const errorText = language === 'ar' ? 'خطأ في تحميل الدورة.' : 'Error loading course.';
+          setError(errorText);
+          navigate('/dashboard');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchCourse();
+    }
+  }, [isEditMode, courseId, navigate, language]);
 
   useEffect(() => {
     // Count words in description
@@ -339,8 +439,14 @@ const CreateCourse: React.FC = () => {
         headers['X-CSRFToken'] = csrfToken;
       }
 
-      const response = await fetch(`${API_BASE_URL}/courses/`, {
-        method: 'POST',
+      const url = isEditMode && courseId 
+        ? `${API_BASE_URL}/courses/${courseId}/`
+        : `${API_BASE_URL}/courses/`;
+      
+      const method = isEditMode ? 'PATCH' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         credentials: 'include',
         headers,
         body: formDataToSend,
@@ -354,9 +460,11 @@ const CreateCourse: React.FC = () => {
         const errorMessage = data.error || data.message || 
           (typeof data === 'object' && Object.keys(data).length > 0 
             ? JSON.stringify(data) 
-            : getText('Failed to create course.', 'فشل إنشاء الدورة.'));
+            : (isEditMode 
+                ? getText('Failed to update course.', 'فشل تحديث الدورة.')
+                : getText('Failed to create course.', 'فشل إنشاء الدورة.')));
         setError(errorMessage);
-        console.error('Course creation error:', data);
+        console.error(`Course ${isEditMode ? 'update' : 'creation'} error:`, data);
       }
     } catch (err) {
       setError(getText('Network error. Please try again.', 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.'));
@@ -399,7 +507,7 @@ const CreateCourse: React.FC = () => {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-dark-100 rounded-2xl p-8 border border-dark-300">
           <h1 className="text-3xl font-bold text-white mb-6">
-            {getText('Create Course', 'إنشاء دورة')}
+            {isEditMode ? getText('Edit Course', 'تعديل الدورة') : getText('Create Course', 'إنشاء دورة')}
           </h1>
 
           {error && (
@@ -554,20 +662,38 @@ const CreateCourse: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   {getText('Subject', 'المادة')} *
                 </label>
-                <select
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{getText('Select Subject', 'اختر المادة')}</option>
-                  {subjects.map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {getName(subject)}
-                    </option>
-                  ))}
-                </select>
+                {subjects.length === 0 ? (
+                  <div className="w-full px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <p className="text-yellow-400 text-sm">
+                      {getText(
+                        'No subjects selected. Please go to your profile and select the subjects you teach.',
+                        'لم يتم اختيار أي مواد. يرجى الذهاب إلى ملفك الشخصي واختيار المواد التي تدرسها.'
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/profile')}
+                      className="mt-2 text-primary-400 hover:text-primary-300 text-sm font-medium underline"
+                    >
+                      {getText('Go to Profile', 'الذهاب إلى الملف الشخصي')}
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">{getText('Select Subject', 'اختر المادة')}</option>
+                    {subjects.map((subject) => (
+                      <option key={subject.id} value={subject.id}>
+                        {getName(subject)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -660,7 +786,10 @@ const CreateCourse: React.FC = () => {
                 disabled={saving || wordCount > 150}
                 className="flex-1 py-3 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all disabled:opacity-50"
               >
-                {saving ? getText('Creating...', 'جاري الإنشاء...') : getText('Create Course', 'إنشاء الدورة')}
+                {saving 
+                  ? (isEditMode ? getText('Editing...', 'جاري التعديل...') : getText('Creating...', 'جاري الإنشاء...'))
+                  : (isEditMode ? getText('Edit', 'تعديل') : getText('Create Course', 'إنشاء الدورة'))
+                }
               </button>
             </div>
           </form>
