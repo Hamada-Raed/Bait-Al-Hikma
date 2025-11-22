@@ -110,7 +110,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6C">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-400 text-sm font-medium">

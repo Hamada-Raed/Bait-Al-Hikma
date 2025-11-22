@@ -1,26 +1,36 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import Header from './Header';
 
 const AvailabilityCalendar: React.FC = () => {
   const { language } = useLanguage();
   const navigate = useNavigate();
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [selectedWeek, setSelectedWeek] = useState(new Date());
-  const [calendarVisible, setCalendarVisible] = useState(true);
+  const today = new Date();
+  const [currentDate, setCurrentDate] = useState(today);
+  const [selectedMonth, setSelectedMonth] = useState(today);
+  const [selectedWeek, setSelectedWeek] = useState(today);
 
   const getText = (en: string, ar: string) => (language === 'ar' ? ar : en);
 
-  // Get the week dates (Monday to Friday)
+  // Get the week dates (Monday to Sunday) - ensure today is included
   const getWeekDates = (date: Date) => {
-    const weekStart = new Date(date);
-    const day = weekStart.getDay();
-    const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
-    weekStart.setDate(diff);
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+    const day = targetDate.getDay();
+    
+    // Calculate days to subtract to get to Monday
+    // Sunday (0) -> subtract 6 to get Monday
+    // Monday (1) -> subtract 0 to get Monday
+    // Tuesday (2) -> subtract 1 to get Monday
+    // etc.
+    const daysToMonday = day === 0 ? 6 : day - 1;
+    
+    const weekStart = new Date(targetDate);
+    weekStart.setDate(targetDate.getDate() - daysToMonday);
     
     const weekDates = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart);
       d.setDate(weekStart.getDate() + i);
       weekDates.push(d);
@@ -73,8 +83,8 @@ const AvailabilityCalendar: React.FC = () => {
 
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayNamesAr = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
-  const dayNamesFull = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  const dayNamesFullAr = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+  const dayNamesFull = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const dayNamesFullAr = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 
   const isSameDay = (date1: Date, date2: Date) => {
     return (
@@ -106,9 +116,9 @@ const AvailabilityCalendar: React.FC = () => {
 
   const goToToday = () => {
     const today = new Date();
+    setCurrentDate(today);
     setSelectedWeek(today);
     setSelectedMonth(today);
-    setCurrentDate(today);
   };
 
   const selectDate = (date: Date) => {
@@ -126,14 +136,19 @@ const AvailabilityCalendar: React.FC = () => {
     return `${start.getDate()}-${end.getDate()} ${monthName}, ${start.getFullYear()}`;
   };
 
-  // Generate time slots from 17 (5 PM) to 23 (11 PM)
-  const timeSlots = [];
-  for (let hour = 17; hour <= 23; hour++) {
+  // Generate time slots from 6 AM (6) to 12 AM (0) - midnight
+  const timeSlots: number[] = [];
+  for (let hour = 6; hour <= 23; hour++) {
     timeSlots.push(hour);
   }
+  timeSlots.push(0); // Add midnight (12 AM)
 
   return (
-    <div className="min-h-screen bg-dark-50 text-gray-100 flex">
+    <div className="min-h-screen bg-dark-50">
+      {/* Header */}
+      <Header />
+      
+      <div className="flex">
       {/* Left Sidebar */}
       <div className="w-80 bg-dark-100 border-r border-dark-300 p-6 flex flex-col">
         {/* Calendar Title */}
@@ -182,7 +197,11 @@ const AvailabilityCalendar: React.FC = () => {
               {monthDates.map((date, index) => {
                 const isCurrentMonth = isSameMonth(date, selectedMonth);
                 const isWeekDay = isInWeek(date);
-                const isToday = isSameDay(date, currentDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dateToCompare = new Date(date);
+                dateToCompare.setHours(0, 0, 0, 0);
+                const isToday = isSameDay(dateToCompare, today);
 
                 return (
                   <button
@@ -201,41 +220,6 @@ const AvailabilityCalendar: React.FC = () => {
               })}
             </div>
           </div>
-        </div>
-
-        {/* My Calendars */}
-        <div className="mt-auto">
-          <button
-            onClick={() => setCalendarVisible(!calendarVisible)}
-            className="flex items-center justify-between w-full mb-3 hover:text-gray-200 transition-colors"
-          >
-            <h3 className="text-sm font-semibold text-gray-300">
-              {getText('My calendars', 'تقويماتي')}
-            </h3>
-            <svg
-              className={`w-4 h-4 text-gray-400 transition-transform ${calendarVisible ? '' : '-rotate-90'}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {calendarVisible && (
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer hover:text-gray-200 transition-colors">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="w-4 h-4 text-primary-500 bg-dark-200 border-dark-400 rounded focus:ring-primary-500 focus:ring-2 cursor-pointer"
-                />
-                <span className="text-sm text-gray-300">{getText('Calendar', 'التقويم')}</span>
-              </label>
-              <button className="text-sm text-primary-400 hover:text-primary-300 transition-colors">
-                {getText('Show all', 'إظهار الكل')}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -278,28 +262,9 @@ const AvailabilityCalendar: React.FC = () => {
               </svg>
             </div>
 
-            {/* View Selector */}
-            <div className="flex items-center gap-2 px-4 py-2 hover:bg-dark-200 rounded cursor-pointer transition-colors">
-              <span className="text-sm font-medium text-gray-300">{getText('Work week', 'أسبوع العمل')}</span>
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Ellipsis */}
-            <button className="p-2 hover:bg-dark-200 rounded transition-colors">
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
-
-            {/* Meet Now Button */}
-            <button className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-200 rounded transition-colors">
-              {getText('Meet now', 'لقاء الآن')}
-            </button>
-
             {/* New Button */}
             <div className="relative group">
               <button className="px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded hover:bg-primary-600 transition-colors flex items-center gap-2">
@@ -319,11 +284,18 @@ const AvailabilityCalendar: React.FC = () => {
         <div className="flex-1 overflow-auto">
           <div className="min-w-full">
             {/* Days Header */}
-            <div className="grid grid-cols-[80px_repeat(5,1fr)] border-b border-dark-300 bg-dark-100 sticky top-0 z-10">
+            <div className="grid grid-cols-[80px_repeat(7,1fr)] border-b border-dark-300 bg-dark-100 sticky top-0 z-10">
               <div className="border-r border-dark-300 p-2"></div>
               {weekDates.map((date, index) => {
                 const dayName = language === 'ar' ? dayNamesFullAr[index] : dayNamesFull[index];
-                const isToday = isSameDay(date, currentDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dateToCompare = new Date(date);
+                dateToCompare.setHours(0, 0, 0, 0);
+                const isToday = isSameDay(dateToCompare, today);
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const dateString = `${day}/${month}`;
                 
                 return (
                   <div
@@ -334,7 +306,7 @@ const AvailabilityCalendar: React.FC = () => {
                   >
                     <div className="text-xs text-gray-400 mb-1">{dayName}</div>
                     <div className={`text-lg font-semibold ${isToday ? 'text-primary-400' : 'text-white'}`}>
-                      {date.getDate()}
+                      {dateString}
                     </div>
                   </div>
                 );
@@ -342,23 +314,42 @@ const AvailabilityCalendar: React.FC = () => {
             </div>
 
             {/* Time Slots and Grid */}
-            <div className="grid grid-cols-[80px_repeat(5,1fr)]">
+            <div className="grid grid-cols-[80px_repeat(7,1fr)]">
               {/* Time Column */}
               <div className="border-r border-dark-300">
-                {timeSlots.map((hour, index) => (
-                  <div
-                    key={hour}
-                    className="border-b border-dark-300 h-16 relative"
-                  >
-                    <div className="absolute top-0 right-2 text-xs text-gray-500 transform -translate-y-1/2">
-                      {hour.toString().padStart(2, '0')}
+                {timeSlots.map((hour, index) => {
+                  let displayHour: number;
+                  let period: string;
+                  
+                  if (hour === 0) {
+                    displayHour = 12;
+                    period = 'AM';
+                  } else if (hour === 12) {
+                    displayHour = 12;
+                    period = 'PM';
+                  } else if (hour > 12) {
+                    displayHour = hour - 12;
+                    period = 'PM';
+                  } else {
+                    displayHour = hour;
+                    period = 'AM';
+                  }
+                  
+                  return (
+                    <div
+                      key={hour}
+                      className="border-b border-dark-300 h-16 relative flex items-start"
+                    >
+                      <div className="text-xs text-gray-500 pt-1 pr-2 w-full text-right">
+                        {displayHour} {period}
+                      </div>
+                      {/* Half-hour divider */}
+                      {index < timeSlots.length - 1 && (
+                        <div className="absolute bottom-0 left-0 right-0 border-t border-dashed border-dark-300"></div>
+                      )}
                     </div>
-                    {/* Half-hour divider */}
-                    {index < timeSlots.length - 1 && (
-                      <div className="absolute bottom-0 left-0 right-0 border-t border-dashed border-dark-300"></div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Day Columns */}
@@ -385,6 +376,7 @@ const AvailabilityCalendar: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
