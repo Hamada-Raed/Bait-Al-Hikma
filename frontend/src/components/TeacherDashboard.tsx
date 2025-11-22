@@ -23,7 +23,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-primary-500/20 to-accent-purple/20 rounded-xl p-6 border border-primary-500/30">
+      <div className="bg-gradient-to-r from-primary-500/20 to-accent-purple/20 rounded-xl p-6 border border-primary-500/30 mt-5">
         <h2 className="text-2xl font-bold text-white mb-2">
           {getText('Welcome to Your Teaching Dashboard', 'مرحباً بك في لوحة التدريس')}
         </h2>
@@ -113,35 +113,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           <p className="mt-4 text-gray-400">
             {getText('No courses created yet.', 'لم يتم إنشاء أي دورات بعد.')}
           </p>
-        </div>
-      </div>
-
-      {/* Profile Info */}
-      <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
-        <h3 className="text-xl font-bold text-white mb-4">
-          {getText('Profile Information', 'معلومات الملف الشخصي')}
-        </h3>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center py-2 border-b border-dark-300">
-            <span className="text-gray-400">{getText('Name', 'الاسم')}</span>
-            <span className="text-white font-medium">
-              {user.first_name} {user.last_name}
-            </span>
-          </div>
-          <div className="flex justify-between items-center py-2 border-b border-dark-300">
-            <span className="text-gray-400">{getText('Email', 'البريد الإلكتروني')}</span>
-            <span className="text-white font-medium">{user.email}</span>
-          </div>
-          <div className="flex justify-between items-center py-2 border-b border-dark-300">
-            <span className="text-gray-400">{getText('Status', 'الحالة')}</span>
-            <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
-              {getText('Approved', 'موافق عليه')}
-            </span>
-          </div>
-          <div className="flex justify-between items-center py-2">
-            <span className="text-gray-400">{getText('User Type', 'نوع المستخدم')}</span>
-            <span className="text-white font-medium">{getText('Teacher', 'معلم')}</span>
-          </div>
         </div>
       </div>
     </div>

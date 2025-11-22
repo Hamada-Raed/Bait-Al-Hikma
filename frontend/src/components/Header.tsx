@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +13,24 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isDropdownOpen]);
 
   const handleLogout = async () => {
     await logout();
@@ -27,14 +45,17 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
     setLanguage(language === 'en' ? 'ar' : 'en');
   };
 
+  const handleHomeClick = () => {
+    navigate('/');
+  };
+
   return (
-    <header className="bg-dark-100 border-b border-dark-300 sticky top-0 z-50 shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="bg-dark-100 border-b border-dark-300 sticky top-0 z-50 shadow-lg w-full left-0 right-0">
+      <div className="w-full px-4 sm:px-6 lg:px-8 mx-auto">
         <div className="flex items-center justify-between h-20">
           {/* Logo and Platform Name */}
-          <a 
-            href="#home" 
-            onClick={(e) => {
+          <button
+            onClick={user?.user_type === 'teacher' ? handleHomeClick : (e) => {
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
@@ -60,7 +81,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-purple bg-clip-text text-transparent">
               {platformName}
             </h1>
-          </a>
+          </button>
 
           {/* Navigation Links - Desktop */}
           <nav className="hidden md:flex items-center space-x-8 rtl:space-x-reverse">
@@ -111,18 +132,120 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
             {/* Auth Buttons - Desktop */}
             {user ? (
               <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
-                <button
-                  onClick={handleDashboardClick}
-                  className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200"
-                >
-                  {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="px-6 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
-                >
-                  {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
-                </button>
+                {user.user_type === 'teacher' ? (
+                  // User Icon with Dropdown for Teachers
+                  <div className="relative" ref={dropdownRef}>
+                    <button
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className="flex items-center justify-center w-10 h-10 rounded-full bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      aria-label="User menu"
+                    >
+                      {/* User Icon - will be replaced with teacher's picture later */}
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {isDropdownOpen && (
+                      <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} mt-2 w-48 bg-dark-200 rounded-lg shadow-xl border border-dark-300 py-2 z-50`}>
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleDashboardClick();
+                          }}
+                          className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                            />
+                          </svg>
+                          <span>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            // TODO: Navigate to profile page when implemented
+                            console.log('Navigate to profile');
+                          }}
+                          className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                            />
+                          </svg>
+                          <span>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsDropdownOpen(false);
+                            handleLogout();
+                          }}
+                          className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                            />
+                          </svg>
+                          <span>{language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Regular buttons for non-teachers
+                  <>
+                    <button
+                      onClick={handleDashboardClick}
+                      className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200"
+                    >
+                      {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="px-6 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
+                    >
+                      {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
@@ -200,20 +323,94 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               </a>
               <div className="pt-4 border-t border-dark-300 flex flex-col space-y-3">
                 {user ? (
-                  <>
-                    <button
-                      onClick={handleDashboardClick}
-                      className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right"
-                    >
-                      {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
-                    >
-                      {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
-                    </button>
-                  </>
+                  user.user_type === 'teacher' ? (
+                    // Mobile dropdown for teachers
+                    <>
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          handleDashboardClick();
+                        }}
+                        className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                          />
+                        </svg>
+                        <span>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          // TODO: Navigate to profile page when implemented
+                          console.log('Navigate to profile');
+                        }}
+                        className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                          />
+                        </svg>
+                        <span>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                          />
+                        </svg>
+                        <span>{language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}</span>
+                      </button>
+                    </>
+                  ) : (
+                    // Regular buttons for non-teachers
+                    <>
+                      <button
+                        onClick={handleDashboardClick}
+                        className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right"
+                      >
+                        {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
+                      >
+                        {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
+                      </button>
+                    </>
+                  )
                 ) : (
                   <>
                     <button
