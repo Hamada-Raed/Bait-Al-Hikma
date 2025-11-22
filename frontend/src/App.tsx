@@ -10,6 +10,7 @@ import Footer from './components/Footer';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import Profile from './components/Profile';
 import './App.css';
 
 const HomePage: React.FC = () => {
@@ -80,6 +81,14 @@ const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
                 </ProtectedRoute>
               }
             />

@@ -123,7 +123,7 @@ class UserViewSet(viewsets.ModelViewSet):
             django_login(request, user)
             
             # Return user data
-            user_serializer = UserSerializer(user)
+            user_serializer = UserSerializer(user, context={'request': request})
             return Response({
                 'message': 'Login successful.',
                 'user': user_serializer.data
@@ -134,11 +134,51 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         if request.user.is_authenticated:
-            serializer = UserSerializer(request.user)
+            serializer = UserSerializer(request.user, context={'request': request})
             return Response(serializer.data)
         return Response({
             'error': 'Not authenticated.'
         }, status=status.HTTP_401_UNAUTHORIZED)
+    
+    @action(detail=False, methods=['put', 'patch'])
+    def update_profile(self, request):
+        if not request.user.is_authenticated:
+            return Response({
+                'error': 'Not authenticated.'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        user = request.user
+        
+        # Prepare data for serializer
+        # Combine request.data and request.FILES properly
+        data = {}
+        
+        # Copy all regular fields from request.data
+        for key, value in request.data.items():
+            if key != 'subjects':  # Handle subjects separately
+                data[key] = value
+        
+        # Handle profile picture file upload
+        if 'profile_picture' in request.FILES:
+            data['profile_picture_file'] = request.FILES['profile_picture']
+        
+        # Handle subjects if provided as list
+        if 'subjects' in request.data:
+            subjects_data = request.data.getlist('subjects') if hasattr(request.data, 'getlist') else request.data.get('subjects', [])
+            if isinstance(subjects_data, list):
+                data['subjects_ids'] = [int(sid) for sid in subjects_data if sid]
+            elif subjects_data:
+                data['subjects_ids'] = [int(subjects_data)]
+        
+        serializer = UserSerializer(user, data=data, partial=True, context={'request': request})
+        
+        if serializer.is_valid():
+            serializer.save()
+            # Return updated user data
+            updated_serializer = UserSerializer(user, context={'request': request})
+            return Response(updated_serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=False, methods=['post'])
     def logout(self, request):

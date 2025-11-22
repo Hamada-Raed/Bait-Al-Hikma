@@ -93,19 +93,38 @@ class LoginSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, validators=[validate_password])
     password_confirm = serializers.CharField(write_only=True, required=False)
-    subjects = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    subjects = serializers.SerializerMethodField()
+    subjects_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     is_approved = serializers.BooleanField(read_only=True)
+    profile_picture = serializers.SerializerMethodField()
+    profile_picture_file = serializers.ImageField(write_only=True, required=False, allow_null=True)
     
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'password', 'password_confirm',
             'user_type', 'first_name', 'last_name', 'birth_date', 'country',
-            'grade', 'track', 'major', 'years_of_experience', 'subjects', 'is_approved'
+            'grade', 'track', 'major', 'years_of_experience', 'subjects', 'subjects_ids', 'is_approved',
+            'phone_number', 'bio', 'profile_picture', 'profile_picture_file'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
         }
+    
+    def get_subjects(self, obj):
+        """Return list of subject IDs for the teacher"""
+        if obj.user_type == 'teacher':
+            return [ts.subject_id for ts in obj.subjects.all()]
+        return []
+    
+    def get_profile_picture(self, obj):
+        """Return absolute URL for profile picture"""
+        if obj.profile_picture:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            return obj.profile_picture.url
+        return None
     
     def validate(self, attrs):
         # Only validate password match if both are provided (for signup)
@@ -115,7 +134,7 @@ class UserSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
-        subjects = validated_data.pop('subjects', [])
+        subjects = validated_data.pop('subjects_ids', validated_data.pop('subjects', []))
         validated_data.pop('password_confirm', None)
         password = validated_data.pop('password')
         
@@ -129,4 +148,30 @@ class UserSerializer(serializers.ModelSerializer):
                 TeacherSubject.objects.create(teacher=user, subject_id=subject_id)
         
         return user
+    
+    def update(self, instance, validated_data):
+        subjects = validated_data.pop('subjects_ids', validated_data.pop('subjects', None))
+        profile_picture_file = validated_data.pop('profile_picture_file', None)
+        
+        # Update user fields
+        for attr, value in validated_data.items():
+            if attr != 'profile_picture':  # Skip profile_picture as it's read-only
+                setattr(instance, attr, value)
+        
+        # Handle profile picture file upload
+        if profile_picture_file:
+            instance.profile_picture = profile_picture_file
+        
+        instance.save()
+        
+        # Update subjects if provided
+        if subjects is not None and instance.user_type == 'teacher':
+            # Remove old subjects
+            TeacherSubject.objects.filter(teacher=instance).delete()
+            # Add new subjects
+            for subject_id in subjects:
+                if subject_id:
+                    TeacherSubject.objects.create(teacher=instance, subject_id=int(subject_id))
+        
+        return instance
 

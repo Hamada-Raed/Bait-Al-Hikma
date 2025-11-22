@@ -11,6 +11,12 @@ interface User {
   first_name: string;
   last_name: string;
   is_approved: boolean;
+  phone_number?: string;
+  bio?: string;
+  profile_picture?: string;
+  birth_date?: string;
+  country?: number;
+  years_of_experience?: number;
 }
 
 interface AuthContextType {

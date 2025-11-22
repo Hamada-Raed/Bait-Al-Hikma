@@ -89,6 +89,9 @@ class User(AbstractUser):
     # Teacher fields
     years_of_experience = models.IntegerField(null=True, blank=True)
     is_approved = models.BooleanField(default=False)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    bio = models.TextField(blank=True, null=True)
+    profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
     
     # Override groups and user_permissions to avoid reverse accessor conflicts
     groups = models.ManyToManyField(

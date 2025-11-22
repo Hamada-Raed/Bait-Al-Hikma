@@ -137,23 +137,30 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                   <div className="relative" ref={dropdownRef}>
                     <button
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="flex items-center justify-center w-10 h-10 rounded-full bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="flex items-center justify-center w-10 h-10 rounded-full bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 overflow-hidden"
                       aria-label="User menu"
                     >
-                      {/* User Icon - will be replaced with teacher's picture later */}
-                      <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      {user?.profile_picture ? (
+                        <img
+                          src={user.profile_picture.startsWith('http') ? user.profile_picture : `http://localhost:8000${user.profile_picture}`}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
                         />
-                      </svg>
+                      ) : (
+                        <svg
+                          className="w-6 h-6"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                          />
+                        </svg>
+                      )}
                     </button>
 
                     {/* Dropdown Menu */}
@@ -184,8 +191,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                         <button
                           onClick={() => {
                             setIsDropdownOpen(false);
-                            // TODO: Navigate to profile page when implemented
-                            console.log('Navigate to profile');
+                            navigate('/profile');
                           }}
                           className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
                         >
@@ -351,8 +357,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                       <button
                         onClick={() => {
                           setIsMenuOpen(false);
-                          // TODO: Navigate to profile page when implemented
-                          console.log('Navigate to profile');
+                          navigate('/profile');
                         }}
                         className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
                       >

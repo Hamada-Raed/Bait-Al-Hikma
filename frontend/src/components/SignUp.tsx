@@ -65,6 +65,8 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     track: '',
     major: '',
     years_of_experience: '',
+    phone_number: '',
+    bio: '',
     subjects: [] as number[],
   });
 
@@ -120,7 +122,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     }
   }, [formData.country, userType]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
@@ -209,6 +211,12 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     } else if (userType === 'teacher') {
       submitData.years_of_experience = parseInt(formData.years_of_experience);
       submitData.subjects = formData.subjects;
+      if (formData.phone_number) {
+        submitData.phone_number = formData.phone_number;
+      }
+      if (formData.bio) {
+        submitData.bio = formData.bio;
+      }
     }
 
     try {
@@ -570,6 +578,32 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                         min="0"
                         className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
                         required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-300 mb-2">
+                        {getText('Phone Number', 'رقم الهاتف')}
+                      </label>
+                      <input
+                        type="tel"
+                        name="phone_number"
+                        value={formData.phone_number}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                        placeholder={getText('Enter phone number', 'أدخل رقم الهاتف')}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-300 mb-2">
+                        {getText('Bio', 'نبذة عنك')}
+                      </label>
+                      <textarea
+                        name="bio"
+                        value={formData.bio}
+                        onChange={handleInputChange}
+                        rows={4}
+                        className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                        placeholder={getText('Tell us about yourself...', 'أخبرنا عن نفسك...')}
                       />
                     </div>
                     <div>
