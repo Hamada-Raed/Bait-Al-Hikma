@@ -143,6 +143,7 @@ class Course(models.Model):
     
     STATUS_CHOICES = [
         ('draft', 'Draft'),
+        ('pending', 'Pending Approval'),
         ('published', 'Published'),
     ]
     

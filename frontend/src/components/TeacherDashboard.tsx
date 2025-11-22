@@ -47,11 +47,30 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const [courseToDelete, setCourseToDelete] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState('');
+  const [deleteConfirmChecked, setDeleteConfirmChecked] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [courseToPublish, setCourseToPublish] = useState<Course | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [unpublishReason, setUnpublishReason] = useState('');
+  const [publishConfirmChecked, setPublishConfirmChecked] = useState(false);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+
+  const fetchCourses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/courses/`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCourses(data.results || data);
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleDescription = (courseId: number) => {
     setExpandedDescriptions(prev => {
@@ -65,9 +84,81 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
     });
   };
 
-  const handlePublishClick = (course: Course) => {
-    setCourseToPublish(course);
-    setPublishModalOpen(true);
+  const handlePublishClick = async (course: Course) => {
+    // If published and has NO students, return to draft directly
+    if (course.status === 'published' && (course.enrollment_count || 0) === 0) {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/courses/${course.id}/`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers,
+          body: JSON.stringify({ status: 'draft' }),
+        });
+
+        if (response.ok) {
+          setCourses(courses.map(c => 
+            c.id === course.id 
+              ? { ...c, status: 'draft' }
+              : c
+          ));
+          fetchCourses(); // Refresh to get updated data
+        }
+      } catch (error) {
+        console.error('Error returning course to draft:', error);
+      }
+      return;
+    }
+
+    // If pending, cancel request and return to draft directly
+    if (course.status === 'pending') {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/courses/${course.id}/`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers,
+          body: JSON.stringify({ status: 'draft' }),
+        });
+
+        if (response.ok) {
+          setCourses(courses.map(c => 
+            c.id === course.id 
+              ? { ...c, status: 'draft' }
+              : c
+          ));
+          fetchCourses(); // Refresh to get updated data
+        }
+      } catch (error) {
+        console.error('Error canceling publish request:', error);
+      }
+      return;
+    }
+
+    // If published and has students, show unpublish modal with reason field
+    if (course.status === 'published' && (course.enrollment_count || 0) > 0) {
+      setUnpublishReason('');
+      setCourseToPublish(course);
+      setPublishModalOpen(true);
+    } else {
+      // For draft, open publish modal
+      setCourseToPublish(course);
+      setPublishModalOpen(true);
+    }
   };
 
   const handlePublishConfirm = async () => {
@@ -91,46 +182,61 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       if (courseToPublish.status === 'published') {
         // Unpublishing: Return to draft
         if (hasStudents) {
-          // Has students - need admin approval
+          // Has students - need admin approval and reason
+          if (!unpublishReason.trim()) {
+            // Reason is required - button is disabled, so this shouldn't happen
+            setPublishing(false);
+            return;
+          }
+          
           try {
             response = await fetch(`${API_BASE_URL}/courses/${courseToPublish.id}/request_unpublish/`, {
               method: 'POST',
               credentials: 'include',
               headers,
               body: JSON.stringify({
-                reason: getText(
-                  'Requesting to return course to draft status as there are enrolled students.',
-                  'طلب إعادة الدورة إلى حالة المسودة لأن هناك طلاب مسجلين.'
-                )
+                reason: unpublishReason.trim()
               }),
             });
 
             if (response.ok) {
-              alert(getText(
-                'Your request to return the course to draft has been submitted for admin approval.',
-                'تم إرسال طلبك لإعادة الدورة إلى المسودة للموافقة من قبل الإدارة.'
+              // Update course status without alert
+              setCourses(courses.map(c => 
+                c.id === courseToPublish.id 
+                  ? { ...c, status: 'pending' }
+                  : c
               ));
               setPublishModalOpen(false);
               setCourseToPublish(null);
+              setUnpublishReason('');
+              setPublishConfirmChecked(false);
+              fetchCourses(); // Refresh to get updated data
               return;
             } else if (response.status === 404) {
-              // Endpoint not implemented yet - show admin approval message
-              alert(getText(
-                'Your request to return the course to draft has been recorded. It requires admin approval since there are enrolled students. An administrator will review your request and approve it. You will be notified once the request is approved.',
-                'تم تسجيل طلبك لإعادة الدورة إلى المسودة. يتطلب موافقة الإدارة لأن هناك طلاب مسجلين. سيقوم أحد المشرفين بمراجعة طلبك والموافقة عليه. سيتم إشعارك بمجرد الموافقة على الطلب.'
+              // Endpoint not implemented yet - set status to pending
+              setCourses(courses.map(c => 
+                c.id === courseToPublish.id 
+                  ? { ...c, status: 'pending' }
+                  : c
               ));
               setPublishModalOpen(false);
               setCourseToPublish(null);
+              setUnpublishReason('');
+              fetchCourses();
               return;
             }
           } catch (fetchError) {
-            // If the endpoint doesn't exist or network error, show admin approval message
-            alert(getText(
-              'Your request to return the course to draft has been recorded. It requires admin approval since there are enrolled students. An administrator will review your request and approve it. You will be notified once the request is approved.',
-              'تم تسجيل طلبك لإعادة الدورة إلى المسودة. يتطلب موافقة الإدارة لأن هناك طلاب مسجلين. سيقوم أحد المشرفين بمراجعة طلبك والموافقة عليه. سيتم إشعارك بمجرد الموافقة على الطلب.'
+            // If the endpoint doesn't exist or network error, set status to pending
+            setCourses(courses.map(c => 
+              c.id === courseToPublish.id 
+                ? { ...c, status: 'pending' }
+                : c
             ));
             setPublishModalOpen(false);
             setCourseToPublish(null);
+            setUnpublishReason('');
+            setPublishConfirmChecked(false);
+            fetchCourses();
             return;
           }
         } else {
@@ -150,6 +256,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             ));
             setPublishModalOpen(false);
             setCourseToPublish(null);
+            setPublishConfirmChecked(false);
             return;
           }
         }
@@ -171,31 +278,40 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
 
           if (response.ok) {
             const data = await response.json();
-            alert(getText(
-              'Your course has been submitted for admin review. You will be notified once it is approved and published.',
-              'تم إرسال دورتك للمراجعة من قبل الإدارة. سيتم إشعارك بمجرد الموافقة عليها ونشرها.'
-            ));
+            // Update course status to pending without alert
+            if (data.course) {
+              setCourses(courses.map(c => 
+                c.id === courseToPublish.id 
+                  ? { ...c, status: data.course.status }
+                  : c
+              ));
+            } else {
+              // Fallback: just update status to pending
+              setCourses(courses.map(c => 
+                c.id === courseToPublish.id 
+                  ? { ...c, status: 'pending' }
+                  : c
+              ));
+            }
             setPublishModalOpen(false);
             setCourseToPublish(null);
-            return;
-          } else if (response.status === 404) {
-            // Endpoint not implemented yet - show message about admin approval
-            alert(getText(
-              'Your course publish request has been recorded. It requires admin approval before being published. An administrator will review your course and approve it for publication. You will be notified once the course is approved.',
-              'تم تسجيل طلب نشر دورتك. يتطلب موافقة الإدارة قبل النشر. سيقوم أحد المشرفين بمراجعة دورتك والموافقة عليها للنشر. سيتم إشعارك بمجرد الموافقة على الدورة.'
-            ));
-            setPublishModalOpen(false);
-            setCourseToPublish(null);
+            setPublishConfirmChecked(false);
+            // Refresh courses to get updated data
+            fetchCourses();
             return;
           }
         } catch (fetchError) {
-          // If the endpoint doesn't exist or network error, show admin approval message
-          alert(getText(
-            'Your course publish request has been recorded. It requires admin approval before being published. An administrator will review your course and approve it for publication. You will be notified once the course is approved.',
-            'تم تسجيل طلب نشر دورتك. يتطلب موافقة الإدارة قبل النشر. سيقوم أحد المشرفين بمراجعة دورتك والموافقة عليها للنشر. سيتم إشعارك بمجرد الموافقة على الدورة.'
+          console.error('Error submitting publish request:', fetchError);
+          // Set status to pending even on error
+          setCourses(courses.map(c => 
+            c.id === courseToPublish.id 
+              ? { ...c, status: 'pending' }
+              : c
           ));
           setPublishModalOpen(false);
           setCourseToPublish(null);
+          setPublishConfirmChecked(false);
+          fetchCourses();
           return;
         }
       }
@@ -220,6 +336,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const handlePublishCancel = () => {
     setPublishModalOpen(false);
     setCourseToPublish(null);
+    setUnpublishReason('');
+    setPublishConfirmChecked(false);
   };
 
   const handleEdit = (courseId: number) => {
@@ -234,6 +352,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const handleDeleteClick = (courseId: number) => {
     setCourseToDelete(courseId);
     setDeleteMessage('');
+    setDeleteConfirmChecked(false);
     setDeleteModalOpen(true);
   };
 
@@ -277,9 +396,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               'Your deletion request has been submitted for admin approval.',
               'تم إرسال طلب الحذف للموافقة من قبل الإدارة.'
             ));
-            setDeleteModalOpen(false);
-            setCourseToDelete(null);
-            setDeleteMessage('');
+          setDeleteModalOpen(false);
+          setCourseToDelete(null);
+          setDeleteMessage('');
+          setDeleteConfirmChecked(false);
           } else if (response.status === 404) {
             // Endpoint not implemented yet - show admin approval message
             alert(getText(
@@ -289,6 +409,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
             setDeleteModalOpen(false);
             setCourseToDelete(null);
             setDeleteMessage('');
+            setDeleteConfirmChecked(false);
           } else {
             try {
               const data = await response.json();
@@ -307,6 +428,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           setDeleteModalOpen(false);
           setCourseToDelete(null);
           setDeleteMessage('');
+          setDeleteConfirmChecked(false);
         } finally {
           setDeleting(false);
         }
@@ -330,6 +452,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           setDeleteModalOpen(false);
           setCourseToDelete(null);
           setDeleteMessage('');
+          setDeleteConfirmChecked(false);
         } else {
           alert(getText('Failed to delete course.', 'فشل حذف الدورة.'));
         }
@@ -436,25 +559,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-400 text-sm font-medium">
-              {getText('Active Courses', 'الدورات النشطة')}
+              {getText('Published Courses', 'الدورات المنشورة')}
             </h3>
-            <svg className="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-white">0</p>
+          <p className="text-3xl font-bold text-white">{courses.filter(c => c.status === 'published').length}</p>
         </div>
 
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-400 text-sm font-medium">
-              {getText('Pending', 'قيد الانتظار')}
+              {getText('Pending Approval', 'قيد الموافقة')}
             </h3>
-            <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-white">0</p>
+          <p className="text-3xl font-bold text-white">{courses.filter(c => c.status === 'pending').length}</p>
         </div>
       </div>
 
@@ -538,43 +661,57 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                         className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
                           course.status === 'published'
                             ? 'bg-green-500/20 text-green-400'
-                            : 'bg-yellow-500/20 text-yellow-400'
+                            : course.status === 'pending'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : 'bg-gray-500/20 text-gray-400'
                         }`}
                       >
                         {course.status === 'published'
                           ? getText('Published', 'منشور')
+                          : course.status === 'pending'
+                          ? getText('Pending', 'قيد الانتظار')
                           : getText('Draft', 'مسودة')}
                       </span>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {/* Preview Button */}
-                      {course.status !== 'published' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePreview(course.id);
-                          }}
-                          className="p-1.5 hover:bg-dark-300 rounded-lg transition-colors"
-                          title={getText('Preview Course', 'معاينة الدورة')}
-                        >
-                          <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                      )}
-                      {/* Publish Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreview(course.id);
+                        }}
+                        className="p-1.5 hover:bg-dark-300 rounded-lg transition-colors"
+                        title={getText('Preview Course', 'معاينة الدورة')}
+                      >
+                        <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
+                      {/* Publish/Unpublish Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handlePublishClick(course);
                         }}
                         className="p-1.5 hover:bg-dark-300 rounded-lg transition-colors"
-                        title={course.status === 'published' ? getText('Unpublish', 'إلغاء النشر') : getText('Publish', 'نشر')}
+                        title={
+                          course.status === 'published' && (course.enrollment_count || 0) === 0
+                            ? getText('Return to Draft', 'إعادة إلى المسودة')
+                            : course.status === 'published' && (course.enrollment_count || 0) > 0
+                            ? getText('Return to Draft (Admin Approval Required)', 'إعادة إلى المسودة (تتطلب موافقة الإدارة)')
+                            : course.status === 'pending'
+                            ? getText('Cancel Request & Return to Draft', 'إلغاء الطلب وإعادة إلى المسودة')
+                            : getText('Publish', 'نشر')
+                        }
                       >
-                        {course.status === 'published' ? (
-                          <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        {(course.status === 'published' && (course.enrollment_count || 0) === 0) || course.status === 'pending' ? (
+                          <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        ) : course.status === 'published' && (course.enrollment_count || 0) > 0 ? (
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
                         ) : (
                           <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -700,18 +837,51 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               
               return (
                 <>
-                  <p className="text-gray-300 text-center mb-4">
-                    {hasStudents 
-                      ? getText(
+                  {!hasStudents && (
+                    <div className="mb-6">
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={deleteConfirmChecked}
+                          onChange={(e) => setDeleteConfirmChecked(e.target.checked)}
+                          className="mt-0.5 w-5 h-5 text-red-500 bg-dark-200 border-dark-400 rounded focus:ring-red-500 focus:ring-2 cursor-pointer"
+                        />
+                        <span className="text-gray-300 text-sm flex-1 group-hover:text-gray-200 transition-colors">
+                          {getText(
+                            'Are you sure you want to delete this course? This action cannot be undone.',
+                            'هل أنت متأكد من حذف هذه الدورة؟ لا يمكن التراجع عن هذا الإجراء.'
+                          )}
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  {hasStudents && (
+                    <>
+                      <p className="text-gray-300 text-center mb-4">
+                        {getText(
                           'This course has enrolled students. Deletion requires admin approval. Please provide a reason for deletion below.',
                           'هذه الدورة تحتوي على طلاب مسجلين. يتطلب الحذف موافقة الإدارة. يرجى تقديم سبب الحذف أدناه.'
-                        )
-                      : getText(
-                          'Are you sure you want to delete this course? This action cannot be undone.',
-                          'هل أنت متأكد من حذف هذه الدورة؟ لا يمكن التراجع عن هذا الإجراء.'
-                        )
-                    }
-                  </p>
+                        )}
+                      </p>
+                      <div className="mb-4">
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={deleteConfirmChecked}
+                            onChange={(e) => setDeleteConfirmChecked(e.target.checked)}
+                            className="mt-0.5 w-5 h-5 text-red-500 bg-dark-200 border-dark-400 rounded focus:ring-red-500 focus:ring-2 cursor-pointer"
+                          />
+                          <span className="text-gray-300 text-sm flex-1 group-hover:text-gray-200 transition-colors">
+                            {getText(
+                              'I understand that this deletion request requires admin approval.',
+                              'أفهم أن طلب الحذف هذا يتطلب موافقة الإدارة.'
+                            )}
+                          </span>
+                        </label>
+                      </div>
+                    </>
+                  )}
 
                   {hasStudents && (
                     <div className="mb-6">
@@ -745,7 +915,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                     </button>
                     <button
                       onClick={handleDeleteConfirm}
-                      disabled={deleting || (hasStudents && !deleteMessage.trim())}
+                      disabled={deleting || !deleteConfirmChecked || (hasStudents && !deleteMessage.trim())}
                       className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {deleting 
@@ -815,11 +985,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                               <p className="text-yellow-400 font-medium mb-1">
                                 {getText('Admin Approval Required', 'الموافقة الإدارية مطلوبة')}
                               </p>
-                              <p className="text-gray-300 text-sm">
+                              <p className="text-gray-300 text-sm mb-3">
                                 {getText(
                                   'This course has enrolled students. Your request to return it to draft status will be submitted for admin review and approval.',
                                   'هذه الدورة تحتوي على طلاب مسجلين. سيتم إرسال طلبك لإعادة الدورة إلى حالة المسودة للمراجعة والموافقة من قبل الإدارة.'
                                 )}
+                              </p>
+                              <label htmlFor="unpublishReason" className="block text-sm font-medium text-gray-300 mb-2">
+                                {getText('Reason for Unpublishing', 'سبب إلغاء النشر')} *
+                              </label>
+                              <textarea
+                                id="unpublishReason"
+                                value={unpublishReason}
+                                onChange={(e) => setUnpublishReason(e.target.value)}
+                                rows={3}
+                                className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                                placeholder={getText(
+                                  'Please explain why you want to return this course to draft...',
+                                  'يرجى شرح سبب رغبتك في إعادة هذه الدورة إلى المسودة...'
+                                )}
+                              />
+                              <p className="text-gray-400 text-xs mt-1">
+                                {getText('This message will be reviewed by the admin.', 'سيتم مراجعة هذه الرسالة من قبل الإدارة.')}
                               </p>
                             </div>
                           </div>
@@ -858,12 +1045,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                       )}
                     </li>
                   </ul>
-                  <p className="text-gray-300 text-sm mt-3 pt-3 border-t border-gray-600">
-                    {getText(
-                      'Are you ready to submit your course for review?',
-                      'هل أنت جاهز لإرسال دورتك للمراجعة؟'
-                    )}
-                  </p>
+                  <div className="mt-3 pt-3 border-t border-gray-600">
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={publishConfirmChecked}
+                        onChange={(e) => setPublishConfirmChecked(e.target.checked)}
+                        className="mt-0.5 w-5 h-5 text-primary-500 bg-dark-200 border-dark-400 rounded focus:ring-primary-500 focus:ring-2 cursor-pointer"
+                      />
+                      <span className="text-gray-300 text-sm flex-1 group-hover:text-gray-200 transition-colors">
+                        {getText(
+                          'Are you ready to submit your course for review?',
+                          'هل أنت جاهز لإرسال دورتك للمراجعة؟'
+                        )}
+                      </span>
+                    </label>
+                  </div>
                 </div>
               )}
             </div>
@@ -879,7 +1076,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               </button>
               <button
                 onClick={handlePublishConfirm}
-                disabled={publishing}
+                disabled={publishing || (!publishConfirmChecked && courseToPublish.status !== 'published')}
                 className="flex-1 py-3 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {publishing 

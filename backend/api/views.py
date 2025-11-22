@@ -302,6 +302,10 @@ class CourseViewSet(viewsets.ModelViewSet):
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Set course status to pending
+        course.status = 'pending'
+        course.save()
+        
         # Create approval request
         from django.utils import timezone
         approval_request = CourseApprovalRequest.objects.create(
@@ -311,10 +315,13 @@ class CourseViewSet(viewsets.ModelViewSet):
             reason=request.data.get('message', ''),
         )
         
+        # Return updated course data
+        serializer = CourseSerializer(course, context={'request': request})
         return Response({
             'message': 'Publish request submitted successfully. Waiting for admin approval.',
-            'request_id': approval_request.id
-        }, status=status.HTTP_201_CREATED)
+            'request_id': approval_request.id,
+            'course': serializer.data
+        }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     def request_unpublish(self, request, pk=None):
@@ -323,6 +330,14 @@ class CourseViewSet(viewsets.ModelViewSet):
             course = Course.objects.get(pk=pk, teacher=request.user)
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Set course status to pending
+        course.status = 'pending'
+        course.save()
+        
+        # Set course status to pending
+        course.status = 'pending'
+        course.save()
         
         # Create approval request
         from django.utils import timezone
@@ -333,10 +348,13 @@ class CourseViewSet(viewsets.ModelViewSet):
             reason=request.data.get('reason', ''),
         )
         
+        # Return updated course data
+        serializer = CourseSerializer(course, context={'request': request})
         return Response({
             'message': 'Unpublish request submitted successfully. Waiting for admin approval.',
-            'request_id': approval_request.id
-        }, status=status.HTTP_201_CREATED)
+            'request_id': approval_request.id,
+            'course': serializer.data
+        }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     def request_deletion(self, request, pk=None):
@@ -435,6 +453,13 @@ class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
             elif request_type == 'delete':
                 course.delete()
                 return Response({'message': 'Course deleted successfully.'}, status=status.HTTP_200_OK)
+            
+            # Return updated course data
+            serializer = CourseSerializer(course, context={'request': request})
+            return Response({
+                'message': 'Request approved successfully.',
+                'course': serializer.data
+            }, status=status.HTTP_200_OK)
             
             # Update approval request
             approval_request.status = 'approved'
