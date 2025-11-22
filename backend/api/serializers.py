@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course
 )
 
 
@@ -175,3 +175,124 @@ class UserSerializer(serializers.ModelSerializer):
         
         return instance
 
+
+class CourseSerializer(serializers.ModelSerializer):
+    subject_name = serializers.SerializerMethodField()
+    grade_name = serializers.SerializerMethodField()
+    track_name = serializers.SerializerMethodField()
+    country_name = serializers.SerializerMethodField()
+    teacher_name = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    video_count = serializers.SerializerMethodField()
+    quiz_count = serializers.SerializerMethodField()
+    document_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Course
+        fields = [
+            'id', 'name', 'description', 'image', 'image_url', 'language', 'price',
+            'course_type', 'country', 'country_name', 'subject', 'subject_name', 
+            'grade', 'grade_name', 'track', 'track_name',
+            'status', 'created_at', 'updated_at', 'teacher', 'teacher_name',
+            'video_count', 'quiz_count', 'document_count'
+        ]
+        read_only_fields = ['teacher', 'created_at', 'updated_at']
+    
+    def get_subject_name(self, obj):
+        if obj.subject:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.subject.name_ar if lang == 'ar' else obj.subject.name_en
+        return None
+    
+    def get_grade_name(self, obj):
+        if obj.grade:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.grade.name_ar if lang == 'ar' else obj.grade.name_en
+        return None
+    
+    def get_track_name(self, obj):
+        if obj.track:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.track.name_ar if lang == 'ar' else obj.track.name_en
+        return None
+    
+    def get_country_name(self, obj):
+        if obj.country:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.country.name_ar if lang == 'ar' else obj.country.name_en
+        return None
+    
+    def get_teacher_name(self, obj):
+        return f"{obj.teacher.first_name} {obj.teacher.last_name}" if obj.teacher else None
+    
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+    
+    def get_video_count(self, obj):
+        # TODO: Implement when video model is created
+        return 0
+    
+    def get_quiz_count(self, obj):
+        # TODO: Implement when quiz model is created
+        return 0
+    
+    def get_document_count(self, obj):
+        # TODO: Implement when document model is created
+        return 0
+    
+    def validate_description(self, value):
+        # Check word count (approximately 150 words)
+        words = value.strip().split()
+        word_count = len([w for w in words if w])
+        if word_count > 150:
+            raise serializers.ValidationError("Description must be 150 words or less.")
+        return value
+    
+    def validate(self, attrs):
+        # If course type is school, country is required
+        if attrs.get('course_type') == 'school' and not attrs.get('country'):
+            raise serializers.ValidationError({
+                'country': 'Country is required for school courses.'
+            })
+        
+        # If course type is school and grade is 11 or 12, track is required
+        if attrs.get('course_type') == 'school' and attrs.get('grade'):
+            grade = attrs.get('grade')
+            if grade:
+                # Check grade_number if available
+                if hasattr(grade, 'grade_number'):
+                    if grade.grade_number == 11 or grade.grade_number == 12:
+                        if not attrs.get('track'):
+                            raise serializers.ValidationError({
+                                'track': 'Track is required for grade 11 or 12 courses.'
+                            })
+                else:
+                    # Fallback to checking name
+                    grade_name = str(grade.name_en if hasattr(grade, 'name_en') else grade)
+                    if '11' in grade_name or '12' in grade_name:
+                        if not attrs.get('track'):
+                            raise serializers.ValidationError({
+                                'track': 'Track is required for grade 11 or 12 courses.'
+                            })
+        return attrs

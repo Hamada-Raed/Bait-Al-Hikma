@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNavigate } from 'react-router-dom';
+
+const API_BASE_URL = 'http://localhost:8000/api';
 
 interface User {
   id: number;
@@ -11,14 +14,54 @@ interface User {
   is_approved: boolean;
 }
 
+interface Course {
+  id: number;
+  name: string;
+  description: string;
+  image_url?: string;
+  language: string;
+  price: string;
+  course_type: string;
+  subject_name?: string;
+  grade_name?: string;
+  target?: string;
+  status: string;
+  video_count: number;
+  quiz_count: number;
+  document_count: number;
+}
+
 interface TeacherDashboardProps {
   user: User;
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/courses/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setCourses(data.results || data);
+        }
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -46,7 +89,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-white">0</p>
+          <p className="text-3xl font-bold text-white">{courses.length}</p>
         </div>
 
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
@@ -88,32 +131,130 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
 
       {/* Courses Section */}
       <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-bold text-white">
             {getText('My Courses', 'دوراتي')}
           </h3>
-          <button className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all">
+          <button
+            onClick={() => navigate('/create-course')}
+            className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
+          >
             {getText('Create Course', 'إنشاء دورة')}
           </button>
         </div>
-        <div className="text-center py-12">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-            />
-          </svg>
-          <p className="mt-4 text-gray-400">
-            {getText('No courses created yet.', 'لم يتم إنشاء أي دورات بعد.')}
-          </p>
-        </div>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</div>
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="text-center py-12">
+            <svg
+              className="mx-auto h-12 w-12 text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+              />
+            </svg>
+            <p className="mt-4 text-gray-400">
+              {getText('No courses created yet.', 'لم يتم إنشاء أي دورات بعد.')}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {courses.map((course) => (
+              <div
+                key={course.id}
+                className="bg-dark-200 rounded-xl border border-dark-300 overflow-hidden hover:border-primary-500 transition-colors"
+              >
+                {/* Course Image */}
+                {course.image_url ? (
+                  <img
+                    src={course.image_url}
+                    alt={course.name}
+                    className="w-full h-48 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-48 bg-dark-300 flex items-center justify-center">
+                    <svg
+                      className="w-16 h-16 text-gray-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+                )}
+
+                {/* Course Info */}
+                <div className="p-4">
+                  <h4 className="text-lg font-bold text-white mb-2 line-clamp-2">{course.name}</h4>
+                  <p className="text-gray-400 text-sm mb-4 line-clamp-2">{course.description}</p>
+
+                  {/* Course Stats */}
+                  <div className="flex items-center justify-between text-sm text-gray-400 mb-4">
+                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <span>{course.video_count}</span>
+                    </div>
+                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      <span>{course.quiz_count}</span>
+                    </div>
+                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>{course.document_count}</span>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="mb-4">
+                    <span
+                      className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                        course.status === 'published'
+                          ? 'bg-green-500/20 text-green-400'
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}
+                    >
+                      {course.status === 'published'
+                        ? getText('Published', 'منشور')
+                        : getText('Draft', 'مسودة')}
+                    </span>
+                  </div>
+
+                  {/* Manage Course Button */}
+                  <button
+                    onClick={() => {
+                      // TODO: Navigate to manage course page
+                      console.log('Manage course:', course.id);
+                    }}
+                    className="w-full py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
+                  >
+                    {getText('Manage Course', 'إدارة الدورة')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

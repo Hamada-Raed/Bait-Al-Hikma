@@ -129,6 +129,48 @@ class TeacherSubject(models.Model):
         return f"{self.teacher.email} - {self.subject.name_en}"
 
 
+class Course(models.Model):
+    COURSE_TYPE_CHOICES = [
+        ('school', 'School'),
+        ('university', 'University'),
+    ]
+    
+    LANGUAGE_CHOICES = [
+        ('ar', 'Arabic'),
+        ('en', 'English'),
+        ('both', 'Both'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+    ]
+    
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='courses')
+    name = models.CharField(max_length=200)
+    description = models.TextField(max_length=1500, help_text='Maximum 150 words')
+    image = models.ImageField(upload_to='course_images/', blank=True, null=True)
+    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default='ar')
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    course_type = models.CharField(max_length=20, choices=COURSE_TYPE_CHOICES)
+    country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True,
+                               help_text='Required for school courses')
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
+    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True)
+    track = models.ForeignKey(Track, on_delete=models.SET_NULL, null=True, blank=True,
+                             help_text='Required if course is for grade 11 or 12')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.name} - {self.teacher.email}"
+    
+
+
 class PlatformSettings(models.Model):
     name_en = models.CharField(max_length=100, default='Bait Al-Hikma')
     name_ar = models.CharField(max_length=100, default='بيت الحكمة')

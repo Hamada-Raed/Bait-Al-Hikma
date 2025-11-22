@@ -11,6 +11,7 @@ import SignUp from './components/SignUp';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
+import CreateCourse from './components/CreateCourse';
 import './App.css';
 
 const HomePage: React.FC = () => {
@@ -89,6 +90,14 @@ const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/create-course"
+              element={
+                <ProtectedRoute>
+                  <CreateCourse />
                 </ProtectedRoute>
               }
             />

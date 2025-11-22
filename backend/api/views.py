@@ -9,13 +9,13 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
     MajorSerializer, SubjectSerializer, UserSerializer, PlatformSettingsSerializer,
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
-    WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer
+    WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer
 )
 
 
@@ -270,3 +270,26 @@ class WhyChooseUsSectionViewSet(viewsets.ReadOnlyModelViewSet):
         section_data = self.get_serializer(section).data
         section_data['reasons'] = WhyChooseUsReasonSerializer(reasons, many=True).data
         return Response(section_data)
+
+
+class CourseViewSet(viewsets.ModelViewSet):
+    serializer_class = CourseSerializer
+    pagination_class = PageNumberPagination
+    
+    def get_queryset(self):
+        # Teachers can only see their own courses
+        if self.request.user.is_authenticated and self.request.user.user_type == 'teacher':
+            return Course.objects.filter(teacher=self.request.user)
+        # Students can only see published courses
+        elif self.request.user.is_authenticated:
+            return Course.objects.filter(status='published')
+        return Course.objects.none()
+    
+    def perform_create(self, serializer):
+        # Automatically set the teacher to the current user
+        serializer.save(teacher=self.request.user)
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
