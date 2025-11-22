@@ -37,11 +37,14 @@ interface TeacherDashboardProps {
   user: User;
 }
 
+type TabType = 'all' | 'published' | 'draft' | 'pending';
+
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('all');
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<number>>(new Set());
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState<number | null>(null);
@@ -83,6 +86,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       return newSet;
     });
   };
+
+  const getFilteredCourses = () => {
+    switch (activeTab) {
+      case 'published':
+        return courses.filter(course => course.status === 'published');
+      case 'draft':
+        return courses.filter(course => course.status === 'draft');
+      case 'pending':
+        return courses.filter(course => course.status === 'pending');
+      case 'all':
+      default:
+        return courses;
+    }
+  };
+
+  const filteredCourses = getFilteredCourses();
 
   const handlePublishClick = async (course: Course) => {
     // If published and has NO students, return to draft directly
@@ -517,21 +536,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-primary-500/20 to-accent-purple/20 rounded-xl p-6 border border-primary-500/30 mt-5">
-        <h2 className="text-2xl font-bold text-white mb-2">
-          {getText('Welcome to Your Teaching Dashboard', 'مرحباً بك في لوحة التدريس')}
-        </h2>
-        <p className="text-gray-300">
-          {getText(
-            'Manage your courses and students from here.',
-            'إدارة دوراتك وطلابك من هنا.'
-          )}
-        </p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-5">
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-400 text-sm font-medium">
@@ -581,25 +586,87 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Courses Section */}
+      {/* Courses Section with Tabs */}
       <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-white">
             {getText('My Courses', 'دوراتي')}
           </h3>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                // TODO: Implement create availability functionality
+                console.log('Create availability clicked');
+              }}
+              className="px-4 py-2 bg-dark-200 border border-dark-400 text-white font-semibold rounded-lg hover:bg-dark-300 transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {getText('Create Availability', 'إنشاء التوفر')}
+            </button>
+            <button
+              onClick={() => navigate('/create-course')}
+              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {getText('Create Course', 'إنشاء دورة')}
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-dark-300 mb-6">
           <button
-            onClick={() => navigate('/create-course')}
-            className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
+            onClick={() => setActiveTab('all')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'all'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
           >
-            {getText('Create Course', 'إنشاء دورة')}
+            {getText('All Courses', 'جميع الدورات')}
+          </button>
+          <button
+            onClick={() => setActiveTab('published')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'published'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            {getText('Published', 'منشور')}
+          </button>
+          <button
+            onClick={() => setActiveTab('draft')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'draft'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            {getText('Draft', 'مسودة')}
+          </button>
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'pending'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            {getText('Pending', 'قيد الانتظار')}
           </button>
         </div>
 
         {loading ? (
           <div className="text-center py-12">
-            <div className="text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
+            <p className="mt-4 text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</p>
           </div>
-        ) : courses.length === 0 ? (
+        ) : filteredCourses.length === 0 ? (
           <div className="text-center py-12">
             <svg
               className="mx-auto h-12 w-12 text-gray-500"
@@ -615,12 +682,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
               />
             </svg>
             <p className="mt-4 text-gray-400">
-              {getText('No courses created yet.', 'لم يتم إنشاء أي دورات بعد.')}
+              {activeTab === 'all'
+                ? getText('No courses created yet.', 'لم يتم إنشاء أي دورات بعد.')
+                : activeTab === 'published'
+                ? getText('No published courses yet.', 'لا توجد دورات منشورة بعد.')
+                : activeTab === 'draft'
+                ? getText('No draft courses yet.', 'لا توجد دورات مسودة بعد.')
+                : getText('No pending courses yet.', 'لا توجد دورات قيد الانتظار بعد.')}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courses.map((course) => (
+            {filteredCourses.map((course) => (
               <div
                 key={course.id}
                 className="bg-dark-200 rounded-xl border border-dark-300 overflow-hidden hover:border-primary-500 transition-colors"

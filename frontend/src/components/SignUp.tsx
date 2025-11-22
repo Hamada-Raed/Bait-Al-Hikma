@@ -151,6 +151,15 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
       setError(t('signup.required'));
       return false;
     }
+    
+    // Email validation for university students - must end with .edu
+    if (userType === 'university_student' && !formData.email.toLowerCase().endsWith('.edu')) {
+      setError(language === 'ar' 
+        ? 'يجب أن ينتهي البريد الإلكتروني بـ .edu للطلاب الجامعيين'
+        : 'Email must end with .edu for university students');
+      return false;
+    }
+    
     if (formData.password !== formData.password_confirm) {
       setError(t('signup.passwordMismatch'));
       return false;
@@ -415,17 +424,35 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-gray-300 mb-2">{t('signup.email')}</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                    required
-                  />
-                </div>
+                  <div>
+                    <label className="block text-gray-300 mb-2">
+                      {t('signup.email')}
+                      {userType === 'university_student' && (
+                        <span className="text-yellow-400 text-xs ml-2 rtl:mr-2">
+                          ({language === 'ar' ? 'يجب أن ينتهي بـ .edu' : 'must end with .edu'})
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-3 bg-dark-300 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                        userType === 'university_student' && formData.email && !formData.email.toLowerCase().endsWith('.edu')
+                          ? 'border-red-500'
+                          : 'border-dark-400'
+                      }`}
+                      required
+                    />
+                    {userType === 'university_student' && formData.email && !formData.email.toLowerCase().endsWith('.edu') && (
+                      <p className="text-red-400 text-xs mt-1">
+                        {language === 'ar' 
+                          ? 'يجب أن ينتهي البريد الإلكتروني بـ .edu للطلاب الجامعيين'
+                          : 'Email must end with .edu for university students'}
+                      </p>
+                    )}
+                  </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-300 mb-2">{t('signup.password')}</label>

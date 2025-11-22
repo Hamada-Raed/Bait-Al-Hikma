@@ -74,37 +74,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-dark-50">
-      {/* Header - Render outside main for teachers to ensure full width */}
-      {user.user_type === 'teacher' ? (
-        <Header />
-      ) : (
-        /* Dashboard Header - Only for students */
-        <header className="bg-dark-100 border-b border-dark-300 sticky top-0 z-50 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-20">
-              <div>
-                <h1 className="text-2xl font-bold text-white">
-                  {getText('Dashboard', 'لوحة التحكم')}
-                </h1>
-                <p className="text-gray-400 text-sm">
-                  {getText(
-                    `Welcome, ${user.first_name || user.username}!`,
-                    `مرحباً، ${user.first_name || user.username}!`
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center space-x-4 rtl:space-x-reverse">
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white rounded-lg transition-colors"
-                >
-                  {getText('Log Out', 'تسجيل الخروج')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-      )}
+      {/* Header - Show for all authenticated users */}
+      <Header />
 
       {/* Dashboard Content */}
       <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${user.user_type === 'teacher' || user.is_staff ? '' : 'py-8'}`}>

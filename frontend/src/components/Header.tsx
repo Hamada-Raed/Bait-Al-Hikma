@@ -55,7 +55,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
         <div className="flex items-center justify-between h-20">
           {/* Logo and Platform Name */}
           <button
-            onClick={user?.user_type === 'teacher' ? handleHomeClick : (e) => {
+            onClick={user ? handleHomeClick : (e) => {
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
@@ -132,23 +132,70 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
             {/* Auth Buttons - Desktop */}
             {user ? (
               <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
-                {user.user_type === 'teacher' ? (
-                  // User Icon with Dropdown for Teachers
-                  <div className="relative" ref={dropdownRef}>
-                    <button
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      className="flex items-center justify-center w-10 h-10 rounded-full bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 overflow-hidden"
-                      aria-label="User menu"
-                    >
-                      {user?.profile_picture ? (
-                        <img
-                          src={user.profile_picture.startsWith('http') ? user.profile_picture : `http://localhost:8000${user.profile_picture}`}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
+                {/* User Icon with Dropdown for all authenticated users */}
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="flex items-center justify-center w-10 h-10 rounded-full bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 overflow-hidden"
+                    aria-label="User menu"
+                  >
+                    {user?.profile_picture ? (
+                      <img
+                        src={user.profile_picture.startsWith('http') ? user.profile_picture : `http://localhost:8000${user.profile_picture}`}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                         />
-                      ) : (
+                      </svg>
+                    )}
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {isDropdownOpen && (
+                    <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} mt-2 w-48 bg-dark-200 rounded-lg shadow-xl border border-dark-300 py-2 z-50`}>
+                      <button
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          handleDashboardClick();
+                        }}
+                        className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                      >
                         <svg
-                          className="w-6 h-6"
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                          />
+                        </svg>
+                        <span>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          navigate('/profile');
+                        }}
+                        className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                      >
+                        <svg
+                          className="w-5 h-5"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -160,98 +207,33 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                           />
                         </svg>
-                      )}
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    {isDropdownOpen && (
-                      <div className={`absolute ${language === 'ar' ? 'left-0' : 'right-0'} mt-2 w-48 bg-dark-200 rounded-lg shadow-xl border border-dark-300 py-2 z-50`}>
-                        <button
-                          onClick={() => {
-                            setIsDropdownOpen(false);
-                            handleDashboardClick();
-                          }}
-                          className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                        <span>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
+                      >
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                            />
-                          </svg>
-                          <span>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsDropdownOpen(false);
-                            navigate('/profile');
-                          }}
-                          className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                            />
-                          </svg>
-                          <span>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsDropdownOpen(false);
-                            handleLogout();
-                          }}
-                          className="w-full px-4 py-2 text-left rtl:text-right text-gray-300 hover:bg-dark-300 hover:text-white transition-colors flex items-center space-x-2 rtl:space-x-reverse"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                            />
-                          </svg>
-                          <span>{language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  // Regular buttons for non-teachers
-                  <>
-                    <button
-                      onClick={handleDashboardClick}
-                      className="px-6 py-2.5 text-gray-300 hover:text-white font-medium transition-colors duration-200 rounded-lg hover:bg-dark-200"
-                    >
-                      {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="px-6 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
-                    >
-                      {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
-                    </button>
-                  </>
-                )}
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                          />
+                        </svg>
+                        <span>{language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="hidden md:flex items-center space-x-3 rtl:space-x-reverse">
@@ -329,93 +311,75 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               </a>
               <div className="pt-4 border-t border-dark-300 flex flex-col space-y-3">
                 {user ? (
-                  user.user_type === 'teacher' ? (
-                    // Mobile dropdown for teachers
-                    <>
-                      <button
-                        onClick={() => {
-                          setIsMenuOpen(false);
-                          handleDashboardClick();
-                        }}
-                        className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
+                  // Mobile menu for all authenticated users
+                  <>
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handleDashboardClick();
+                      }}
+                      className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                          />
-                        </svg>
-                        <span>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsMenuOpen(false);
-                          navigate('/profile');
-                        }}
-                        className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                        />
+                      </svg>
+                      <span>{language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        navigate('/profile');
+                      }}
+                      className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right flex items-center space-x-2 rtl:space-x-reverse"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                          />
-                        </svg>
-                        <span>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsMenuOpen(false);
-                          handleLogout();
-                        }}
-                        className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse"
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                      <span>{language === 'ar' ? 'الملف الشخصي' : 'Profile'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                          />
-                        </svg>
-                        <span>{language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}</span>
-                      </button>
-                    </>
-                  ) : (
-                    // Regular buttons for non-teachers
-                    <>
-                      <button
-                        onClick={handleDashboardClick}
-                        className="w-full px-4 py-2.5 text-gray-300 hover:text-white font-medium transition-colors rounded-lg hover:bg-dark-200 text-left rtl:text-right"
-                      >
-                        {language === 'ar' ? 'لوحة التحكم' : 'Dashboard'}
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full px-4 py-2.5 bg-dark-200 hover:bg-dark-300 text-gray-300 hover:text-white font-medium rounded-lg transition-all duration-200"
-                      >
-                        {language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}
-                      </button>
-                    </>
-                  )
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                        />
+                      </svg>
+                      <span>{language === 'ar' ? 'تسجيل الخروج' : 'Log Out'}</span>
+                    </button>
+                  </>
                 ) : (
                   <>
                     <button

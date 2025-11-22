@@ -21,6 +21,28 @@ interface Subject {
   code: string;
 }
 
+interface Grade {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  grade_number: number;
+  country: number;
+}
+
+interface Track {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  code: string;
+}
+
+interface Major {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  code: string;
+}
+
 const Profile: React.FC = () => {
   const { user, checkAuth } = useAuth();
   const { language } = useLanguage();
@@ -29,6 +51,9 @@ const Profile: React.FC = () => {
   
   const [countries, setCountries] = useState<Country[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [majors, setMajors] = useState<Major[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,36 +70,74 @@ const Profile: React.FC = () => {
     bio: user?.bio || '',
     years_of_experience: user?.years_of_experience?.toString() || '',
     subjects: [] as number[],
+    grade: '',
+    track: '',
+    major: '',
   });
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
   useEffect(() => {
-    if (!user || user.user_type !== 'teacher') {
+    if (!user) {
       navigate('/dashboard');
       return;
     }
 
     const fetchData = async () => {
       try {
-        const [countriesRes, subjectsRes, userRes] = await Promise.all([
+        setLoading(true);
+        const promises: Promise<Response>[] = [
           fetch(`${API_BASE_URL}/countries/`),
-          fetch(`${API_BASE_URL}/subjects/`),
           fetch(`${API_BASE_URL}/users/me/`, {
             credentials: 'include',
           }),
-        ]);
+        ];
 
-        const countriesData = await countriesRes.json();
-        const subjectsData = await subjectsRes.json();
-        const userData = await userRes.json();
+        // Add subject fetch for teachers
+        if (user.user_type === 'teacher') {
+          promises.push(fetch(`${API_BASE_URL}/subjects/`));
+        }
+
+        // Add grade/track fetch for school students
+        if (user.user_type === 'school_student') {
+          promises.push(fetch(`${API_BASE_URL}/grades/`));
+          promises.push(fetch(`${API_BASE_URL}/tracks/`));
+        }
+
+        // Add major fetch for university students
+        if (user.user_type === 'university_student') {
+          promises.push(fetch(`${API_BASE_URL}/majors/`));
+        }
+
+        const results = await Promise.all(promises);
+        const countriesData = await results[0].json();
+        const userData = await results[1].json();
 
         setCountries(countriesData.results || countriesData);
-        setSubjects(subjectsData.results || subjectsData);
+
+        // Handle teacher-specific data
+        if (user.user_type === 'teacher' && results.length > 2) {
+          const subjectsData = await results[2].json();
+          setSubjects(subjectsData.results || subjectsData);
+        }
+
+        // Handle school student-specific data
+        if (user.user_type === 'school_student' && results.length > 2) {
+          const gradesData = await results[2].json();
+          const tracksData = await results[3].json();
+          setGrades(gradesData.results || gradesData);
+          setTracks(tracksData.results || tracksData);
+        }
+
+        // Handle university student-specific data
+        if (user.user_type === 'university_student' && results.length > 2) {
+          const majorsData = await results[2].json();
+          setMajors(majorsData.results || majorsData);
+        }
 
         // Update form data with user data
         if (userData) {
-          setFormData({
+          const baseFormData: any = {
             first_name: userData.first_name || '',
             last_name: userData.last_name || '',
             email: userData.email || '',
@@ -82,9 +145,22 @@ const Profile: React.FC = () => {
             country: userData.country?.toString() || '',
             phone_number: userData.phone_number || '',
             bio: userData.bio || '',
-            years_of_experience: userData.years_of_experience?.toString() || '',
-            subjects: Array.isArray(userData.subjects) ? userData.subjects : [],
-          });
+            grade: '',
+            track: '',
+            major: '',
+          };
+
+          if (user.user_type === 'teacher') {
+            baseFormData.years_of_experience = userData.years_of_experience?.toString() || '';
+            baseFormData.subjects = Array.isArray(userData.subjects) ? userData.subjects : [];
+          } else if (user.user_type === 'school_student') {
+            baseFormData.grade = userData.grade?.toString() || '';
+            baseFormData.track = userData.track?.toString() || '';
+          } else if (user.user_type === 'university_student') {
+            baseFormData.major = userData.major?.toString() || '';
+          }
+
+          setFormData(baseFormData);
 
           if (userData.profile_picture) {
             const pictureUrl = userData.profile_picture.startsWith('http') 
@@ -154,12 +230,26 @@ const Profile: React.FC = () => {
       if (formData.country) formDataToSend.append('country', formData.country);
       if (formData.phone_number) formDataToSend.append('phone_number', formData.phone_number);
       if (formData.bio) formDataToSend.append('bio', formData.bio);
-      if (formData.years_of_experience) formDataToSend.append('years_of_experience', formData.years_of_experience);
       
-      // Add subjects
-      formData.subjects.forEach(subjectId => {
-        formDataToSend.append('subjects', subjectId.toString());
-      });
+      // Teacher-specific fields
+      if (user?.user_type === 'teacher') {
+        if (formData.years_of_experience) formDataToSend.append('years_of_experience', formData.years_of_experience);
+        // Add subjects
+        formData.subjects.forEach(subjectId => {
+          formDataToSend.append('subjects', subjectId.toString());
+        });
+      }
+      
+      // School student-specific fields
+      if (user?.user_type === 'school_student') {
+        if (formData.grade) formDataToSend.append('grade', formData.grade);
+        if (formData.track) formDataToSend.append('track', formData.track);
+      }
+      
+      // University student-specific fields
+      if (user?.user_type === 'university_student') {
+        if (formData.major) formDataToSend.append('major', formData.major);
+      }
 
       // Add profile picture if a new one was selected
       if (fileInputRef.current?.files?.[0]) {
@@ -209,7 +299,7 @@ const Profile: React.FC = () => {
     }));
   };
 
-  const getName = (item: Country | Subject) => {
+  const getName = (item: Country | Subject | Grade | Track | Major) => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
   };
 
@@ -382,55 +472,129 @@ const Profile: React.FC = () => {
             </div>
 
             {/* Teacher Specific Fields */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                {getText('Years of Experience', 'سنوات الخبرة')}
-              </label>
-              <input
-                type="number"
-                name="years_of_experience"
-                value={formData.years_of_experience}
-                onChange={handleChange}
-                min="0"
-                className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                {getText('Bio', 'نبذة عنك')}
-              </label>
-              <textarea
-                name="bio"
-                value={formData.bio}
-                onChange={handleChange}
-                rows={4}
-                className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder={getText('Tell us about yourself...', 'أخبرنا عن نفسك...')}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                {getText('Subjects', 'المواد')}
-              </label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {subjects.map((subject) => (
-                  <label
-                    key={subject.id}
-                    className="flex items-center space-x-2 rtl:space-x-reverse p-3 bg-dark-200 rounded-lg cursor-pointer hover:bg-dark-300 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData.subjects.includes(subject.id)}
-                      onChange={() => handleSubjectToggle(subject.id)}
-                      className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
-                    />
-                    <span className="text-white text-sm">{getName(subject)}</span>
+            {user?.user_type === 'teacher' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {getText('Years of Experience', 'سنوات الخبرة')}
                   </label>
-                ))}
+                  <input
+                    type="number"
+                    name="years_of_experience"
+                    value={formData.years_of_experience}
+                    onChange={handleChange}
+                    min="0"
+                    className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {getText('Subjects', 'المواد')}
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {subjects.map((subject) => (
+                      <label
+                        key={subject.id}
+                        className="flex items-center space-x-2 rtl:space-x-reverse p-3 bg-dark-200 rounded-lg cursor-pointer hover:bg-dark-300 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.subjects.includes(subject.id)}
+                          onChange={() => handleSubjectToggle(subject.id)}
+                          className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                        />
+                        <span className="text-white text-sm">{getName(subject)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* School Student Specific Fields */}
+            {user?.user_type === 'school_student' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {getText('Grade', 'الصف')}
+                  </label>
+                  <select
+                    name="grade"
+                    value={formData.grade}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">{getText('Select Grade', 'اختر الصف')}</option>
+                    {grades.filter(g => !formData.country || g.country.toString() === formData.country).map((grade) => (
+                      <option key={grade.id} value={grade.id}>
+                        {getName(grade)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {formData.grade && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {getText('Track', 'المسار')}
+                    </label>
+                    <select
+                      name="track"
+                      value={formData.track}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">{getText('Select Track', 'اختر المسار')} ({getText('Optional', 'اختياري')})</option>
+                      {tracks.map((track) => (
+                        <option key={track.id} value={track.id}>
+                          {getName(track)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* University Student Specific Fields */}
+            {user?.user_type === 'university_student' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  {getText('Major', 'التخصص')}
+                </label>
+                <select
+                  name="major"
+                  value={formData.major}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">{getText('Select Major', 'اختر التخصص')}</option>
+                  {majors.map((major) => (
+                    <option key={major.id} value={major.id}>
+                      {getName(major)}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
+            )}
+
+            {/* Bio field for teachers only */}
+            {user?.user_type === 'teacher' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  {getText('Bio', 'نبذة عنك')}
+                </label>
+                <textarea
+                  name="bio"
+                  value={formData.bio}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder={getText('Tell us about yourself...', 'أخبرنا عن نفسك...')}
+                />
+              </div>
+            )}
 
             {/* Submit Button */}
             <div className="flex gap-4">
