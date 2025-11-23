@@ -299,28 +299,96 @@ class CourseSerializer(serializers.ModelSerializer):
 
 
 class AvailabilitySerializer(serializers.ModelSerializer):
+    grades = serializers.PrimaryKeyRelatedField(many=True, queryset=Grade.objects.all(), required=False)
+    grade_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    is_booked = serializers.BooleanField(read_only=True)
+    
     class Meta:
         model = Availability
-        fields = ['id', 'teacher', 'date', 'hour', 'created_at', 'updated_at']
-        read_only_fields = ['teacher', 'created_at', 'updated_at']
+        fields = ['id', 'teacher', 'title', 'date', 'start_hour', 'end_hour', 'for_university_students', 'for_school_students', 
+                  'grades', 'grade_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
+        read_only_fields = ['teacher', 'created_at', 'updated_at', 'is_booked', 'booked_by', 'booked_at']
     
     def validate(self, attrs):
         from django.utils import timezone
         from datetime import datetime, time
         
-        # Get date and hour
+        # Get date and hours
         date = attrs.get('date')
-        hour = attrs.get('hour')
+        start_hour = attrs.get('start_hour')
+        end_hour = attrs.get('end_hour')
+        teacher = self.context['request'].user if self.context.get('request') else None
         
-        if date and hour is not None:
-            # Check if the date/hour is in the past
+        if date and start_hour is not None and end_hour is not None and teacher:
+            # Validate start_hour < end_hour (handle wrap-around at midnight)
+            if start_hour == end_hour:
+                raise serializers.ValidationError({
+                    'end_hour': 'End hour must be different from start hour.'
+                })
+            
+            # Check if the start time is in the past
             now = timezone.now()
-            slot_datetime = datetime.combine(date, time(hour, 0))
+            slot_datetime = datetime.combine(date, time(start_hour, 0))
             slot_datetime = timezone.make_aware(slot_datetime)
             
             if slot_datetime < now:
                 raise serializers.ValidationError({
                     'date': 'Cannot create availability in the past.'
                 })
+            
+            # Check for overlapping availabilities (same teacher, same date)
+            existing = Availability.objects.filter(
+                teacher=teacher,
+                date=date
+            )
+            
+            # Exclude current instance if updating
+            if self.instance:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            # Create a temporary availability object to check overlaps
+            temp_availability = Availability(
+                date=date,
+                start_hour=start_hour,
+                end_hour=end_hour,
+                teacher=teacher
+            )
+            
+            for existing_av in existing:
+                if temp_availability.overlaps_with(existing_av):
+                    raise serializers.ValidationError({
+                        'start_hour': f'This availability overlaps with an existing availability ({existing_av.start_hour}:00-{existing_av.end_hour}:00) on {date.strftime("%B %d, %Y")}. Please choose a different time.'
+                    })
+        
+        # Validate that at least one student type is selected
+        if not attrs.get('for_university_students') and not attrs.get('for_school_students'):
+            raise serializers.ValidationError({
+                'for_university_students': 'At least one student type must be selected.',
+                'for_school_students': 'At least one student type must be selected.'
+            })
+        
+        # Validate grades if school students is selected
+        if attrs.get('for_school_students'):
+            grade_ids = attrs.get('grade_ids', [])
+            if not grade_ids:
+                raise serializers.ValidationError({
+                    'grades': 'At least one grade must be selected when school students is selected.'
+                })
         
         return attrs
+    
+    def create(self, validated_data):
+        grade_ids = validated_data.pop('grade_ids', [])
+        availability = Availability.objects.create(**validated_data)
+        if grade_ids:
+            availability.grades.set(grade_ids)
+        return availability
+    
+    def update(self, instance, validated_data):
+        grade_ids = validated_data.pop('grade_ids', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if grade_ids is not None:
+            instance.grades.set(grade_ids)
+        return instance

@@ -524,23 +524,80 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
         # Automatically set the teacher to the current user
         serializer.save(teacher=self.request.user)
     
+    def destroy(self, request, *args, **kwargs):
+        """Override destroy to check 8-hour rule for booked availabilities"""
+        instance = self.get_object()
+        
+        # Check if availability can be deleted
+        can_delete, error_message = instance.can_be_deleted()
+        
+        if not can_delete:
+            return Response({
+                'error': error_message
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return super().destroy(request, *args, **kwargs)
+    
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
-        """Create multiple availability slots at once"""
+        """Create availability block from selected time slots"""
         if not request.user.is_authenticated or request.user.user_type != 'teacher':
             return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
         slots = request.data.get('slots', [])
-        if not slots:
+        if not slots or len(slots) == 0:
             return Response({'error': 'No slots provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get common data
+        title = request.data.get('title', '')
+        for_university_students = request.data.get('for_university_students', False)
+        for_school_students = request.data.get('for_school_students', False)
+        grade_ids = request.data.get('grade_ids', [])
+        
+        # Group slots by date and calculate start/end hours for each date
+        from collections import defaultdict
+        date_blocks = defaultdict(lambda: {'hours': [], 'date': None})
+        
+        for slot in slots:
+            date_str = slot.get('date')
+            hour = slot.get('hour')
+            if date_str and hour is not None:
+                if date_blocks[date_str]['date'] is None:
+                    date_blocks[date_str]['date'] = date_str
+                date_blocks[date_str]['hours'].append(hour)
         
         created = []
         errors = []
         
-        for slot in slots:
+        # Create one block per date
+        for date_str, block_data in date_blocks.items():
+            hours = sorted(set(block_data['hours']))  # Remove duplicates and sort
+            
+            if len(hours) == 0:
+                continue
+            
+            # Find consecutive hours to form blocks
+            # For simplicity, we'll create one block from min to max+1
+            start_hour = min(hours)
+            end_hour = max(hours) + 1
+            
+            # Handle wrap-around (if 0 is in the list, it should be treated as 24)
+            if 0 in hours:
+                # If we have hours like [22, 23, 0], we need to handle it
+                normalized_hours = [h if h != 0 else 24 for h in hours]
+                start_hour = min(normalized_hours)
+                end_hour = max(normalized_hours) + 1
+                if end_hour > 24:
+                    end_hour = end_hour % 24
+            
             serializer = AvailabilitySerializer(data={
-                'date': slot.get('date'),
-                'hour': slot.get('hour')
+                'date': date_str,
+                'start_hour': start_hour,
+                'end_hour': end_hour,
+                'title': title,
+                'for_university_students': for_university_students,
+                'for_school_students': for_school_students,
+                'grade_ids': grade_ids if for_school_students else []
             }, context={'request': request})
             
             if serializer.is_valid():
@@ -548,9 +605,9 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
                     availability = serializer.save(teacher=request.user)
                     created.append(serializer.data)
                 except Exception as e:
-                    errors.append({'slot': slot, 'error': str(e)})
+                    errors.append({'date': date_str, 'error': str(e)})
             else:
-                errors.append({'slot': slot, 'error': serializer.errors})
+                errors.append({'date': date_str, 'error': serializer.errors})
         
         return Response({
             'created': created,
@@ -561,27 +618,37 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['delete'])
     def bulk_delete(self, request):
-        """Delete multiple availability slots at once"""
+        """Delete availability blocks by IDs"""
         if not request.user.is_authenticated or request.user.user_type != 'teacher':
             return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         
-        slots = request.data.get('slots', [])
-        if not slots:
-            return Response({'error': 'No slots provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        availability_ids = request.data.get('availability_ids', [])
+        if not availability_ids:
+            return Response({'error': 'No availability IDs provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if availabilities can be deleted (8-hour rule)
+        availabilities_to_delete = Availability.objects.filter(
+            teacher=request.user,
+            id__in=availability_ids
+        )
         
         deleted_count = 0
-        for slot in slots:
-            date = slot.get('date')
-            hour = slot.get('hour')
-            if date and hour is not None:
-                deleted = Availability.objects.filter(
-                    teacher=request.user,
-                    date=date,
-                    hour=hour
-                ).delete()
-                deleted_count += deleted[0]
+        errors = []
+        
+        for availability in availabilities_to_delete:
+            can_delete, error_message = availability.can_be_deleted()
+            if can_delete:
+                availability.delete()
+                deleted_count += 1
+            else:
+                errors.append({
+                    'id': availability.id,
+                    'error': error_message
+                })
         
         return Response({
-            'message': f'Deleted {deleted_count} availability slot(s).',
-            'deleted_count': deleted_count
+            'message': f'Deleted {deleted_count} availability block(s).',
+            'deleted_count': deleted_count,
+            'errors': errors,
+            'error_count': len(errors)
         }, status=status.HTTP_200_OK)

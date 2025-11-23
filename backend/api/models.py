@@ -346,17 +346,72 @@ class WhyChooseUsSection(models.Model):
 
 
 class Availability(models.Model):
-    """Teacher availability time slots"""
+    """Teacher availability time blocks"""
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='availabilities')
+    title = models.CharField(max_length=200, blank=True, null=True)
     date = models.DateField()
-    hour = models.IntegerField(help_text='Hour in 24-hour format (0-23)')
+    start_hour = models.IntegerField(help_text='Start hour in 24-hour format (0-23)')
+    end_hour = models.IntegerField(help_text='End hour in 24-hour format (0-23), exclusive (not included)')
+    for_university_students = models.BooleanField(default=False)
+    for_school_students = models.BooleanField(default=False)
+    grades = models.ManyToManyField(Grade, blank=True, related_name='availabilities')
+    is_booked = models.BooleanField(default=False, help_text='Whether this availability has been booked by a student')
+    booked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='booked_availabilities')
+    booked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ['teacher', 'date', 'hour']
-        ordering = ['date', 'hour']
+        ordering = ['date', 'start_hour']
         verbose_name_plural = 'Availabilities'
     
     def __str__(self):
-        return f"{self.teacher.email} - {self.date} {self.hour}:00"
+        title_str = f" - {self.title}" if self.title else ""
+        return f"{self.teacher.email} - {self.date} {self.start_hour}:00-{self.end_hour}:00{title_str}"
+    
+    def get_hours(self):
+        """Get list of hours in this block"""
+        hours = []
+        current = self.start_hour
+        while current != self.end_hour:
+            hours.append(current)
+            current = (current + 1) % 24
+        return hours
+    
+    def overlaps_with(self, other):
+        """Check if this availability overlaps with another"""
+        if self.date != other.date or self.teacher != other.teacher:
+            return False
+        
+        # Check if blocks overlap
+        # Normalize hours (handle wrap-around at midnight)
+        def normalize_hour(hour):
+            return hour if hour != 0 else 24
+        
+        self_start = normalize_hour(self.start_hour)
+        self_end = normalize_hour(self.end_hour) if self.end_hour != 0 else 24
+        other_start = normalize_hour(other.start_hour)
+        other_end = normalize_hour(other.end_hour) if other.end_hour != 0 else 24
+        
+        # Check overlap
+        return not (self_end <= other_start or other_end <= self_start)
+    
+    def can_be_deleted(self):
+        """Check if availability can be deleted (8 hours before start time if booked)"""
+        if not self.is_booked:
+            return True, None
+        
+        from django.utils import timezone
+        from datetime import datetime, time
+        
+        slot_datetime = datetime.combine(self.date, time(self.start_hour, 0))
+        slot_datetime = timezone.make_aware(slot_datetime)
+        now = timezone.now()
+        
+        time_until_slot = slot_datetime - now
+        
+        if time_until_slot.total_seconds() < 8 * 3600:  # Less than 8 hours
+            hours_remaining = time_until_slot.total_seconds() / 3600
+            return False, f"Cannot delete availability. It is booked and starts in less than 8 hours ({hours_remaining:.1f} hours remaining)."
+        
+        return True, None

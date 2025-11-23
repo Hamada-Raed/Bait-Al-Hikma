@@ -133,11 +133,11 @@ class CourseApprovalRequestAdmin(admin.ModelAdmin):
 
 @admin.register(Availability)
 class AvailabilityAdmin(admin.ModelAdmin):
-    list_display = ['teacher', 'date', 'hour', 'created_at']
-    list_filter = ['date', 'hour', 'created_at']
-    search_fields = ['teacher__email', 'teacher__first_name', 'teacher__last_name']
+    list_display = ['teacher', 'date', 'start_hour', 'end_hour', 'title', 'is_booked', 'created_at']
+    list_filter = ['date', 'start_hour', 'is_booked', 'created_at']
+    search_fields = ['teacher__email', 'teacher__first_name', 'teacher__last_name', 'title']
     readonly_fields = ['created_at', 'updated_at']
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.select_related('teacher')
+        return qs.select_related('teacher', 'booked_by')
