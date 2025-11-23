@@ -680,7 +680,7 @@ const ManageCourse: React.FC = () => {
         setEditingVideo(null);
         setVideoForm({ title: '', description: '', video_file: null, video_url: '', duration_minutes: 0 });
         setDragActive(false);
-      }, true); // Require checkbox
+      });
       return;
     }
 
@@ -981,7 +981,7 @@ const ManageCourse: React.FC = () => {
           ]
         });
         setDragActiveQuizImage(false);
-      }, true); // Require checkbox
+      });
       return;
     }
 
