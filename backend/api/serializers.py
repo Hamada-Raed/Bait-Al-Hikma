@@ -309,6 +309,11 @@ class AvailabilitySerializer(serializers.ModelSerializer):
                   'grades', 'grade_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
         read_only_fields = ['teacher', 'created_at', 'updated_at', 'is_booked', 'booked_by', 'booked_at']
     
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Title is required.')
+        return value.strip()
+    
     def validate(self, attrs):
         from django.utils import timezone
         from datetime import datetime, time

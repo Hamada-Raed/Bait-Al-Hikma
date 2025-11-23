@@ -456,6 +456,11 @@ const AvailabilityCalendar: React.FC = () => {
 
   // Handle form submission
   const handleCreateAvailability = async () => {
+    if (!formData.title || formData.title.trim() === '') {
+      alert(getText('Please enter a title', 'يرجى إدخال عنوان'));
+      return;
+    }
+
     if (!formData.for_university_students && !formData.for_school_students) {
       alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
       return;
@@ -842,7 +847,7 @@ const AvailabilityCalendar: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-dark-200 rounded">
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={language === 'ar' ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"} />
                     </svg>
                   </button>
                   <button onClick={goToToday} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-200 rounded">
@@ -850,7 +855,7 @@ const AvailabilityCalendar: React.FC = () => {
                   </button>
                   <button onClick={() => changeWeek(1)} className="p-2 hover:bg-dark-200 rounded">
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={language === 'ar' ? "M15 19l-7-7 7-7" : "M9 5l7 7-7 7"} />
                     </svg>
                   </button>
                 </div>
@@ -903,8 +908,10 @@ const AvailabilityCalendar: React.FC = () => {
                 <div className="border-r border-dark-300 bg-dark-50 sticky left-0 z-20 shadow-lg ">
                   {timeSlots.map((hour, i) => {
                     let displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                    let period = hour >= 12 ? 'PM' : 'AM';
-                    if (hour === 0) period = 'AM';
+                    let period = language === 'ar' 
+                      ? (hour >= 12 ? 'م' : 'ص')
+                      : (hour >= 12 ? 'PM' : 'AM');
+                    if (hour === 0) period = language === 'ar' ? 'ص' : 'AM';
 
                     return (
                       <div
@@ -983,16 +990,25 @@ const AvailabilityCalendar: React.FC = () => {
 
       {/* Modal Form */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-dark-100 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-100 rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col m-4">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-dark-300">
-              <h2 className="text-2xl font-bold text-white">
-                {getText('Create Availability', 'إنشاء التوفر')}
-              </h2>
+            <div className="flex items-center justify-between p-6 border-b border-dark-300 bg-gradient-to-r from-dark-100 to-dark-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-primary-500/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white">
+                    {getText('Create Availability', 'إنشاء التوفر')}
+                  </h2>
+                </div>
+              </div>
               <button
                 onClick={handleCancel}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-dark-300 rounded-lg"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1000,40 +1016,140 @@ const AvailabilityCalendar: React.FC = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 space-y-6">
+            {/* Modal Body - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+              {/* Selected Time Slots Info - Prominent Display */}
+              <div className="bg-gradient-to-br from-primary-500/20 to-accent-purple/20 border border-primary-500/30 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-primary-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white mb-2">
+                      {getText('Selected Time Block', 'كتلة الوقت المحددة')}
+                    </h3>
+                    {pendingSlots.length > 0 && (() => {
+                      const dates = Array.from(new Set(pendingSlots.map(s => s.date))).sort();
+                      const hours = pendingSlots.map(s => s.hour).sort((a, b) => {
+                        const aNorm = a === 0 ? 24 : a;
+                        const bNorm = b === 0 ? 24 : b;
+                        return aNorm - bNorm;
+                      });
+                      const minHour = hours[0];
+                      const maxHour = hours[hours.length - 1];
+                      
+                      const formatHour = (h: number) => {
+                        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                        const period = language === 'ar' 
+                          ? (h >= 12 ? 'م' : 'ص')
+                          : (h >= 12 ? 'PM' : 'AM');
+                        return h === 0 ? `12 ${period}` : `${displayHour} ${period}`;
+                      };
+                      
+                      const formatDate = (dateStr: string) => {
+                        const date = new Date(dateStr + 'T00:00:00');
+                        const monthNames = language === 'ar' 
+                          ? ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+                             'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+                          : ['January', 'February', 'March', 'April', 'May', 'June', 
+                             'July', 'August', 'September', 'October', 'November', 'December'];
+                        const dayNames = language === 'ar'
+                          ? ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+                          : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        return `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+                      };
+                      
+                      const startDate = formatDate(dates[0]);
+                      const endDate = dates.length > 1 ? formatDate(dates[dates.length - 1]) : null;
+                      const timeRange = minHour === maxHour 
+                        ? formatHour(minHour)
+                        : `${formatHour(minHour)} - ${formatHour(maxHour + 1)}`;
+                      const duration = maxHour - minHour + 1;
+                      
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-5 h-5 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-white font-medium">{startDate}</span>
+                              {endDate && startDate !== endDate && (
+                                <span className="text-gray-300">→ {endDate}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <svg className="w-5 h-5 text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-white font-medium">{timeRange}</span>
+                              <span className="text-gray-400 text-sm">({duration} {getText('hours', 'ساعات')})</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
               {/* Title Input */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Title', 'العنوان')}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                  <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  {getText('Title', 'العنوان')} <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder={getText('Add a title', 'أضف عنواناً')}
-                  className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder={getText('e.g., Math Tutoring Session', 'مثال: جلسة تدريس الرياضيات')}
+                  required
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                 />
               </div>
 
               {/* Student Type Checkboxes */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  {getText('Student Type', 'نوع الطالب')}
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                  <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  {getText('Student Type', 'نوع الطالب')} <span className="text-red-400">*</span>
                 </label>
-                <div className="space-y-3">
-                  <label className="flex items-center cursor-pointer">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    formData.for_university_students 
+                      ? 'bg-primary-500/10 border-primary-500' 
+                      : 'bg-dark-200 border-dark-300 hover:border-primary-500/50'
+                  }`}>
                     <input
                       type="checkbox"
                       checked={formData.for_university_students}
                       onChange={(e) => setFormData(prev => ({ ...prev, for_university_students: e.target.checked }))}
-                      className="w-5 h-5 text-primary-500 bg-dark-200 border-dark-300 rounded focus:ring-primary-500"
+                      className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
                     />
-                    <span className="ml-3 text-gray-300">
-                      {getText('University Students', 'طلاب الجامعة')}
-                    </span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                        </svg>
+                        <span className="text-gray-200 font-medium">
+                          {getText('University Students', 'طلاب الجامعة')}
+                        </span>
+                      </div>
+                    </div>
                   </label>
-                  <label className="flex items-center cursor-pointer">
+                  <label className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                    formData.for_school_students 
+                      ? 'bg-primary-500/10 border-primary-500' 
+                      : 'bg-dark-200 border-dark-300 hover:border-primary-500/50'
+                  }`}>
                     <input
                       type="checkbox"
                       checked={formData.for_school_students}
@@ -1044,27 +1160,43 @@ const AvailabilityCalendar: React.FC = () => {
                           setSelectedCountry(null);
                         }
                       }}
-                      className="w-5 h-5 text-primary-500 bg-dark-200 border-dark-300 rounded focus:ring-primary-500"
+                      className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
                     />
-                    <span className="ml-3 text-gray-300">
-                      {getText('School Students', 'طلاب المدرسة')}
-                    </span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <span className="text-gray-200 font-medium">
+                          {getText('School Students', 'طلاب المدرسة')}
+                        </span>
+                      </div>
+                    </div>
                   </label>
                 </div>
               </div>
 
               {/* Country and Grades Selection (only if school students is selected) */}
               {formData.for_school_students && (
-                <div className="space-y-4">
+                <div className="space-y-4 p-4 bg-dark-200/50 rounded-xl border border-dark-300">
+                  <div className="flex items-center gap-2 mb-3">
+                    <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002 2h2.945M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 className="text-sm font-semibold text-gray-300">
+                      {getText('School Student Requirements', 'متطلبات طلاب المدرسة')}
+                    </h3>
+                  </div>
+                  
                   {/* Country Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      {getText('Country', 'البلد')}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                      {getText('Country', 'البلد')} <span className="text-red-400">*</span>
                     </label>
                     <select
                       value={selectedCountry || ''}
                       onChange={(e) => setSelectedCountry(e.target.value ? parseInt(e.target.value) : null)}
-                      className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                     >
                       <option value="">{getText('Select a country', 'اختر بلداً')}</option>
                       {countries.map(country => (
@@ -1077,109 +1209,110 @@ const AvailabilityCalendar: React.FC = () => {
 
                   {/* Grades Selection */}
                   {selectedCountry && grades.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        {getText('Grades', 'الصفوف')}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                        {getText('Select Grades', 'اختر الصفوف')} <span className="text-red-400">*</span>
                       </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2 bg-dark-200 rounded-lg">
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-60 overflow-y-auto p-3 bg-dark-200 rounded-lg border border-dark-300">
+                        {/* All Grades Option */}
+                        <label 
+                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border-2 ${
+                            formData.grade_ids.length === grades.length && grades.length > 0
+                              ? 'bg-primary-500/20 border-primary-500'
+                              : 'hover:bg-dark-300 border-transparent'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.grade_ids.length === grades.length && grades.length > 0}
+                            onChange={() => {
+                              if (formData.grade_ids.length === grades.length) {
+                                // Deselect all
+                                setFormData(prev => ({ ...prev, grade_ids: [] }));
+                              } else {
+                                // Select all
+                                setFormData(prev => ({ ...prev, grade_ids: grades.map(g => g.id) }));
+                              }
+                            }}
+                            className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
+                          />
+                          <span className={`text-sm font-medium ${
+                            formData.grade_ids.length === grades.length && grades.length > 0
+                              ? 'text-white' 
+                              : 'text-gray-300'
+                          }`}>
+                            {getText('All Grades', 'جميع الصفوف')}
+                          </span>
+                        </label>
                         {grades.map(grade => (
-                          <label key={grade.id} className="flex items-center cursor-pointer">
+                          <label 
+                            key={grade.id} 
+                            className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
+                              formData.grade_ids.includes(grade.id)
+                                ? 'bg-primary-500/20 border border-primary-500/50'
+                                : 'hover:bg-dark-300'
+                            }`}
+                          >
                             <input
                               type="checkbox"
                               checked={formData.grade_ids.includes(grade.id)}
                               onChange={() => handleGradeToggle(grade.id)}
-                              className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500"
+                              className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
                             />
-                            <span className="ml-2 text-sm text-gray-300">
+                            <span className={`text-sm ${
+                              formData.grade_ids.includes(grade.id) ? 'text-white font-medium' : 'text-gray-300'
+                            }`}>
                               {language === 'ar' ? grade.name_ar : grade.name_en}
                             </span>
                           </label>
                         ))}
                       </div>
+                      {formData.grade_ids.length > 0 && (
+                        <p className="text-xs text-primary-400">
+                          {getText(`${formData.grade_ids.length} grade(s) selected`, `تم اختيار ${formData.grade_ids.length} صف`)}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
               )}
-
-              {/* Selected Slots Info */}
-              <div className="bg-dark-200 rounded-lg p-4 space-y-2">
-                <p className="text-sm text-gray-400">
-                  {getText(
-                    `Selected ${pendingSlots.length} time slot(s)`,
-                    `تم اختيار ${pendingSlots.length} فترات زمنية`
-                  )}
-                </p>
-                {pendingSlots.length > 0 && (() => {
-                  // Calculate date and time range
-                  const dates = Array.from(new Set(pendingSlots.map(s => s.date))).sort();
-                  const hours = pendingSlots.map(s => s.hour).sort((a, b) => {
-                    const aNorm = a === 0 ? 24 : a;
-                    const bNorm = b === 0 ? 24 : b;
-                    return aNorm - bNorm;
-                  });
-                  const minHour = hours[0];
-                  const maxHour = hours[hours.length - 1];
-                  
-                  const formatHour = (h: number) => {
-                    const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-                    const period = h >= 12 ? 'PM' : 'AM';
-                    return h === 0 ? `12 ${period}` : `${displayHour} ${period}`;
-                  };
-                  
-                  const formatDate = (dateStr: string) => {
-                    const date = new Date(dateStr + 'T00:00:00');
-                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                                       'July', 'August', 'September', 'October', 'November', 'December'];
-                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                    return `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-                  };
-                  
-                  const startDate = formatDate(dates[0]);
-                  const endDate = dates.length > 1 ? formatDate(dates[dates.length - 1]) : null;
-                  const timeRange = minHour === maxHour 
-                    ? formatHour(minHour)
-                    : `${formatHour(minHour)} - ${formatHour(maxHour)}`;
-                  
-                  return (
-                    <div className="text-sm text-gray-300 space-y-1">
-                      <p><span className="font-medium">Date:</span> {startDate}{endDate && startDate !== endDate ? ` to ${endDate}` : ''}</p>
-                      <p><span className="font-medium">Time:</span> {timeRange}</p>
-                    </div>
-                  );
-                })()}
-              </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-4 p-6 border-t border-dark-300">
-              <button
-                onClick={handleCancel}
-                className="px-6 py-2 text-gray-300 hover:text-white transition-colors"
-              >
-                {getText('Cancel', 'إلغاء')}
-              </button>
-              <button
-                onClick={handleCreateAvailability}
-                disabled={creating}
-                className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {creating ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {getText('Creating...', 'جاري الإنشاء...')}
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {getText('Create Availability', 'إنشاء التوفر')}
-                  </>
-                )}
-              </button>
+            <div className="flex items-center justify-between gap-4 p-6 border-t border-dark-300 bg-dark-200/50">
+              <div className="text-xs text-gray-400">
+                {getText('* Required fields', '* الحقول المطلوبة')}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleCancel}
+                  className="px-6 py-2.5 text-gray-300 hover:text-white hover:bg-dark-300 rounded-lg transition-colors font-medium"
+                >
+                  {getText('Cancel', 'إلغاء')}
+                </button>
+                <button
+                  onClick={handleCreateAvailability}
+                  disabled={creating || !formData.title || formData.title.trim() === '' || (!formData.for_university_students && !formData.for_school_students) || (formData.for_school_students && (!selectedCountry || formData.grade_ids.length === 0))}
+                  className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-lg hover:shadow-primary-500/50"
+                >
+                  {creating ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {getText('Creating...', 'جاري الإنشاء...')}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {getText('Create Availability', 'إنشاء التوفر')}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1219,7 +1352,9 @@ const AvailabilityCalendar: React.FC = () => {
                   
                   const formatHour = (hour: number) => {
                     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                    const period = hour >= 12 ? 'PM' : 'AM';
+                    const period = language === 'ar' 
+                      ? (hour >= 12 ? 'م' : 'ص')
+                      : (hour >= 12 ? 'PM' : 'AM');
                     return hour === 0 ? `12 ${period}` : `${displayHour} ${period}`;
                   };
                   
