@@ -13,6 +13,7 @@ import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import CreateCourse from './components/CreateCourse';
 import AvailabilityCalendar from './components/AvailabilityCalendar';
+import ManageCourse from './components/ManageCourse';
 import './App.css';
 
 const HomePage: React.FC = () => {
@@ -107,6 +108,14 @@ const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <AvailabilityCalendar />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/manage-course/:courseId"
+              element={
+                <ProtectedRoute>
+                  <ManageCourse />
                 </ProtectedRoute>
               }
             />

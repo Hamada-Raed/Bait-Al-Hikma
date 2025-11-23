@@ -864,8 +864,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                   {/* Manage Course Button */}
                   <button
                     onClick={() => {
-                      // TODO: Navigate to manage course page
-                      console.log('Manage course:', course.id);
+                      navigate(`/manage-course/${course.id}`);
                     }}
                     className="w-full py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
                   >

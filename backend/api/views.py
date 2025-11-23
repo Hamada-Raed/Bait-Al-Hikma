@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
@@ -286,6 +286,9 @@ class CourseViewSet(viewsets.ModelViewSet):
         return Course.objects.none()
     
     def perform_create(self, serializer):
+        # Only teachers can create courses
+        if not self.request.user.is_authenticated or self.request.user.user_type != 'teacher':
+            raise serializers.ValidationError({'error': 'Only teachers can create courses.'})
         # Automatically set the teacher to the current user
         serializer.save(teacher=self.request.user)
     
@@ -381,6 +384,37 @@ class CourseViewSet(viewsets.ModelViewSet):
             'message': 'Deletion request submitted successfully. Waiting for admin approval.',
             'request_id': approval_request.id
         }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['get'], url_path='course-structure')
+    def course_structure(self, request, pk=None):
+        """Get course structure with chapters, sections, videos, and quizzes"""
+        try:
+            course = Course.objects.get(pk=pk)
+            # Only allow teacher who owns the course or admins
+            if not request.user.is_authenticated:
+                return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            if request.user.user_type != 'teacher' or course.teacher != request.user:
+                if not (request.user.is_staff or request.user.is_superuser):
+                    return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # For now, return course with empty structure
+        # TODO: Add Chapter, Section, Video, Quiz models and populate this
+        serializer = CourseSerializer(course, context={'request': request})
+        
+        return Response({
+            'course': {
+                'id': course.id,
+                'title': course.name,
+                'description': course.description,
+                'enrolled_students': 0,  # TODO: Calculate from enrollments
+            },
+            'chapters': [],  # TODO: Get chapters from database
+            'total_videos': 0,  # TODO: Calculate from videos
+            'total_quizzes': 0,  # TODO: Calculate from quizzes
+        }, status=status.HTTP_200_OK)
 
 
 class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
