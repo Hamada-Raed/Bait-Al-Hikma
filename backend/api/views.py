@@ -9,13 +9,13 @@ from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
     MajorSerializer, SubjectSerializer, UserSerializer, PlatformSettingsSerializer,
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
-    WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer
+    WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer
 )
 
 
@@ -508,3 +508,80 @@ class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+
+class AvailabilityViewSet(viewsets.ModelViewSet):
+    serializer_class = AvailabilitySerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        # Teachers can only see their own availabilities
+        if self.request.user.is_authenticated and self.request.user.user_type == 'teacher':
+            return Availability.objects.filter(teacher=self.request.user)
+        return Availability.objects.none()
+    
+    def perform_create(self, serializer):
+        # Automatically set the teacher to the current user
+        serializer.save(teacher=self.request.user)
+    
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Create multiple availability slots at once"""
+        if not request.user.is_authenticated or request.user.user_type != 'teacher':
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        slots = request.data.get('slots', [])
+        if not slots:
+            return Response({'error': 'No slots provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        created = []
+        errors = []
+        
+        for slot in slots:
+            serializer = AvailabilitySerializer(data={
+                'date': slot.get('date'),
+                'hour': slot.get('hour')
+            }, context={'request': request})
+            
+            if serializer.is_valid():
+                try:
+                    availability = serializer.save(teacher=request.user)
+                    created.append(serializer.data)
+                except Exception as e:
+                    errors.append({'slot': slot, 'error': str(e)})
+            else:
+                errors.append({'slot': slot, 'error': serializer.errors})
+        
+        return Response({
+            'created': created,
+            'errors': errors,
+            'created_count': len(created),
+            'error_count': len(errors)
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=False, methods=['delete'])
+    def bulk_delete(self, request):
+        """Delete multiple availability slots at once"""
+        if not request.user.is_authenticated or request.user.user_type != 'teacher':
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        slots = request.data.get('slots', [])
+        if not slots:
+            return Response({'error': 'No slots provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        deleted_count = 0
+        for slot in slots:
+            date = slot.get('date')
+            hour = slot.get('hour')
+            if date and hour is not None:
+                deleted = Availability.objects.filter(
+                    teacher=request.user,
+                    date=date,
+                    hour=hour
+                ).delete()
+                deleted_count += deleted[0]
+        
+        return Response({
+            'message': f'Deleted {deleted_count} availability slot(s).',
+            'deleted_count': deleted_count
+        }, status=status.HTTP_200_OK)

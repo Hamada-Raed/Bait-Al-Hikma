@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability
 )
 
 
@@ -295,4 +295,32 @@ class CourseSerializer(serializers.ModelSerializer):
                             raise serializers.ValidationError({
                                 'track': 'Track is required for grade 11 or 12 courses.'
                             })
+        return attrs
+
+
+class AvailabilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Availability
+        fields = ['id', 'teacher', 'date', 'hour', 'created_at', 'updated_at']
+        read_only_fields = ['teacher', 'created_at', 'updated_at']
+    
+    def validate(self, attrs):
+        from django.utils import timezone
+        from datetime import datetime, time
+        
+        # Get date and hour
+        date = attrs.get('date')
+        hour = attrs.get('hour')
+        
+        if date and hour is not None:
+            # Check if the date/hour is in the past
+            now = timezone.now()
+            slot_datetime = datetime.combine(date, time(hour, 0))
+            slot_datetime = timezone.make_aware(slot_datetime)
+            
+            if slot_datetime < now:
+                raise serializers.ValidationError({
+                    'date': 'Cannot create availability in the past.'
+                })
+        
         return attrs

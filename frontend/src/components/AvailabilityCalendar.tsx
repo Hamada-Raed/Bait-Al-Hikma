@@ -1,7 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ensureCsrfToken } from '../utils/csrf';
 import Header from './Header';
+
+const API_BASE_URL = 'http://localhost:8000/api';
+
+interface Availability {
+  id: number;
+  date: string;
+  hour: number;
+}
 
 const AvailabilityCalendar: React.FC = () => {
   const { language } = useLanguage();
@@ -10,8 +19,40 @@ const AvailabilityCalendar: React.FC = () => {
   const [currentDate] = useState(today);
   const [selectedMonth, setSelectedMonth] = useState(today);
   const [selectedWeek, setSelectedWeek] = useState(today);
+  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ dateIdx: number; hourIdx: number } | null>(null);
+  const [dragEnd, setDragEnd] = useState<{ dateIdx: number; hourIdx: number } | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
+  const gridRef = useRef<HTMLDivElement>(null);
+  const cellRefs = useRef<Map<string, { dateIdx: number; hourIdx: number; element: HTMLDivElement }>>(new Map());
 
   const getText = (en: string, ar: string) => (language === 'ar' ? ar : en);
+
+  // Fetch availabilities
+  useEffect(() => {
+    fetchAvailabilities();
+  }, [selectedWeek]);
+
+  const fetchAvailabilities = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/availabilities/`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAvailabilities(data.results || data);
+      }
+    } catch (error) {
+      console.error('Error fetching availabilities:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Get week dates (Monday to Sunday)
   const getWeekDates = (date: Date) => {
@@ -110,6 +151,198 @@ const AvailabilityCalendar: React.FC = () => {
   for (let h = 6; h <= 23; h++) timeSlots.push(h);
   timeSlots.push(0);
 
+  // Check if a slot is available
+  const isSlotAvailable = (dateIdx: number, hourIdx: number): boolean => {
+    const date = weekDates[dateIdx];
+    const hour = timeSlots[hourIdx];
+    const dateStr = date.toISOString().split('T')[0];
+    return availabilities.some(av => av.date === dateStr && av.hour === hour);
+  };
+
+  // Check if a slot is in the past
+  const isSlotInPast = (dateIdx: number, hourIdx: number): boolean => {
+    const date = weekDates[dateIdx];
+    const hour = timeSlots[hourIdx];
+    const now = new Date();
+    const slotDate = new Date(date);
+    slotDate.setHours(hour, 0, 0, 0);
+    return slotDate < now;
+  };
+
+  // Get slot key
+  const getSlotKey = (dateIdx: number, hourIdx: number): string => {
+    const date = weekDates[dateIdx];
+    const hour = timeSlots[hourIdx];
+    return `${date.toISOString().split('T')[0]}-${hour}`;
+  };
+
+  // Check if slot is selected (during drag)
+  const isSlotSelected = (dateIdx: number, hourIdx: number): boolean => {
+    if (!isDragging || !dragStart || !dragEnd) return false;
+    
+    const minDateIdx = Math.min(dragStart.dateIdx, dragEnd.dateIdx);
+    const maxDateIdx = Math.max(dragStart.dateIdx, dragEnd.dateIdx);
+    const minHourIdx = Math.min(dragStart.hourIdx, dragEnd.hourIdx);
+    const maxHourIdx = Math.max(dragStart.hourIdx, dragEnd.hourIdx);
+    
+    return dateIdx >= minDateIdx && dateIdx <= maxDateIdx &&
+           hourIdx >= minHourIdx && hourIdx <= maxHourIdx;
+  };
+
+  // Handle mouse up (end drag)
+  const handleMouseUp = useCallback(async () => {
+    if (!isDragging || !dragStart || !dragEnd) {
+      setIsDragging(false);
+      setDragStart(null);
+      setDragEnd(null);
+      return;
+    }
+
+    // Calculate all selected slots
+    const minDateIdx = Math.min(dragStart.dateIdx, dragEnd.dateIdx);
+    const maxDateIdx = Math.max(dragStart.dateIdx, dragEnd.dateIdx);
+    const minHourIdx = Math.min(dragStart.hourIdx, dragEnd.hourIdx);
+    const maxHourIdx = Math.max(dragStart.hourIdx, dragEnd.hourIdx);
+
+    const slotsToCreate: { date: string; hour: number }[] = [];
+    
+    for (let dateIdx = minDateIdx; dateIdx <= maxDateIdx; dateIdx++) {
+      for (let hourIdx = minHourIdx; hourIdx <= maxHourIdx; hourIdx++) {
+        // Skip past slots
+        if (isSlotInPast(dateIdx, hourIdx)) continue;
+        
+        // Skip if already available
+        if (isSlotAvailable(dateIdx, hourIdx)) continue;
+        
+        const date = weekDates[dateIdx];
+        const hour = timeSlots[hourIdx];
+        const dateStr = date.toISOString().split('T')[0];
+        
+        slotsToCreate.push({ date: dateStr, hour });
+      }
+    }
+
+    // Create availabilities
+    if (slotsToCreate.length > 0) {
+      try {
+        const csrfToken = await ensureCsrfToken();
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (csrfToken) {
+          headers['X-CSRFToken'] = csrfToken;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/availabilities/bulk_create/`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ slots: slotsToCreate }),
+        });
+
+        if (response.ok) {
+          await fetchAvailabilities();
+        } else {
+          const error = await response.json();
+          console.error('Error creating availabilities:', error);
+        }
+      } catch (error) {
+        console.error('Error creating availabilities:', error);
+      }
+    }
+
+    // Reset drag state
+    setIsDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+  }, [isDragging, dragStart, dragEnd, weekDates, timeSlots, availabilities]);
+
+  // Set up document-level mouse events for drag
+  useEffect(() => {
+    const handleDocumentMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !dragStart) return;
+      
+      // Find the cell under the mouse
+      const target = e.target as HTMLElement;
+      const cell = target.closest('[data-date-idx][data-hour-idx]') as HTMLElement;
+      
+      if (cell) {
+        const dateIdx = parseInt(cell.getAttribute('data-date-idx') || '0');
+        const hourIdx = parseInt(cell.getAttribute('data-hour-idx') || '0');
+        
+        // Don't allow dragging into past slots
+        if (!isSlotInPast(dateIdx, hourIdx)) {
+          setDragEnd({ dateIdx, hourIdx });
+        }
+      }
+    };
+
+    const handleDocumentMouseUp = () => {
+      if (isDragging) {
+        handleMouseUp();
+      }
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleDocumentMouseMove);
+      document.addEventListener('mouseup', handleDocumentMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleDocumentMouseMove);
+      document.removeEventListener('mouseup', handleDocumentMouseUp);
+    };
+  }, [isDragging, dragStart, handleMouseUp]);
+
+  // Handle mouse down (start drag)
+  const handleMouseDown = (dateIdx: number, hourIdx: number) => {
+    if (isSlotInPast(dateIdx, hourIdx)) return;
+    
+    setIsDragging(true);
+    setDragStart({ dateIdx, hourIdx });
+    setDragEnd({ dateIdx, hourIdx });
+  };
+
+
+
+  // Handle click to delete availability
+  const handleSlotClick = async (dateIdx: number, hourIdx: number) => {
+    if (isDragging) return;
+    
+    if (isSlotAvailable(dateIdx, hourIdx)) {
+      // Delete availability
+      const date = weekDates[dateIdx];
+      const hour = timeSlots[hourIdx];
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const availability = availabilities.find(av => av.date === dateStr && av.hour === hour);
+      
+      if (availability) {
+        try {
+          const csrfToken = await ensureCsrfToken();
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          };
+          if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+          }
+
+          const response = await fetch(`${API_BASE_URL}/availabilities/${availability.id}/`, {
+            method: 'DELETE',
+            headers,
+            credentials: 'include',
+          });
+
+          if (response.ok) {
+            await fetchAvailabilities();
+          }
+        } catch (error) {
+          console.error('Error deleting availability:', error);
+        }
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dark-50">
       <Header />
@@ -203,15 +436,6 @@ const AvailabilityCalendar: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              {/* <button className="px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded hover:bg-primary-600 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                {getText('New', 'جديد')}
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button> */}
             </div>
 
             {/* Days Header Row */}
@@ -246,9 +470,8 @@ const AvailabilityCalendar: React.FC = () => {
           </div>
 
           {/* Calendar Grid */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto" ref={gridRef}>
             <div className="min-w-max">
-
               {/* Time Grid */}
               <div className="grid grid-cols-[80px_repeat(7,1fr)]">
                 {/* Sticky Time Column */}
@@ -277,16 +500,39 @@ const AvailabilityCalendar: React.FC = () => {
                 {/* Day Columns */}
                 {weekDates.map((_, dateIdx) => (
                   <div key={dateIdx} className={`border-r border-dark-300 ${dateIdx === 6 ? '' : 'border-r'}`}>
-                    {timeSlots.map((hour, hourIdx) => (
-                      <div
-                        key={`${dateIdx}-${hour}`}
-                        className="border-b border-dark-300 h-16 hover:bg-dark-200/50 transition-colors cursor-pointer relative"
-                      >
-                        {hourIdx < timeSlots.length - 1 && (
-                          <div className="absolute inset-x-0 bottom-0 border-t border-dashed border-dark-300" />
-                        )}
-                      </div>
-                    ))}
+                    {timeSlots.map((hour, hourIdx) => {
+                      const isAvailable = isSlotAvailable(dateIdx, hourIdx);
+                      const isPast = isSlotInPast(dateIdx, hourIdx);
+                      const isSelected = isSlotSelected(dateIdx, hourIdx);
+                      
+                      return (
+                        <div
+                          key={`${dateIdx}-${hour}`}
+                          data-date-idx={dateIdx}
+                          data-hour-idx={hourIdx}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleMouseDown(dateIdx, hourIdx);
+                          }}
+                          onClick={() => handleSlotClick(dateIdx, hourIdx)}
+                          className={`
+                            border-b border-dark-300 h-16 transition-colors relative select-none
+                            ${isPast 
+                              ? 'bg-dark-800/30 cursor-not-allowed opacity-50' 
+                              : isSelected
+                              ? 'bg-blue-500/50 cursor-crosshair'
+                              : isAvailable
+                              ? 'bg-primary-500/30 hover:bg-primary-500/50 cursor-pointer'
+                              : 'hover:bg-dark-200/50 cursor-crosshair'
+                            }
+                          `}
+                        >
+                          {hourIdx < timeSlots.length - 1 && (
+                            <div className="absolute inset-x-0 bottom-0 border-t border-dashed border-dark-300" />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>

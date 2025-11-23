@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability
 )
 
 
@@ -129,3 +129,15 @@ class CourseApprovalRequestAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('course', 'requested_by', 'reviewed_by')
+
+
+@admin.register(Availability)
+class AvailabilityAdmin(admin.ModelAdmin):
+    list_display = ['teacher', 'date', 'hour', 'created_at']
+    list_filter = ['date', 'hour', 'created_at']
+    search_fields = ['teacher__email', 'teacher__first_name', 'teacher__last_name']
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('teacher')

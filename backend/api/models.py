@@ -343,3 +343,20 @@ class WhyChooseUsSection(models.Model):
     def load(cls):
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class Availability(models.Model):
+    """Teacher availability time slots"""
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='availabilities')
+    date = models.DateField()
+    hour = models.IntegerField(help_text='Hour in 24-hour format (0-23)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['teacher', 'date', 'hour']
+        ordering = ['date', 'hour']
+        verbose_name_plural = 'Availabilities'
+    
+    def __str__(self):
+        return f"{self.teacher.email} - {self.date} {self.hour}:00"

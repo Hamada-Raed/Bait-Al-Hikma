@@ -4,7 +4,7 @@ from .views import (
     CountryViewSet, GradeViewSet, TrackViewSet,
     MajorViewSet, SubjectViewSet, UserViewSet, PlatformSettingsViewSet,
     HeroSectionViewSet, FeatureViewSet, FeaturesSectionViewSet,
-    WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet
+    WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet
 )
 
 router = DefaultRouter()
@@ -22,6 +22,7 @@ router.register(r'why-choose-us-reasons', WhyChooseUsReasonViewSet, basename='wh
 router.register(r'why-choose-us-section', WhyChooseUsSectionViewSet, basename='why-choose-us-section')
 router.register(r'courses', CourseViewSet, basename='course')
 router.register(r'admin/courses', AdminCourseViewSet, basename='admin-course')
+router.register(r'availabilities', AvailabilityViewSet, basename='availability')
 
 urlpatterns = [
     path('', include(router.urls)),
