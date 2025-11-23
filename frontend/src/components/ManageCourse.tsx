@@ -204,6 +204,11 @@ const ManageCourse: React.FC = () => {
   const [dragActiveQuizImage, setDragActiveQuizImage] = useState<boolean>(false);
   const quizImageInputRef = useRef<HTMLInputElement>(null);
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  
+  // Confirmation dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
+  const [confirmCallback, setConfirmCallback] = useState<(() => void) | null>(null);
+  const [confirmMessage, setConfirmMessage] = useState<string>('');
 
   // Drag and drop states
   const [draggedChapter, setDraggedChapter] = useState<Chapter | null>(null);
@@ -396,6 +401,20 @@ const ManageCourse: React.FC = () => {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
+    
+    // Add CSRF token for POST/PUT/DELETE requests
+    const csrfToken = await ensureCsrfToken();
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    return headers;
+  };
+
+  // Helper function to get auth headers for file uploads (FormData)
+  // Note: Don't set Content-Type for FormData - browser will set it with boundary
+  const getAuthHeadersForFileUpload = async (): Promise<HeadersInit> => {
+    const headers: HeadersInit = {};
     
     // Add CSRF token for POST/PUT/DELETE requests
     const csrfToken = await ensureCsrfToken();
@@ -724,6 +743,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-video/', {
         method: 'POST',
+        headers: await getAuthHeadersForFileUpload(),
         credentials: 'include', // Include session cookies for authentication
         body: formData,
       });
@@ -865,7 +885,68 @@ const ManageCourse: React.FC = () => {
     setShowQuizModal(true);
   };
 
-  const closeQuizModal = (): void => {
+  // Check if quiz form has data
+  const hasQuizFormData = (): boolean => {
+    return !!(
+      quizForm.title?.trim() ||
+      quizForm.description?.trim() ||
+      quizForm.questions.length > 0 ||
+      currentQuestion.question_text?.trim() ||
+      currentQuestion.image_file ||
+      currentQuestion.options.some(opt => opt.option_text?.trim())
+    );
+  };
+
+  // Show confirmation dialog
+  const showConfirmation = (message: string, onConfirm: () => void): void => {
+    setConfirmMessage(message);
+    setConfirmCallback(() => onConfirm);
+    setShowConfirmDialog(true);
+  };
+
+  // Handle confirmation dialog response
+  const handleConfirm = (confirmed: boolean): void => {
+    setShowConfirmDialog(false);
+    if (confirmed && confirmCallback) {
+      confirmCallback();
+    }
+    setConfirmCallback(null);
+    setConfirmMessage('');
+  };
+
+  const closeQuizModal = (force: boolean = false): void => {
+    // Check if there's data and show confirmation
+    if (!force && hasQuizFormData()) {
+      const message = language === 'ar' 
+        ? 'هل أنت متأكد؟ سيتم فقدان جميع البيانات غير المحفوظة.'
+        : 'Are you sure? All unsaved data will be lost.';
+      
+      showConfirmation(message, () => {
+        setShowQuizModal(false);
+        setQuizModalSection(null);
+        setEditingQuiz(null);
+        setEditingQuestionIndex(null);
+        setQuizForm({ 
+          title: '', 
+          description: '', 
+          duration_minutes: 10,
+          questions: []
+        });
+        setCurrentQuestion({
+          question_text: '',
+          question_type: 'text',
+          question_image: '',
+          image_file: null,
+          options: [
+            { option_text: '', is_correct: false },
+            { option_text: '', is_correct: false }
+          ]
+        });
+        setDragActiveQuizImage(false);
+      });
+      return;
+    }
+
     setShowQuizModal(false);
     setQuizModalSection(null);
     setEditingQuiz(null);
@@ -1068,10 +1149,23 @@ const ManageCourse: React.FC = () => {
       return handleUpdateQuiz(e);
     }
     
-    if (!quizForm.title || quizForm.questions.length === 0) {
-      alert('Please provide quiz title and at least one question');
+    // Validation: Title, description, and at least one question are required
+    if (!quizForm.title || !quizForm.title.trim()) {
+      setError(language === 'ar' ? 'يرجى إدخال عنوان الاختبار' : 'Please enter quiz title');
       return;
     }
+    
+    if (!quizForm.description || !quizForm.description.trim()) {
+      setError(language === 'ar' ? 'يرجى إدخال وصف الاختبار' : 'Please enter quiz description');
+      return;
+    }
+    
+    if (quizForm.questions.length === 0) {
+      setError(language === 'ar' ? 'يرجى إضافة سؤال واحد على الأقل' : 'Please add at least one question');
+      return;
+    }
+    
+    setError(''); // Clear any previous errors
 
     const chapter = chapters.find(c => c.sections.some(s => s.id === quizModalSection));
     const section = chapter?.sections.find(s => s.id === quizModalSection);
@@ -1099,7 +1193,7 @@ const ManageCourse: React.FC = () => {
       
       if (response.ok) {
         showSuccess('Quiz created successfully!');
-        closeQuizModal();
+        closeQuizModal(true); // Force close without confirmation
         await fetchCourseStructure();
       } else {
         setError((data as any).error || (data as any).detail || 'Failed to create quiz');
@@ -1385,6 +1479,7 @@ const ManageCourse: React.FC = () => {
 
       const response = await fetch('http://localhost:8000/api/manage-video/', {
         method: 'PUT',
+        headers: await getAuthHeadersForFileUpload(),
         credentials: 'include', // Include session cookies for authentication
         body: formData,
       });
@@ -1570,7 +1665,22 @@ const ManageCourse: React.FC = () => {
 
   const handleUpdateQuiz = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!quizForm.title || !editingQuiz) return;
+    if (!quizForm.title || !quizForm.title.trim() || !editingQuiz) {
+      setError(language === 'ar' ? 'يرجى إدخال عنوان الاختبار' : 'Please enter quiz title');
+      return;
+    }
+    
+    if (!quizForm.description || !quizForm.description.trim()) {
+      setError(language === 'ar' ? 'يرجى إدخال وصف الاختبار' : 'Please enter quiz description');
+      return;
+    }
+    
+    if (quizForm.questions.length === 0) {
+      setError(language === 'ar' ? 'يرجى إضافة سؤال واحد على الأقل' : 'Please add at least one question');
+      return;
+    }
+    
+    setError(''); // Clear any previous errors
 
     try {
       const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
@@ -1591,7 +1701,7 @@ const ManageCourse: React.FC = () => {
 
       if (response.ok) {
         showSuccess('Quiz updated successfully!');
-        closeQuizModal();
+        closeQuizModal(true); // Force close without confirmation
         fetchCourseStructure();
       } else {
         const data = await response.json();
@@ -2278,11 +2388,11 @@ const ManageCourse: React.FC = () => {
 
         {/* Quiz Creation Modal */}
         {showQuizModal && (
-          <div className="modal-overlay" onClick={closeQuizModal}>
+          <div className="modal-overlay" onClick={() => closeQuizModal(false)}>
             <div className="modal-content quiz-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>{editingQuiz ? t.updateQuiz : t.createQuiz}</h2>
-                <button className="modal-close" onClick={closeQuizModal}>×</button>
+                <button className="modal-close" onClick={() => closeQuizModal(false)}>×</button>
               </div>
               
               <form onSubmit={handleQuizSubmit} className="modal-form">
@@ -2458,9 +2568,36 @@ const ManageCourse: React.FC = () => {
 
                 <div className="modal-actions">
                   <button type="submit" className="btn-save">{editingQuiz ? t.update : t.save}</button>
-                  <button type="button" className="btn-cancel" onClick={closeQuizModal}>{t.cancel}</button>
+                  <button type="button" className="btn-cancel" onClick={() => closeQuizModal(false)}>{t.cancel}</button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Dialog */}
+        {showConfirmDialog && (
+          <div className="confirm-dialog-overlay" onClick={() => handleConfirm(false)}>
+            <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="confirm-dialog-icon">⚠️</div>
+              <h3 className="confirm-dialog-title">
+                {language === 'ar' ? 'تأكيد' : 'Confirmation'}
+              </h3>
+              <p className="confirm-dialog-message">{confirmMessage}</p>
+              <div className="confirm-dialog-actions">
+                <button 
+                  className="confirm-btn confirm-btn-cancel" 
+                  onClick={() => handleConfirm(false)}
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button 
+                  className="confirm-btn confirm-btn-confirm" 
+                  onClick={() => handleConfirm(true)}
+                >
+                  {language === 'ar' ? 'تأكيد' : 'Confirm'}
+                </button>
+              </div>
             </div>
           </div>
         )}
