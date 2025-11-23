@@ -415,3 +415,110 @@ class Availability(models.Model):
             return False, f"Cannot delete availability. It is booked and starts in less than 8 hours ({hours_remaining:.1f} hours remaining)."
         
         return True, None
+
+
+# Course Structure Models
+class Chapter(models.Model):
+    """Chapter in a course"""
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='chapters')
+    title = models.CharField(max_length=200)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+    
+    def __str__(self):
+        return f"{self.course.name} - {self.title}"
+
+
+class Section(models.Model):
+    """Section within a chapter"""
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, related_name='sections')
+    title = models.CharField(max_length=200)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+    
+    def __str__(self):
+        return f"{self.chapter.title} - {self.title}"
+
+
+class Video(models.Model):
+    """Video content in a section"""
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name='videos')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    video_file = models.FileField(upload_to='course_videos/', blank=True, null=True)
+    video_url = models.URLField(blank=True, null=True, help_text='External video URL (YouTube, Vimeo, etc.)')
+    duration_minutes = models.IntegerField(default=0)
+    is_locked = models.BooleanField(default=False, help_text='Locked videos are only visible to enrolled students')
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+    
+    def __str__(self):
+        return f"{self.section.title} - {self.title}"
+
+
+class Quiz(models.Model):
+    """Quiz in a section"""
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, related_name='quizzes')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    duration_minutes = models.IntegerField(default=10)
+    is_locked = models.BooleanField(default=False, help_text='Locked quizzes are only visible to enrolled students')
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name_plural = 'Quizzes'
+    
+    def __str__(self):
+        return f"{self.section.title} - {self.title}"
+
+
+class Question(models.Model):
+    """Question in a quiz"""
+    QUESTION_TYPE_CHOICES = [
+        ('text', 'Text Question'),
+        ('image', 'Image Question'),
+    ]
+    
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
+    question_text = models.TextField(blank=True, null=True, help_text='Required for text questions')
+    question_type = models.CharField(max_length=10, choices=QUESTION_TYPE_CHOICES, default='text')
+    question_image = models.ImageField(upload_to='quiz_images/', blank=True, null=True, help_text='Required for image questions')
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+    
+    def __str__(self):
+        return f"{self.quiz.title} - Question {self.order + 1}"
+
+
+class QuestionOption(models.Model):
+    """Option for a question"""
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='options')
+    option_text = models.CharField(max_length=500)
+    is_correct = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['order', 'id']
+    
+    def __str__(self):
+        return f"{self.question} - {self.option_text[:50]}"

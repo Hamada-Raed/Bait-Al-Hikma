@@ -47,13 +47,13 @@
    ============================================ */
 
 .success-banner {
-  background: rgba(34, 197, 94, 0.2); /* green with opacity */
-  color: #86efac; /* green-300 */
+  background: rgba(14, 165, 233, 0.2); /* primary-500 with opacity */
+  color: #38bdf8; /* primary-400 */
   padding: 15px 20px;
   border-radius: 4px;
   margin-bottom: 20px;
   font-weight: 600;
-  border-left: 4px solid #22c55e; /* green-500 */
+  border-left: 4px solid #0ea5e9; /* primary-500 */
   animation: slideDown 0.3s ease;
 }
 
@@ -364,14 +364,14 @@ body.dark-mode .course-stats-panel .stat-label {
 }
 
 .action-btn.add-section-chapter {
-  background: #22c55e; /* green-500 */
+  background: #0ea5e9; /* primary-500 */
   color: white;
-  border-color: #22c55e;
+  border-color: #0ea5e9;
 }
 
 .action-btn.add-section-chapter:hover {
-  background: #16a34a; /* green-600 */
-  border-color: #16a34a;
+  background: #0284c7; /* primary-600 */
+  border-color: #0284c7;
 }
 
 .action-btn.edit:hover {
@@ -590,7 +590,7 @@ body.dark-mode .course-stats-panel .stat-label {
 }
 
 .quiz-item:hover {
-  border-left-color: #22c55e; /* green-500 */
+  border-left-color: #8b5cf6; /* accent-purple */
 }
 
 .item-info {
@@ -665,9 +665,9 @@ body.dark-mode .course-stats-panel .stat-label {
 }
 
 .quiz-badge {
-  background: rgba(34, 197, 94, 0.2); /* green-500 with opacity */
-  color: #86efac; /* green-300 */
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(139, 92, 246, 0.2); /* accent-purple with opacity */
+  color: #a78bfa; /* purple-300 */
+  border: 1px solid rgba(139, 92, 246, 0.3);
 }
 
 /* Lock Status */
@@ -687,9 +687,9 @@ body.dark-mode .course-stats-panel .stat-label {
 }
 
 .lock-status.unlocked {
-  background: rgba(34, 197, 94, 0.2); /* green-500 with opacity */
-  color: #86efac; /* green-300 */
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: rgba(14, 165, 233, 0.2); /* primary-500 with opacity */
+  color: #38bdf8; /* primary-400 */
+  border: 1px solid rgba(14, 165, 233, 0.3);
 }
 
 .item-actions {
@@ -1189,13 +1189,13 @@ body.dark-mode .course-stats-panel .stat-label {
 }
 
 .action-btn.add-quiz {
-  background: #22c55e; /* green-500 */
+  background: #8b5cf6; /* accent-purple */
   color: white;
   border: none;
 }
 
 .action-btn.add-quiz:hover {
-  background: #16a34a; /* green-600 */
+  background: #7c3aed; /* darker purple */
 }
 
 .action-btn.lock {
@@ -1216,13 +1216,13 @@ body.dark-mode .course-stats-panel .stat-label {
 }
 
 .action-btn.lock.unlocked {
-  background: rgba(34, 197, 94, 0.2); /* green-500 with opacity */
-  border-color: #22c55e; /* green-500 */
-  color: #86efac; /* green-300 */
+  background: rgba(14, 165, 233, 0.2); /* primary-500 with opacity */
+  border-color: #0ea5e9; /* primary-500 */
+  color: #38bdf8; /* primary-400 */
 }
 
 .action-btn.lock.unlocked:hover {
-  background: #22c55e; /* green-500 */
+  background: #0ea5e9; /* primary-500 */
   color: white;
 }
 

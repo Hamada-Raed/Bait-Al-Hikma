@@ -7,9 +7,11 @@ from django.contrib.auth import authenticate
 from django.contrib.auth import login as django_login
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.db import models
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
+    Chapter, Section, Video, Quiz, Question, QuestionOption
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
@@ -400,9 +402,73 @@ class CourseViewSet(viewsets.ModelViewSet):
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
         
-        # For now, return course with empty structure
-        # TODO: Add Chapter, Section, Video, Quiz models and populate this
-        serializer = CourseSerializer(course, context={'request': request})
+        # Get chapters with sections, videos, and quizzes
+        chapters = Chapter.objects.filter(course=course).prefetch_related(
+            'sections__videos',
+            'sections__quizzes__questions__options'
+        ).order_by('order', 'id')
+        
+        chapters_data = []
+        total_videos = 0
+        total_quizzes = 0
+        
+        for chapter in chapters:
+            sections_data = []
+            for section in chapter.sections.all().order_by('order', 'id'):
+                videos_data = []
+                for video in section.videos.all().order_by('order', 'id'):
+                    videos_data.append({
+                        'id': video.id,
+                        'title': video.title,
+                        'description': video.description,
+                        'video_url': video.video_url,
+                        'duration_minutes': video.duration_minutes,
+                        'is_locked': video.is_locked,
+                        'order': video.order
+                    })
+                    total_videos += 1
+                
+                quizzes_data = []
+                for quiz in section.quizzes.all().order_by('order', 'id'):
+                    questions_data = []
+                    for question in quiz.questions.all().order_by('order', 'id'):
+                        options_data = []
+                        for option in question.options.all().order_by('order', 'id'):
+                            options_data.append({
+                                'option_text': option.option_text,
+                                'is_correct': option.is_correct
+                            })
+                        questions_data.append({
+                            'question_text': question.question_text,
+                            'question_type': question.question_type,
+                            'question_image': question.question_image.url if question.question_image else '',
+                            'options': options_data
+                        })
+                    quizzes_data.append({
+                        'id': quiz.id,
+                        'title': quiz.title,
+                        'description': quiz.description,
+                        'duration_minutes': quiz.duration_minutes,
+                        'is_locked': quiz.is_locked,
+                        'order': quiz.order,
+                        'questions': questions_data
+                    })
+                    total_quizzes += 1
+                
+                sections_data.append({
+                    'id': section.id,
+                    'title': section.title,
+                    'order': section.order,
+                    'videos': videos_data,
+                    'quizzes': quizzes_data
+                })
+            
+            chapters_data.append({
+                'id': chapter.id,
+                'title': chapter.title,
+                'order': chapter.order,
+                'sections': sections_data
+            })
         
         return Response({
             'course': {
@@ -411,9 +477,9 @@ class CourseViewSet(viewsets.ModelViewSet):
                 'description': course.description,
                 'enrolled_students': 0,  # TODO: Calculate from enrollments
             },
-            'chapters': [],  # TODO: Get chapters from database
-            'total_videos': 0,  # TODO: Calculate from videos
-            'total_quizzes': 0,  # TODO: Calculate from quizzes
+            'chapters': chapters_data,
+            'total_videos': total_videos,
+            'total_quizzes': total_quizzes,
         }, status=status.HTTP_200_OK)
 
 
@@ -686,3 +752,532 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
             'errors': errors,
             'error_count': len(errors)
         }, status=status.HTTP_200_OK)
+
+
+# Course Structure Management Views
+@api_view(['POST', 'PUT', 'DELETE'])
+@permission_classes([AllowAny])  # We'll check authentication manually
+def manage_chapter(request):
+    """Create, update, or delete a chapter"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can manage chapters.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'POST':
+        course_id = request.data.get('course_id')
+        title = request.data.get('title')
+        order = request.data.get('order', 0)
+        
+        if not course_id or not title:
+            return Response({'error': 'course_id and title are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            course = Course.objects.get(pk=course_id, teacher=request.user)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Adjust order if needed
+        max_order = Chapter.objects.filter(course=course).count()
+        if order > max_order:
+            order = max_order
+        
+        # Shift existing chapters with order >= new order
+        Chapter.objects.filter(course=course, order__gte=order).update(order=models.F('order') + 1)
+        
+        chapter = Chapter.objects.create(course=course, title=title, order=order)
+        return Response({'success': True, 'id': chapter.id, 'title': chapter.title, 'order': chapter.order}, status=status.HTTP_201_CREATED)
+    
+    elif request.method == 'PUT':
+        chapter_id = request.data.get('chapter_id')
+        title = request.data.get('title')
+        
+        if not chapter_id:
+            return Response({'error': 'chapter_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chapter = Chapter.objects.get(pk=chapter_id, course__teacher=request.user)
+        except Chapter.DoesNotExist:
+            return Response({'error': 'Chapter not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if title:
+            chapter.title = title
+        chapter.save()
+        return Response({'success': True, 'id': chapter.id, 'title': chapter.title}, status=status.HTTP_200_OK)
+    
+    elif request.method == 'DELETE':
+        chapter_id = request.data.get('chapter_id')
+        
+        if not chapter_id:
+            return Response({'error': 'chapter_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chapter = Chapter.objects.get(pk=chapter_id, course__teacher=request.user)
+            course = chapter.course
+            order = chapter.order
+            chapter.delete()
+            
+            # Reorder remaining chapters
+            Chapter.objects.filter(course=course, order__gt=order).update(order=models.F('order') - 1)
+            
+            return Response({'success': True}, status=status.HTTP_200_OK)
+        except Chapter.DoesNotExist:
+            return Response({'error': 'Chapter not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST', 'PUT', 'DELETE'])
+@permission_classes([AllowAny])
+def manage_section(request):
+    """Create, update, or delete a section"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can manage sections.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'POST':
+        chapter_id = request.data.get('chapter_id')
+        title = request.data.get('title')
+        order = request.data.get('order', 0)
+        
+        if not chapter_id or not title:
+            return Response({'error': 'chapter_id and title are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            chapter = Chapter.objects.get(pk=chapter_id, course__teacher=request.user)
+        except Chapter.DoesNotExist:
+            return Response({'error': 'Chapter not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Adjust order if needed
+        max_order = Section.objects.filter(chapter=chapter).count()
+        if order > max_order:
+            order = max_order
+        
+        # Shift existing sections with order >= new order
+        Section.objects.filter(chapter=chapter, order__gte=order).update(order=models.F('order') + 1)
+        
+        section = Section.objects.create(chapter=chapter, title=title, order=order)
+        return Response({'success': True, 'id': section.id, 'title': section.title, 'order': section.order}, status=status.HTTP_201_CREATED)
+    
+    elif request.method == 'PUT':
+        section_id = request.data.get('section_id')
+        title = request.data.get('title')
+        
+        if not section_id:
+            return Response({'error': 'section_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+        except Section.DoesNotExist:
+            return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if title:
+            section.title = title
+        section.save()
+        return Response({'success': True, 'id': section.id, 'title': section.title}, status=status.HTTP_200_OK)
+    
+    elif request.method == 'DELETE':
+        section_id = request.data.get('section_id')
+        
+        if not section_id:
+            return Response({'error': 'section_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+            chapter = section.chapter
+            order = section.order
+            section.delete()
+            
+            # Reorder remaining sections
+            Section.objects.filter(chapter=chapter, order__gt=order).update(order=models.F('order') - 1)
+            
+            return Response({'success': True}, status=status.HTTP_200_OK)
+        except Section.DoesNotExist:
+            return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST', 'PUT', 'DELETE'])
+@permission_classes([AllowAny])
+def manage_video(request):
+    """Create, update, or delete a video"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can manage videos.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'POST':
+        section_id = request.data.get('section_id')
+        title = request.data.get('title')
+        description = request.data.get('description', '')
+        duration_minutes = int(request.data.get('duration_minutes', 0))
+        order = int(request.data.get('order', 0))
+        video_file = request.FILES.get('video_file')
+        video_url = request.data.get('video_url', '')
+        
+        if not section_id or not title:
+            return Response({'error': 'section_id and title are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not video_file and not video_url:
+            return Response({'error': 'Either video_file or video_url is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+        except Section.DoesNotExist:
+            return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Adjust order if needed
+        max_order = Video.objects.filter(section=section).count()
+        if order > max_order:
+            order = max_order
+        
+        # Shift existing videos with order >= new order
+        Video.objects.filter(section=section, order__gte=order).update(order=models.F('order') + 1)
+        
+        video = Video.objects.create(
+            section=section,
+            title=title,
+            description=description,
+            duration_minutes=duration_minutes,
+            order=order,
+            video_file=video_file if video_file else None,
+            video_url=video_url if video_url else None
+        )
+        return Response({'success': True, 'id': video.id}, status=status.HTTP_201_CREATED)
+    
+    elif request.method == 'PUT':
+        video_id = request.data.get('video_id')
+        title = request.data.get('title')
+        description = request.data.get('description')
+        duration_minutes = request.data.get('duration_minutes')
+        is_locked = request.data.get('is_locked')
+        video_file = request.FILES.get('video_file')
+        video_url = request.data.get('video_url')
+        
+        if not video_id:
+            return Response({'error': 'video_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            video = Video.objects.get(pk=video_id, section__chapter__course__teacher=request.user)
+        except Video.DoesNotExist:
+            return Response({'error': 'Video not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if title:
+            video.title = title
+        if description is not None:
+            video.description = description
+        if duration_minutes is not None:
+            video.duration_minutes = int(duration_minutes)
+        if is_locked is not None:
+            video.is_locked = bool(is_locked)
+        if video_file:
+            video.video_file = video_file
+            video.video_url = None  # Clear URL if file is uploaded
+        elif video_url is not None:
+            video.video_url = video_url
+            if video_url:
+                video.video_file = None  # Clear file if URL is provided
+        
+        video.save()
+        return Response({'success': True, 'id': video.id}, status=status.HTTP_200_OK)
+    
+    elif request.method == 'DELETE':
+        video_id = request.data.get('video_id')
+        
+        if not video_id:
+            return Response({'error': 'video_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            video = Video.objects.get(pk=video_id, section__chapter__course__teacher=request.user)
+            section = video.section
+            order = video.order
+            video.delete()
+            
+            # Reorder remaining videos
+            Video.objects.filter(section=section, order__gt=order).update(order=models.F('order') - 1)
+            
+            return Response({'success': True}, status=status.HTTP_200_OK)
+        except Video.DoesNotExist:
+            return Response({'error': 'Video not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST', 'PUT', 'DELETE'])
+@permission_classes([AllowAny])
+def manage_section_quiz(request):
+    """Create, update, or delete a quiz"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can manage quizzes.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'POST':
+        section_id = request.data.get('section_id')
+        title = request.data.get('title')
+        description = request.data.get('description', '')
+        duration_minutes = int(request.data.get('duration_minutes', 10))
+        order = int(request.data.get('order', 0))
+        questions_data = request.data.get('questions', [])
+        
+        if not section_id or not title:
+            return Response({'error': 'section_id and title are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+        except Section.DoesNotExist:
+            return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Adjust order if needed
+        max_order = Quiz.objects.filter(section=section).count()
+        if order > max_order:
+            order = max_order
+        
+        # Shift existing quizzes with order >= new order
+        Quiz.objects.filter(section=section, order__gte=order).update(order=models.F('order') + 1)
+        
+        quiz = Quiz.objects.create(
+            section=section,
+            title=title,
+            description=description,
+            duration_minutes=duration_minutes,
+            order=order
+        )
+        
+        # Create questions
+        for q_idx, q_data in enumerate(questions_data):
+            question = Question.objects.create(
+                quiz=quiz,
+                question_text=q_data.get('question_text', ''),
+                question_type=q_data.get('question_type', 'text'),
+                order=q_idx
+            )
+            
+            # Handle image upload if present
+            if q_data.get('question_type') == 'image' and 'question_image' in request.FILES:
+                # This would need to be handled differently - images in questions array
+                pass
+            
+            # Create options
+            options_data = q_data.get('options', [])
+            for opt_idx, opt_data in enumerate(options_data):
+                QuestionOption.objects.create(
+                    question=question,
+                    option_text=opt_data.get('option_text', ''),
+                    is_correct=opt_data.get('is_correct', False),
+                    order=opt_idx
+                )
+        
+        return Response({'success': True, 'id': quiz.id}, status=status.HTTP_201_CREATED)
+    
+    elif request.method == 'PUT':
+        quiz_id = request.data.get('quiz_id')
+        title = request.data.get('title')
+        description = request.data.get('description')
+        duration_minutes = request.data.get('duration_minutes')
+        is_locked = request.data.get('is_locked')
+        questions_data = request.data.get('questions', [])
+        
+        if not quiz_id:
+            return Response({'error': 'quiz_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            quiz = Quiz.objects.get(pk=quiz_id, section__chapter__course__teacher=request.user)
+        except Quiz.DoesNotExist:
+            return Response({'error': 'Quiz not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if title:
+            quiz.title = title
+        if description is not None:
+            quiz.description = description
+        if duration_minutes is not None:
+            quiz.duration_minutes = int(duration_minutes)
+        if is_locked is not None:
+            quiz.is_locked = bool(is_locked)
+        quiz.save()
+        
+        # Update questions if provided
+        if questions_data:
+            # Delete existing questions
+            quiz.questions.all().delete()
+            
+            # Create new questions
+            for q_idx, q_data in enumerate(questions_data):
+                question = Question.objects.create(
+                    quiz=quiz,
+                    question_text=q_data.get('question_text', ''),
+                    question_type=q_data.get('question_type', 'text'),
+                    order=q_idx
+                )
+                
+                # Create options
+                options_data = q_data.get('options', [])
+                for opt_idx, opt_data in enumerate(options_data):
+                    QuestionOption.objects.create(
+                        question=question,
+                        option_text=opt_data.get('option_text', ''),
+                        is_correct=opt_data.get('is_correct', False),
+                        order=opt_idx
+                    )
+        
+        return Response({'success': True, 'id': quiz.id}, status=status.HTTP_200_OK)
+    
+    elif request.method == 'DELETE':
+        quiz_id = request.data.get('quiz_id')
+        
+        if not quiz_id:
+            return Response({'error': 'quiz_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            quiz = Quiz.objects.get(pk=quiz_id, section__chapter__course__teacher=request.user)
+            section = quiz.section
+            order = quiz.order
+            quiz.delete()
+            
+            # Reorder remaining quizzes
+            Quiz.objects.filter(section=section, order__gt=order).update(order=models.F('order') - 1)
+            
+            return Response({'success': True}, status=status.HTTP_200_OK)
+        except Quiz.DoesNotExist:
+            return Response({'error': 'Quiz not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reorder_chapters(request):
+    """Reorder chapters within a course"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can reorder chapters.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    course_id = request.data.get('course_id')
+    chapter_orders = request.data.get('chapter_orders', [])  # List of {id: chapter_id, order: new_order}
+    
+    if not course_id or not chapter_orders:
+        return Response({'error': 'course_id and chapter_orders are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        course = Course.objects.get(pk=course_id, teacher=request.user)
+    except Course.DoesNotExist:
+        return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Update orders
+    for item in chapter_orders:
+        chapter_id = item.get('id')
+        new_order = item.get('order')
+        if chapter_id and new_order is not None:
+            try:
+                chapter = Chapter.objects.get(pk=chapter_id, course=course)
+                chapter.order = new_order
+                chapter.save()
+            except Chapter.DoesNotExist:
+                continue
+    
+    return Response({'success': True}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reorder_sections(request):
+    """Reorder sections within a chapter"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can reorder sections.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    chapter_id = request.data.get('chapter_id')
+    section_orders = request.data.get('section_orders', [])
+    
+    if not chapter_id or not section_orders:
+        return Response({'error': 'chapter_id and section_orders are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        chapter = Chapter.objects.get(pk=chapter_id, course__teacher=request.user)
+    except Chapter.DoesNotExist:
+        return Response({'error': 'Chapter not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    for item in section_orders:
+        section_id = item.get('id')
+        new_order = item.get('order')
+        if section_id and new_order is not None:
+            try:
+                section = Section.objects.get(pk=section_id, chapter=chapter)
+                section.order = new_order
+                section.save()
+            except Section.DoesNotExist:
+                continue
+    
+    return Response({'success': True}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reorder_videos(request):
+    """Reorder videos within a section"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can reorder videos.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    section_id = request.data.get('section_id')
+    video_orders = request.data.get('video_orders', [])
+    
+    if not section_id or not video_orders:
+        return Response({'error': 'section_id and video_orders are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    for item in video_orders:
+        video_id = item.get('id')
+        new_order = item.get('order')
+        if video_id and new_order is not None:
+            try:
+                video = Video.objects.get(pk=video_id, section=section)
+                video.order = new_order
+                video.save()
+            except Video.DoesNotExist:
+                continue
+    
+    return Response({'success': True}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reorder_quizzes(request):
+    """Reorder quizzes within a section"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can reorder quizzes.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    section_id = request.data.get('section_id')
+    quiz_orders = request.data.get('quiz_orders', [])
+    
+    if not section_id or not quiz_orders:
+        return Response({'error': 'section_id and quiz_orders are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    for item in quiz_orders:
+        quiz_id = item.get('id')
+        new_order = item.get('order')
+        if quiz_id and new_order is not None:
+            try:
+                quiz = Quiz.objects.get(pk=quiz_id, section=section)
+                quiz.order = new_order
+                quiz.save()
+            except Quiz.DoesNotExist:
+                continue
+    
+    return Response({'success': True}, status=status.HTTP_200_OK)

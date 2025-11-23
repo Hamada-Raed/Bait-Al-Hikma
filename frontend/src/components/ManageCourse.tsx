@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import Header from './Header';
+import { ensureCsrfToken } from '../utils/csrf';
 import './ManageCourse.css';
 
 // Type definitions
@@ -391,16 +392,24 @@ const ManageCourse: React.FC = () => {
   }, [courseId, navigate, user]);
 
   // Helper function to get auth headers
-  const getAuthHeaders = (): HeadersInit => {
-    return {
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
+    
+    // Add CSRF token for POST/PUT/DELETE requests
+    const csrfToken = await ensureCsrfToken();
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    return headers;
   };
 
   const fetchCourseStructure = async (): Promise<void> => {
     try {
       const response = await fetch(`http://localhost:8000/api/courses/${courseId}/course-structure/`, {
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include', // Include session cookies for authentication
       });
       const data: CourseStructureResponse = await response.json();
@@ -469,7 +478,7 @@ const ManageCourse: React.FC = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleChapterDrop = (e: React.DragEvent, targetChapter: Chapter): void => {
+  const handleChapterDrop = async (e: React.DragEvent, targetChapter: Chapter): Promise<void> => {
     e.preventDefault();
     if (!draggedChapter || draggedChapter.id === targetChapter.id) {
       setDraggedChapter(null);
@@ -491,8 +500,40 @@ const ManageCourse: React.FC = () => {
 
     setChapters(newChapters);
     calculateStats(newChapters);
-    showSuccess('Chapter order updated!');
     setDraggedChapter(null);
+
+    // Send to backend
+    try {
+      const chapter_orders = newChapters.map((chapter, index) => ({
+        id: chapter.id,
+        order: index
+      }));
+
+      const response = await fetch('http://localhost:8000/api/reorder-chapters/', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          course_id: courseId,
+          chapter_orders: chapter_orders
+        }),
+      });
+
+      if (response.ok) {
+        showSuccess('Chapter order updated!');
+        // Refresh to ensure consistency
+        await fetchCourseStructure();
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to update chapter order');
+        // Revert on error
+        await fetchCourseStructure();
+      }
+    } catch (err) {
+      setError('Failed to update chapter order');
+      // Revert on error
+      await fetchCourseStructure();
+    }
   };
 
   // Drag and Drop Handlers for Sections - LOCAL ONLY
@@ -506,7 +547,7 @@ const ManageCourse: React.FC = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleSectionDrop = (e: React.DragEvent, targetSection: Section, chapterId: number): void => {
+  const handleSectionDrop = async (e: React.DragEvent, targetSection: Section, chapterId: number): Promise<void> => {
     e.preventDefault();
     if (!draggedSection || draggedSection.section.id === targetSection.id || draggedSection.chapterId !== chapterId) {
       setDraggedSection(null);
@@ -543,8 +584,37 @@ const ManageCourse: React.FC = () => {
         ? { ...c, sections: newSections }
         : c
     ));
-    showSuccess('Section order updated!');
     setDraggedSection(null);
+
+    // Send to backend
+    try {
+      const section_orders = newSections.map((section, index) => ({
+        id: section.id,
+        order: index
+      }));
+
+      const response = await fetch('http://localhost:8000/api/reorder-sections/', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          chapter_id: chapterId,
+          section_orders: section_orders
+        }),
+      });
+
+      if (response.ok) {
+        showSuccess('Section order updated!');
+        await fetchCourseStructure();
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to update section order');
+        await fetchCourseStructure();
+      }
+    } catch (err) {
+      setError('Failed to update section order');
+      await fetchCourseStructure();
+    }
   };
 
   // Video Modal Handlers
@@ -1010,7 +1080,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           section_id: quizModalSection,
@@ -1064,7 +1134,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-chapter/', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           course_id: courseId,
@@ -1102,7 +1172,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-chapter/', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           chapter_id: editingChapter.id,
@@ -1127,7 +1197,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-chapter/', {
         method: 'DELETE',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({ chapter_id: chapterId }),
       });
@@ -1156,7 +1226,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section/', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           chapter_id: chapterId,
@@ -1194,7 +1264,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section/', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           section_id: editingSection.id,
@@ -1219,7 +1289,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section/', {
         method: 'DELETE',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({ section_id: sectionId }),
       });
@@ -1255,7 +1325,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-video/', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           video_id: videoId,
@@ -1335,7 +1405,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-video/', {
         method: 'DELETE',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({ video_id: videoId }),
       });
@@ -1360,7 +1430,7 @@ const ManageCourse: React.FC = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleVideoDrop = (e: React.DragEvent, targetVideo: Video, sectionId: number): void => {
+  const handleVideoDrop = async (e: React.DragEvent, targetVideo: Video, sectionId: number): Promise<void> => {
     e.preventDefault();
     if (!draggedVideo || draggedVideo.video.id === targetVideo.id || draggedVideo.sectionId !== sectionId) {
       setDraggedVideo(null);
@@ -1404,8 +1474,37 @@ const ManageCourse: React.FC = () => {
           : s
       )
     })));
-    showSuccess('Video order updated!');
     setDraggedVideo(null);
+
+    // Send to backend
+    try {
+      const video_orders = newVideos.map((video, index) => ({
+        id: video.id,
+        order: index
+      }));
+
+      const response = await fetch('http://localhost:8000/api/reorder-videos/', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          section_id: sectionId,
+          video_orders: video_orders
+        }),
+      });
+
+      if (response.ok) {
+        showSuccess('Video order updated!');
+        await fetchCourseStructure();
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to update video order');
+        await fetchCourseStructure();
+      }
+    } catch (err) {
+      setError('Failed to update video order');
+      await fetchCourseStructure();
+    }
   };
 
   // Quiz Operations
@@ -1429,7 +1528,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           quiz_id: quizId,
@@ -1476,7 +1575,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
         method: 'PUT',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({
           quiz_id: editingQuiz.id,
@@ -1509,7 +1608,7 @@ const ManageCourse: React.FC = () => {
     try {
       const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
         method: 'DELETE',
-        headers: getAuthHeaders(),
+        headers: await getAuthHeaders(),
         credentials: 'include',
         body: JSON.stringify({ quiz_id: quizId }),
       });
@@ -1534,7 +1633,7 @@ const ManageCourse: React.FC = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleQuizDrop = (e: React.DragEvent, targetQuiz: Quiz, sectionId: number): void => {
+  const handleQuizDrop = async (e: React.DragEvent, targetQuiz: Quiz, sectionId: number): Promise<void> => {
     e.preventDefault();
     if (!draggedQuiz || draggedQuiz.quiz.id === targetQuiz.id || draggedQuiz.sectionId !== sectionId) {
       setDraggedQuiz(null);
@@ -1578,8 +1677,37 @@ const ManageCourse: React.FC = () => {
           : s
       )
     })));
-    showSuccess('Quiz order updated!');
     setDraggedQuiz(null);
+
+    // Send to backend
+    try {
+      const quiz_orders = newQuizzes.map((quiz, index) => ({
+        id: quiz.id,
+        order: index
+      }));
+
+      const response = await fetch('http://localhost:8000/api/reorder-quizzes/', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          section_id: sectionId,
+          quiz_orders: quiz_orders
+        }),
+      });
+
+      if (response.ok) {
+        showSuccess('Quiz order updated!');
+        await fetchCourseStructure();
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to update quiz order');
+        await fetchCourseStructure();
+      }
+    } catch (err) {
+      setError('Failed to update quiz order');
+      await fetchCourseStructure();
+    }
   };
 
   if (loading) {

@@ -4,7 +4,9 @@ from .views import (
     CountryViewSet, GradeViewSet, TrackViewSet,
     MajorViewSet, SubjectViewSet, UserViewSet, PlatformSettingsViewSet,
     HeroSectionViewSet, FeatureViewSet, FeaturesSectionViewSet,
-    WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet
+    WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet,
+    manage_chapter, manage_section, manage_video, manage_section_quiz,
+    reorder_chapters, reorder_sections, reorder_videos, reorder_quizzes
 )
 
 router = DefaultRouter()
@@ -26,5 +28,15 @@ router.register(r'availabilities', AvailabilityViewSet, basename='availability')
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Course structure management endpoints
+    path('manage-chapter/', manage_chapter, name='manage-chapter'),
+    path('manage-section/', manage_section, name='manage-section'),
+    path('manage-video/', manage_video, name='manage-video'),
+    path('manage-section-quiz/', manage_section_quiz, name='manage-section-quiz'),
+    # Reorder endpoints for drag and drop
+    path('reorder-chapters/', reorder_chapters, name='reorder-chapters'),
+    path('reorder-sections/', reorder_sections, name='reorder-sections'),
+    path('reorder-videos/', reorder_videos, name='reorder-videos'),
+    path('reorder-quizzes/', reorder_quizzes, name='reorder-quizzes'),
 ]
 

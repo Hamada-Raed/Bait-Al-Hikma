@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
+    Chapter, Section, Video, Quiz, Question, QuestionOption
 )
 
 
@@ -397,3 +398,68 @@ class AvailabilitySerializer(serializers.ModelSerializer):
         if grade_ids is not None:
             instance.grades.set(grade_ids)
         return instance
+
+
+# Course Structure Serializers
+class QuestionOptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuestionOption
+        fields = ['id', 'option_text', 'is_correct', 'order']
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    options = QuestionOptionSerializer(many=True, read_only=True)
+    question_image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Question
+        fields = ['id', 'question_text', 'question_type', 'question_image', 'question_image_url', 'options', 'order']
+    
+    def get_question_image_url(self, obj):
+        if obj.question_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.question_image.url)
+            return obj.question_image.url
+        return None
+
+
+class VideoSerializer(serializers.ModelSerializer):
+    video_file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Video
+        fields = ['id', 'title', 'description', 'video_file', 'video_file_url', 'video_url', 'duration_minutes', 'is_locked', 'order']
+    
+    def get_video_file_url(self, obj):
+        if obj.video_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.video_file.url)
+            return obj.video_file.url
+        return None
+
+
+class QuizSerializer(serializers.ModelSerializer):
+    questions = QuestionSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Quiz
+        fields = ['id', 'title', 'description', 'duration_minutes', 'is_locked', 'order', 'questions']
+
+
+class SectionSerializer(serializers.ModelSerializer):
+    videos = VideoSerializer(many=True, read_only=True)
+    quizzes = QuizSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Section
+        fields = ['id', 'title', 'order', 'videos', 'quizzes']
+
+
+class ChapterSerializer(serializers.ModelSerializer):
+    sections = SectionSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'order', 'sections']
