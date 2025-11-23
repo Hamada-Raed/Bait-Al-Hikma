@@ -1007,7 +1007,8 @@ body.dark-mode .course-stats-panel .stat-label {
   direction: rtl;
 }
 
-.manage-course.rtl .modal-header {
+.manage-course.rtl .modal-header,
+.modal-content.rtl .modal-header {
   flex-direction: row-reverse;
 }
 
@@ -1268,7 +1269,7 @@ body.dark-mode .course-stats-panel .stat-label {
 
 /* Quiz modal - larger size */
 .modal-content.quiz-modal {
-  max-width: 1200px;
+  max-width: 800px;
   width: 95%;
   max-height: 95vh;
 }
@@ -1912,8 +1913,48 @@ body.dark-mode .option-label {
 .confirm-dialog-message {
   font-size: 16px;
   color: #9ca3af; /* gray-400 */
-  margin: 0 0 32px 0;
+  margin: 0 0 24px 0;
   line-height: 1.6;
+}
+
+.confirm-dialog-checkbox {
+  margin: 0 0 32px 0;
+  padding: 16px;
+  background: #2a2a2a; /* dark-200 */
+  border-radius: 8px;
+  border: 1px solid #333333; /* dark-300 */
+}
+
+.confirm-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-checkbox-label:hover {
+  color: #f3f4f6; /* gray-100 */
+}
+
+.confirm-checkbox-input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: #0ea5e9; /* primary-500 */
+  flex-shrink: 0;
+}
+
+.confirm-checkbox-text {
+  font-size: 14px;
+  color: #9ca3af; /* gray-400 */
+  line-height: 1.5;
+  flex: 1;
+}
+
+.confirm-checkbox-label:hover .confirm-checkbox-text {
+  color: #f3f4f6; /* gray-100 */
 }
 
 .confirm-dialog-actions {
@@ -1955,6 +1996,18 @@ body.dark-mode .option-label {
   background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%); /* primary-600 to darker purple */
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+}
+
+.confirm-btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.confirm-btn-confirm:disabled:hover {
+  background: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+  transform: none;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
 .confirm-btn:active {

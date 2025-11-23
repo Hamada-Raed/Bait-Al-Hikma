@@ -209,6 +209,8 @@ const ManageCourse: React.FC = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
   const [confirmCallback, setConfirmCallback] = useState<(() => void) | null>(null);
   const [confirmMessage, setConfirmMessage] = useState<string>('');
+  const [confirmRequiresCheckbox, setConfirmRequiresCheckbox] = useState<boolean>(false);
+  const [confirmCheckboxChecked, setConfirmCheckboxChecked] = useState<boolean>(false);
 
   // Drag and drop states
   const [draggedChapter, setDraggedChapter] = useState<Chapter | null>(null);
@@ -654,7 +656,34 @@ const ManageCourse: React.FC = () => {
     setShowVideoModal(true);
   };
 
-  const closeVideoModal = (): void => {
+  // Check if video form has data
+  const hasVideoFormData = (): boolean => {
+    return !!(
+      videoForm.title?.trim() ||
+      videoForm.description?.trim() ||
+      videoForm.video_file ||
+      videoForm.video_url?.trim() ||
+      videoForm.duration_minutes > 0
+    );
+  };
+
+  const closeVideoModal = (force: boolean = false): void => {
+    // Check if there's data and show confirmation
+    if (!force && hasVideoFormData()) {
+      const message = language === 'ar' 
+        ? 'هل أنت متأكد؟ سيتم فقدان جميع البيانات غير المحفوظة.'
+        : 'Are you sure? All unsaved data will be lost.';
+      
+      showConfirmation(message, () => {
+        setShowVideoModal(false);
+        setVideoModalSection(null);
+        setEditingVideo(null);
+        setVideoForm({ title: '', description: '', video_file: null, video_url: '', duration_minutes: 0 });
+        setDragActive(false);
+      }, true); // Require checkbox
+      return;
+    }
+
     setShowVideoModal(false);
     setVideoModalSection(null);
     setEditingVideo(null);
@@ -759,7 +788,7 @@ const ManageCourse: React.FC = () => {
         const sectionIdToExpand = videoModalSection;
         const parentChapter = chapters.find(c => c.sections.some(s => s.id === sectionIdToExpand));
         
-        closeVideoModal();
+        closeVideoModal(true); // Force close without confirmation
         
         try {
           await fetchCourseStructure();
@@ -898,20 +927,29 @@ const ManageCourse: React.FC = () => {
   };
 
   // Show confirmation dialog
-  const showConfirmation = (message: string, onConfirm: () => void): void => {
+  const showConfirmation = (message: string, onConfirm: () => void, requiresCheckbox: boolean = false): void => {
     setConfirmMessage(message);
     setConfirmCallback(() => onConfirm);
+    setConfirmRequiresCheckbox(requiresCheckbox);
+    setConfirmCheckboxChecked(false);
     setShowConfirmDialog(true);
   };
 
   // Handle confirmation dialog response
   const handleConfirm = (confirmed: boolean): void => {
+    if (confirmed && confirmRequiresCheckbox && !confirmCheckboxChecked) {
+      // Don't close if checkbox is required but not checked
+      return;
+    }
+    
     setShowConfirmDialog(false);
     if (confirmed && confirmCallback) {
       confirmCallback();
     }
     setConfirmCallback(null);
     setConfirmMessage('');
+    setConfirmRequiresCheckbox(false);
+    setConfirmCheckboxChecked(false);
   };
 
   const closeQuizModal = (force: boolean = false): void => {
@@ -943,7 +981,7 @@ const ManageCourse: React.FC = () => {
           ]
         });
         setDragActiveQuizImage(false);
-      });
+      }, true); // Require checkbox
       return;
     }
 
@@ -1286,23 +1324,32 @@ const ManageCourse: React.FC = () => {
   };
 
   const handleDeleteChapter = async (chapterId: number): Promise<void> => {
-    if (!window.confirm(`${t.confirmDelete} ${t.chapter}?`)) return;
+    const chapter = chapters.find(c => c.id === chapterId);
+    const chapterName = chapter ? chapter.title : t.chapter;
+    const message = language === 'ar' 
+      ? `هل أنت متأكد من حذف ${t.chapter} "${chapterName}"؟ سيتم حذف جميع الأقسام والفيديوهات والاختبارات داخل هذا الفصل. لا يمكن التراجع عن هذا الإجراء.`
+      : `Are you sure you want to delete ${t.chapter} "${chapterName}"? This will delete all sections, videos, and quizzes within this chapter. This action cannot be undone.`;
+    
+    showConfirmation(message, async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/manage-chapter/', {
+          method: 'DELETE',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify({ chapter_id: chapterId }),
+        });
 
-    try {
-      const response = await fetch('http://localhost:8000/api/manage-chapter/', {
-        method: 'DELETE',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({ chapter_id: chapterId }),
-      });
-
-      if (response.ok) {
-        showSuccess('Chapter deleted successfully!');
-        fetchCourseStructure();
+        if (response.ok) {
+          showSuccess('Chapter deleted successfully!');
+          fetchCourseStructure();
+        } else {
+          const data = await response.json();
+          setError((data as any).error || 'Failed to delete chapter');
+        }
+      } catch (err) {
+        setError('Failed to delete chapter');
       }
-    } catch (err) {
-      setError('Failed to delete chapter');
-    }
+    }, true); // Requires checkbox
   };
 
   // Section Operations
@@ -1378,23 +1425,40 @@ const ManageCourse: React.FC = () => {
   };
 
   const handleDeleteSection = async (sectionId: number): Promise<void> => {
-    if (!window.confirm(`${t.confirmDelete} ${t.section}?`)) return;
-
-    try {
-      const response = await fetch('http://localhost:8000/api/manage-section/', {
-        method: 'DELETE',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({ section_id: sectionId }),
-      });
-
-      if (response.ok) {
-        showSuccess('Section deleted successfully!');
-        fetchCourseStructure();
+    // Find the section to get its name
+    let sectionName = t.section;
+    for (const chapter of chapters) {
+      const section = chapter.sections.find(s => s.id === sectionId);
+      if (section) {
+        sectionName = section.title;
+        break;
       }
-    } catch (err) {
-      setError('Failed to delete section');
     }
+    
+    const message = language === 'ar' 
+      ? `هل أنت متأكد من حذف ${t.section} "${sectionName}"؟ سيتم حذف جميع الفيديوهات والاختبارات داخل هذا القسم. لا يمكن التراجع عن هذا الإجراء.`
+      : `Are you sure you want to delete ${t.section} "${sectionName}"? This will delete all videos and quizzes within this section. This action cannot be undone.`;
+    
+    showConfirmation(message, async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/manage-section/', {
+          method: 'DELETE',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify({ section_id: sectionId }),
+        });
+
+        if (response.ok) {
+          showSuccess('Section deleted successfully!');
+          fetchCourseStructure();
+        } else {
+          const data = await response.json();
+          setError((data as any).error || 'Failed to delete section');
+        }
+      } catch (err) {
+        setError('Failed to delete section');
+      }
+    }, true); // Requires checkbox
   };
 
   // Video Operations
@@ -1486,7 +1550,7 @@ const ManageCourse: React.FC = () => {
 
       if (response.ok) {
         showSuccess('Video updated successfully!');
-        closeVideoModal();
+        closeVideoModal(true); // Force close without confirmation
         fetchCourseStructure();
       }
     } catch (err) {
@@ -1495,23 +1559,43 @@ const ManageCourse: React.FC = () => {
   };
 
   const handleDeleteVideo = async (videoId: number): Promise<void> => {
-    if (!window.confirm(`${t.confirmDelete} ${t.video}?`)) return;
-
-    try {
-      const response = await fetch('http://localhost:8000/api/manage-video/', {
-        method: 'DELETE',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({ video_id: videoId }),
-      });
-
-      if (response.ok) {
-        showSuccess('Video deleted successfully!');
-        fetchCourseStructure();
+    // Find the video to get its name
+    let videoName = t.video;
+    for (const chapter of chapters) {
+      for (const section of chapter.sections) {
+        const video = section.videos.find(v => v.id === videoId);
+        if (video) {
+          videoName = video.title;
+          break;
+        }
       }
-    } catch (err) {
-      setError('Failed to delete video');
+      if (videoName !== t.video) break;
     }
+    
+    const message = language === 'ar' 
+      ? `هل أنت متأكد من حذف ${t.video} "${videoName}"؟ لا يمكن التراجع عن هذا الإجراء.`
+      : `Are you sure you want to delete ${t.video} "${videoName}"? This action cannot be undone.`;
+    
+    showConfirmation(message, async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/manage-video/', {
+          method: 'DELETE',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify({ video_id: videoId }),
+        });
+
+        if (response.ok) {
+          showSuccess('Video deleted successfully!');
+          fetchCourseStructure();
+        } else {
+          const data = await response.json();
+          setError((data as any).error || 'Failed to delete video');
+        }
+      } catch (err) {
+        setError('Failed to delete video');
+      }
+    }, true); // Require checkbox
   };
 
   // Drag and Drop for Videos - LOCAL ONLY (no backend)
@@ -1713,23 +1797,43 @@ const ManageCourse: React.FC = () => {
   };
 
   const handleDeleteQuiz = async (quizId: number): Promise<void> => {
-    if (!window.confirm(`${t.confirmDelete} ${t.quiz}?`)) return;
-
-    try {
-      const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
-        method: 'DELETE',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({ quiz_id: quizId }),
-      });
-
-      if (response.ok) {
-        showSuccess('Quiz deleted successfully!');
-        fetchCourseStructure();
+    // Find the quiz to get its name
+    let quizName = t.quiz;
+    for (const chapter of chapters) {
+      for (const section of chapter.sections) {
+        const quiz = section.quizzes.find(q => q.id === quizId);
+        if (quiz) {
+          quizName = quiz.title;
+          break;
+        }
       }
-    } catch (err) {
-      setError('Failed to delete quiz');
+      if (quizName !== t.quiz) break;
     }
+    
+    const message = language === 'ar' 
+      ? `هل أنت متأكد من حذف ${t.quiz} "${quizName}"؟ سيتم حذف جميع الأسئلة داخل هذا الاختبار. لا يمكن التراجع عن هذا الإجراء.`
+      : `Are you sure you want to delete ${t.quiz} "${quizName}"? This will delete all questions within this quiz. This action cannot be undone.`;
+    
+    showConfirmation(message, async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
+          method: 'DELETE',
+          headers: await getAuthHeaders(),
+          credentials: 'include',
+          body: JSON.stringify({ quiz_id: quizId }),
+        });
+
+        if (response.ok) {
+          showSuccess('Quiz deleted successfully!');
+          fetchCourseStructure();
+        } else {
+          const data = await response.json();
+          setError((data as any).error || 'Failed to delete quiz');
+        }
+      } catch (err) {
+        setError('Failed to delete quiz');
+      }
+    }, true); // Require checkbox
   };
 
   // Drag and Drop for Quizzes - LOCAL ONLY (no backend)
@@ -2276,11 +2380,11 @@ const ManageCourse: React.FC = () => {
 
         {/* Video Upload Modal */}
         {showVideoModal && (
-          <div className="modal-overlay" onClick={closeVideoModal}>
-            <div className="modal-content video-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-overlay" onClick={() => closeVideoModal(false)}>
+            <div className={`modal-content video-modal ${language === 'ar' ? 'rtl' : ''}`} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>{editingVideo ? t.update + ' ' + t.video : t.uploadVideo}</h2>
-                <button className="modal-close" onClick={closeVideoModal}>×</button>
+                <button className="modal-close" onClick={() => closeVideoModal(false)}>×</button>
               </div>
               
               <form onSubmit={handleVideoSubmit} className="modal-form">
@@ -2379,7 +2483,7 @@ const ManageCourse: React.FC = () => {
                   <button type="submit" className="btn-save" disabled={isSubmittingVideo}>
                     {editingVideo ? t.update : t.save}
                   </button>
-                  <button type="button" className="btn-cancel" onClick={closeVideoModal}>{t.cancel}</button>
+                  <button type="button" className="btn-cancel" onClick={() => closeVideoModal(false)}>{t.cancel}</button>
                 </div>
               </form>
             </div>
@@ -2389,7 +2493,7 @@ const ManageCourse: React.FC = () => {
         {/* Quiz Creation Modal */}
         {showQuizModal && (
           <div className="modal-overlay" onClick={() => closeQuizModal(false)}>
-            <div className="modal-content quiz-modal" onClick={(e) => e.stopPropagation()}>
+            <div className={`modal-content quiz-modal ${language === 'ar' ? 'rtl' : ''}`} onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h2>{editingQuiz ? t.updateQuiz : t.createQuiz}</h2>
                 <button className="modal-close" onClick={() => closeQuizModal(false)}>×</button>
@@ -2584,6 +2688,26 @@ const ManageCourse: React.FC = () => {
                 {language === 'ar' ? 'تأكيد' : 'Confirmation'}
               </h3>
               <p className="confirm-dialog-message">{confirmMessage}</p>
+              
+              {/* Checkbox for delete confirmations */}
+              {confirmRequiresCheckbox && (
+                <div className="confirm-dialog-checkbox">
+                  <label className="confirm-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={confirmCheckboxChecked}
+                      onChange={(e) => setConfirmCheckboxChecked(e.target.checked)}
+                      className="confirm-checkbox-input"
+                    />
+                    <span className="confirm-checkbox-text">
+                      {language === 'ar' 
+                        ? 'أفهم أن هذا الإجراء لا يمكن التراجع عنه'
+                        : 'I understand this action cannot be undone'}
+                    </span>
+                  </label>
+                </div>
+              )}
+              
               <div className="confirm-dialog-actions">
                 <button 
                   className="confirm-btn confirm-btn-cancel" 
@@ -2594,6 +2718,7 @@ const ManageCourse: React.FC = () => {
                 <button 
                   className="confirm-btn confirm-btn-confirm" 
                   onClick={() => handleConfirm(true)}
+                  disabled={confirmRequiresCheckbox && !confirmCheckboxChecked}
                 >
                   {language === 'ar' ? 'تأكيد' : 'Confirm'}
                 </button>
