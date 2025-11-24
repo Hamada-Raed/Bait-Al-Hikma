@@ -531,3 +531,39 @@ class QuestionOption(models.Model):
     
     def __str__(self):
         return f"{self.question} - {self.option_text[:50]}"
+
+
+class PrivateLessonPrice(models.Model):
+    """Pricing for private lessons based on student type, grade, and subject"""
+    STUDENT_TYPE_CHOICES = [
+        ('university_student', 'University Student'),
+        ('school_student', 'School Student'),
+    ]
+    
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='private_lesson_prices')
+    student_type = models.CharField(max_length=20, choices=STUDENT_TYPE_CHOICES)
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE)
+    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True, 
+                             help_text='Required for school students')
+    price = models.DecimalField(max_digits=10, decimal_places=2, help_text='Price per hour')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['teacher', 'student_type', 'subject', 'grade']
+        ordering = ['-created_at']
+        verbose_name = 'Private Lesson Price'
+        verbose_name_plural = 'Private Lesson Prices'
+    
+    def __str__(self):
+        grade_str = f" - {self.grade.name_en}" if self.grade else ""
+        return f"{self.teacher.email} - {self.get_student_type_display()} - {self.subject.name_en}{grade_str} - {self.price}"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # Grade is required for school students
+        if self.student_type == 'school_student' and not self.grade:
+            raise ValidationError({'grade': 'Grade is required for school students.'})
+        # Grade should not be set for university students
+        if self.student_type == 'university_student' and self.grade:
+            raise ValidationError({'grade': 'Grade should not be set for university students.'})

@@ -12,6 +12,8 @@ interface Country {
   name_en: string;
   name_ar: string;
   code: string;
+  currency_code?: string;
+  currency_symbol?: string;
 }
 
 interface Subject {
@@ -42,6 +44,623 @@ interface Major {
   name_ar: string;
   code: string;
 }
+
+interface PrivateLessonPrice {
+  id: number;
+  student_type: 'university_student' | 'school_student';
+  student_type_display: string;
+  subject: number;
+  subject_name: string;
+  grade: number | null;
+  grade_name: string | null;
+  price: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PricingTabProps {
+  user: any;
+  subjects: Subject[];
+  grades: Grade[];
+  countries: Country[];
+  language: string;
+  getText: (en: string, ar: string) => string;
+  getName: (item: Country | Subject | Grade | Track | Major) => string;
+}
+
+const PricingTab: React.FC<PricingTabProps> = ({ user, subjects, grades, countries, language, getText, getName }) => {
+  const [prices, setPrices] = useState<PrivateLessonPrice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingPrice, setEditingPrice] = useState<PrivateLessonPrice | null>(null);
+  const [userCountry, setUserCountry] = useState<Country | null>(null);
+  const [userCurrency, setUserCurrency] = useState<{code: string, symbol: string, name: string} | null>(null);
+  
+  const [newPrice, setNewPrice] = useState({
+    student_type: 'university_student' as 'university_student' | 'school_student',
+    subject: '',
+    grades: [] as number[], // Changed to array for checkboxes
+    price: '',
+  });
+
+  const getCurrencyName = (countryCode?: string): string => {
+    if (!countryCode) return '';
+    const code = countryCode.toUpperCase();
+    if (code === 'JOR') {
+      return language === 'ar' ? 'دينار' : 'Dinar';
+    } else if (code === 'PSE') {
+      return language === 'ar' ? 'شيكل' : 'Shekel';
+    }
+    return '';
+  };
+
+  // Fetch user's country and currency
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/users/me/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const userData = await response.json();
+          if (userData.country) {
+            const country = countries.find(c => c.id === userData.country);
+            if (country) {
+              setUserCountry(country);
+              if (country.currency_code && country.currency_symbol) {
+                setUserCurrency({
+                  code: country.currency_code,
+                  symbol: country.currency_symbol,
+                  name: getCurrencyName(country.code)
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+      }
+    };
+    if (countries.length > 0) {
+      fetchUserData();
+    }
+  }, [countries, language]);
+
+  // Fetch existing prices
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API_BASE_URL}/private-lesson-prices/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPrices(Array.isArray(data) ? data : (data.results || []));
+        }
+      } catch (err) {
+        console.error('Error fetching prices:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPrices();
+  }, []);
+
+  const calculateNetPrice = (grossPrice: number): number => {
+    if (!grossPrice || grossPrice <= 0) return 0;
+    const commissionAmount = (grossPrice * 10) / 100;
+    return Math.round(grossPrice - commissionAmount);
+  };
+
+  const calculateCommissionAmount = (grossPrice: number): number => {
+    if (!grossPrice || grossPrice <= 0) return 0;
+    return Math.round((grossPrice * 10) / 100);
+  };
+
+  const handleAddPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    // Validation
+    if (!newPrice.subject) {
+      setError(getText('Subject is required.', 'المادة مطلوبة.'));
+      return;
+    }
+    if (newPrice.student_type === 'school_student' && newPrice.grades.length === 0) {
+      setError(getText('At least one grade is required for school students.', 'يجب اختيار صف واحد على الأقل لطلاب المدارس.'));
+      return;
+    }
+    if (!newPrice.price || parseFloat(newPrice.price) <= 0) {
+      setError(getText('Price must be greater than 0.', 'يجب أن يكون السعر أكبر من 0.'));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
+      // For school students with multiple grades, create one price per grade
+      if (newPrice.student_type === 'school_student' && newPrice.grades.length > 0) {
+        const promises = newPrice.grades.map(gradeId => {
+          const priceData = {
+            student_type: newPrice.student_type,
+            subject: parseInt(newPrice.subject),
+            grade: gradeId,
+            price: newPrice.price,
+          };
+          return fetch(`${API_BASE_URL}/private-lesson-prices/`, {
+            method: 'POST',
+            credentials: 'include',
+            headers,
+            body: JSON.stringify(priceData),
+          });
+        });
+
+        const responses = await Promise.all(promises);
+        const results = await Promise.all(responses.map(r => r.json()));
+        
+        const allSuccess = responses.every(r => r.ok);
+        if (allSuccess) {
+          setSuccess(getText('Prices added successfully!', 'تم إضافة الأسعار بنجاح!'));
+          // Refresh prices list
+          const fetchResponse = await fetch(`${API_BASE_URL}/private-lesson-prices/`, {
+            credentials: 'include',
+          });
+          if (fetchResponse.ok) {
+            const data = await fetchResponse.json();
+            setPrices(Array.isArray(data) ? data : (data.results || []));
+          }
+          setNewPrice({
+            student_type: 'university_student',
+            subject: '',
+            grades: [],
+            price: '',
+          });
+          setShowAddForm(false);
+        } else {
+          const errorMessages = results.filter(r => !r.ok).map(r => r.error || r.message).join(', ');
+          setError(errorMessages || getText('Failed to add some prices.', 'فشل إضافة بعض الأسعار.'));
+        }
+      } else {
+        // For university students or single grade
+        const priceData: any = {
+          student_type: newPrice.student_type,
+          subject: parseInt(newPrice.subject),
+          price: newPrice.price,
+        };
+
+        if (newPrice.student_type === 'school_student' && newPrice.grades.length === 1) {
+          priceData.grade = newPrice.grades[0];
+        }
+
+        const response = await fetch(`${API_BASE_URL}/private-lesson-prices/`, {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+          body: JSON.stringify(priceData),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setSuccess(getText('Price added successfully!', 'تم إضافة السعر بنجاح!'));
+          setPrices([...prices, data]);
+          setNewPrice({
+            student_type: 'university_student',
+            subject: '',
+            grades: [],
+            price: '',
+          });
+          setShowAddForm(false);
+        } else {
+          const errorMessage = data.error || data.message || 
+            (typeof data === 'object' && Object.keys(data).length > 0 
+              ? JSON.stringify(data) 
+              : getText('Failed to add price.', 'فشل إضافة السعر.'));
+          setError(errorMessage);
+        }
+      }
+    } catch (err) {
+      setError(getText('Network error. Please try again.', 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditPrice = (price: PrivateLessonPrice) => {
+    setEditingPrice(price);
+    setNewPrice({
+      student_type: price.student_type,
+      subject: price.subject.toString(),
+      grades: price.grade ? [price.grade] : [],
+      price: price.price,
+    });
+    setShowAddForm(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleUpdatePrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPrice) return;
+
+    setError('');
+    setSuccess('');
+
+    // Validation
+    if (!newPrice.subject) {
+      setError(getText('Subject is required.', 'المادة مطلوبة.'));
+      return;
+    }
+    if (newPrice.student_type === 'school_student' && newPrice.grades.length === 0) {
+      setError(getText('At least one grade is required for school students.', 'يجب اختيار صف واحد على الأقل لطلاب المدارس.'));
+      return;
+    }
+    if (!newPrice.price || parseFloat(newPrice.price) <= 0) {
+      setError(getText('Price must be greater than 0.', 'يجب أن يكون السعر أكبر من 0.'));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
+      const priceData: any = {
+        student_type: newPrice.student_type,
+        subject: parseInt(newPrice.subject),
+        price: newPrice.price,
+      };
+
+      if (newPrice.student_type === 'school_student' && newPrice.grades.length > 0) {
+        priceData.grade = newPrice.grades[0]; // For edit, we only support one grade
+      }
+
+      const response = await fetch(`${API_BASE_URL}/private-lesson-prices/${editingPrice.id}/`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify(priceData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(getText('Price updated successfully!', 'تم تحديث السعر بنجاح!'));
+        setPrices(prices.map(p => p.id === editingPrice.id ? data : p));
+        setEditingPrice(null);
+        setNewPrice({
+          student_type: 'university_student',
+          subject: '',
+          grades: [],
+          price: '',
+        });
+        setShowAddForm(false);
+      } else {
+        const errorMessage = data.error || data.message || 
+          (typeof data === 'object' && Object.keys(data).length > 0 
+            ? JSON.stringify(data) 
+            : getText('Failed to update price.', 'فشل تحديث السعر.'));
+        setError(errorMessage);
+      }
+    } catch (err) {
+      setError(getText('Network error. Please try again.', 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPrice(null);
+    setNewPrice({
+      student_type: 'university_student',
+      subject: '',
+      grades: [],
+      price: '',
+    });
+    setShowAddForm(false);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleGradeToggle = (gradeId: number) => {
+    setNewPrice(prev => ({
+      ...prev,
+      grades: prev.grades.includes(gradeId)
+        ? prev.grades.filter(id => id !== gradeId)
+        : [...prev.grades, gradeId]
+    }));
+  };
+
+  const handleDeletePrice = async (id: number) => {
+    if (!window.confirm(getText('Are you sure you want to delete this price?', 'هل أنت متأكد من حذف هذا السعر؟'))) {
+      return;
+    }
+
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {};
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/private-lesson-prices/${id}/`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers,
+      });
+
+      if (response.ok) {
+        setPrices(prices.filter(p => p.id !== id));
+        setSuccess(getText('Price deleted successfully!', 'تم حذف السعر بنجاح!'));
+      } else {
+        setError(getText('Failed to delete price.', 'فشل حذف السعر.'));
+      }
+    } catch (err) {
+      setError(getText('Network error. Please try again.', 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.'));
+    }
+  };
+
+  // Filter grades by user's country
+  const availableGrades = grades.filter(g => !userCountry || g.country === userCountry.id);
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="p-4 bg-green-500/10 border border-green-500/50 rounded-lg">
+          <p className="text-green-400 text-sm">{success}</p>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center">
+        <h3 className="text-xl font-semibold text-white">
+          {getText('Private Lesson Pricing', 'تسعير الدروس الخاصة')}
+        </h3>
+        <button
+          type="button"
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-lg transition-colors"
+        >
+          {showAddForm 
+            ? getText('Cancel', 'إلغاء')
+            : getText('Add Price for Private Lesson', 'إضافة سعر للدرس الخاص')
+          }
+        </button>
+      </div>
+
+      {showAddForm && (
+        <form onSubmit={editingPrice ? handleUpdatePrice : handleAddPrice} className="bg-dark-200 rounded-lg p-6 space-y-4">
+          {editingPrice && (
+            <div className="mb-4 p-3 bg-primary-500/10 border border-primary-500/30 rounded-lg">
+              <p className="text-primary-400 text-sm font-medium">
+                {getText('Editing Price', 'تعديل السعر')}
+              </p>
+            </div>
+          )}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {getText('Student Type', 'نوع الطالب')} *
+            </label>
+            <select
+              value={newPrice.student_type}
+              onChange={(e) => setNewPrice({
+                ...newPrice,
+                student_type: e.target.value as 'university_student' | 'school_student',
+                grades: [], // Reset grades when student type changes
+              })}
+              className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+              disabled={!!editingPrice}
+            >
+              <option value="university_student">{getText('University Student', 'طالب جامعة')}</option>
+              <option value="school_student">{getText('School Student', 'طالب مدرسة')}</option>
+            </select>
+          </div>
+
+          {newPrice.student_type === 'school_student' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {getText('Grades', 'الصفوف')} * {editingPrice && <span className="text-xs text-gray-500">({getText('Select one grade', 'اختر صف واحد')})</span>}
+              </label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto bg-dark-300 border border-dark-400 rounded-lg p-4">
+                {availableGrades.map((grade) => (
+                  <label
+                    key={grade.id}
+                    className="flex items-center space-x-2 rtl:space-x-reverse p-3 bg-dark-200 rounded-lg cursor-pointer hover:bg-dark-400 transition-colors"
+                  >
+                    <input
+                      type={editingPrice ? "radio" : "checkbox"}
+                      name={editingPrice ? "grade" : undefined}
+                      checked={newPrice.grades.includes(grade.id)}
+                      onChange={() => {
+                        if (editingPrice) {
+                          // For edit mode, only allow one grade (radio behavior)
+                          setNewPrice({ ...newPrice, grades: [grade.id] });
+                        } else {
+                          // For add mode, allow multiple grades (checkbox behavior)
+                          handleGradeToggle(grade.id);
+                        }
+                      }}
+                      className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                    />
+                    <span className="text-white text-sm">{getName(grade)}</span>
+                  </label>
+                ))}
+              </div>
+              {newPrice.grades.length === 0 && (
+                <p className="mt-1 text-red-400 text-sm">
+                  {getText('Please select at least one grade.', 'يرجى اختيار صف واحد على الأقل.')}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {getText('Subject', 'المادة')} *
+            </label>
+            <select
+              value={newPrice.subject}
+              onChange={(e) => setNewPrice({ ...newPrice, subject: e.target.value })}
+              className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            >
+              <option value="">{getText('Select Subject', 'اختر المادة')}</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {getName(subject)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {getText('Price per Hour', 'السعر لكل ساعة')} *
+            </label>
+            <input
+              type="number"
+              value={newPrice.price}
+              onChange={(e) => setNewPrice({ ...newPrice, price: e.target.value })}
+              min="1"
+              step="1"
+              className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder={getText('Enter price', 'أدخل السعر')}
+              required
+            />
+          </div>
+
+          {/* Price Calculation */}
+          {newPrice.price && parseFloat(newPrice.price) > 0 && userCurrency && (
+            <div className="bg-dark-300 border border-dark-400 rounded-lg p-5 space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-400">{getText('Price per Hour', 'السعر لكل ساعة')}:</span>
+                <span className="text-white font-semibold">
+                  {Math.round(parseFloat(newPrice.price)).toLocaleString()} {userCurrency.name}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-400">
+                  {getText('Platform Fee', 'رسوم المنصة')} (10%):
+                </span>
+                <span className="text-red-400 font-semibold">
+                  -{calculateCommissionAmount(parseFloat(newPrice.price)).toLocaleString()} {userCurrency.name}
+                </span>
+              </div>
+              <div className="border-t border-dark-400 pt-3 mt-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300 font-semibold text-base">
+                    {getText('You Will Receive', 'ستحصل على')}:
+                  </span>
+                  <span className="text-green-400 font-bold text-xl">
+                    {calculateNetPrice(parseFloat(newPrice.price)).toLocaleString()} {userCurrency.name}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="flex-1 py-3 bg-dark-300 text-white font-semibold rounded-xl hover:bg-dark-400 transition-all"
+            >
+              {getText('Cancel', 'إلغاء')}
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-3 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-xl hover:from-primary-600 hover:to-accent-purple/90 transition-all disabled:opacity-50"
+            >
+              {saving 
+                ? (editingPrice ? getText('Updating...', 'جاري التحديث...') : getText('Adding...', 'جاري الإضافة...'))
+                : (editingPrice ? getText('Update Price', 'تحديث السعر') : getText('Add Price', 'إضافة السعر'))
+              }
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Existing Prices List */}
+      {loading ? (
+        <div className="text-center py-8">
+          <p className="text-gray-400">{getText('Loading...', 'جاري التحميل...')}</p>
+        </div>
+      ) : prices.length === 0 ? (
+        <div className="text-center py-12 bg-dark-200 rounded-lg">
+          <p className="text-gray-400">{getText('No prices added yet.', 'لم يتم إضافة أسعار بعد.')}</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {prices.map((price) => (
+            <div key={price.id} className="bg-dark-200 rounded-lg p-6 border border-dark-400">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-2">
+                    <span className="text-white font-semibold">
+                      {price.student_type_display}
+                    </span>
+                    {price.grade_name && (
+                      <span className="text-gray-400">- {price.grade_name}</span>
+                    )}
+                  </div>
+                  <p className="text-gray-300 mb-2">
+                    {getText('Subject', 'المادة')}: {price.subject_name}
+                  </p>
+                  {userCurrency && (
+                    <p className="text-primary-400 font-bold text-lg">
+                      {parseFloat(price.price).toLocaleString()} {userCurrency.name} / {getText('hour', 'ساعة')}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleEditPrice(price)}
+                    className="px-4 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 font-semibold rounded-lg transition-colors"
+                  >
+                    {getText('Edit', 'تعديل')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePrice(price.id)}
+                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold rounded-lg transition-colors"
+                  >
+                    {getText('Delete', 'حذف')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Profile: React.FC = () => {
   const { user, checkAuth } = useAuth();
@@ -94,9 +713,10 @@ const Profile: React.FC = () => {
           }),
         ];
 
-        // Add subject fetch for teachers
+        // Add subject and grades fetch for teachers (needed for pricing)
         if (user.user_type === 'teacher') {
           promises.push(fetch(`${API_BASE_URL}/subjects/`));
+          promises.push(fetch(`${API_BASE_URL}/grades/`));
         }
 
         // Add grade/track fetch for school students
@@ -118,8 +738,25 @@ const Profile: React.FC = () => {
 
         // Handle teacher-specific data
         if (user.user_type === 'teacher' && results.length > 2) {
-          const subjectsData = await results[2].json();
-          setSubjects(subjectsData.results || subjectsData);
+          const allSubjectsData = await results[2].json();
+          const allSubjects = allSubjectsData.results || allSubjectsData;
+          
+          // Filter subjects to only show teacher's selected subjects from profile
+          if (userData && userData.subjects && Array.isArray(userData.subjects)) {
+            const teacherSubjectIds = userData.subjects; // Array of subject IDs
+            const teacherSubjects = allSubjects.filter((subject: Subject) => 
+              teacherSubjectIds.includes(subject.id)
+            );
+            setSubjects(teacherSubjects);
+          } else {
+            // If no subjects in profile, show empty array
+            setSubjects([]);
+          }
+          
+          if (results.length > 3) {
+            const gradesData = await results[3].json();
+            setGrades(gradesData.results || gradesData);
+          }
         }
 
         // Handle school student-specific data
@@ -384,7 +1021,7 @@ const Profile: React.FC = () => {
                 {previewImage ? (
                   <img
                     src={previewImage}
-                    alt="Profile"
+                    alt=""
                     className="w-32 h-32 rounded-full object-cover border-4 border-primary-500"
                   />
                 ) : (
@@ -662,29 +1299,15 @@ const Profile: React.FC = () => {
 
           {/* Pricing Tab - Only for teachers */}
           {activeTab === 'pricing' && user?.user_type === 'teacher' && (
-            <div className="space-y-6">
-              <div className="text-center py-12">
-                <svg
-                  className="w-16 h-16 text-gray-400 mx-auto mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  {getText('Pricing Settings', 'إعدادات التسعير')}
-                </h3>
-                <p className="text-gray-400">
-                  {getText('Pricing management will be available soon.', 'إدارة التسعير ستكون متاحة قريباً.')}
-                </p>
-              </div>
-            </div>
+            <PricingTab 
+              user={user}
+              subjects={subjects}
+              grades={grades}
+              countries={countries}
+              language={language}
+              getText={getText}
+              getName={getName}
+            />
           )}
 
           {/* Payment Tab - Only for teachers */}

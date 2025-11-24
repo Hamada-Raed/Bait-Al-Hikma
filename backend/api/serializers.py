@@ -3,7 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption
+    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice
 )
 
 
@@ -470,3 +470,48 @@ class ChapterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chapter
         fields = ['id', 'title', 'order', 'sections']
+
+
+class PrivateLessonPriceSerializer(serializers.ModelSerializer):
+    subject_name = serializers.SerializerMethodField()
+    grade_name = serializers.SerializerMethodField()
+    student_type_display = serializers.CharField(source='get_student_type_display', read_only=True)
+    
+    class Meta:
+        model = PrivateLessonPrice
+        fields = ['id', 'teacher', 'student_type', 'student_type_display', 'subject', 'subject_name', 
+                  'grade', 'grade_name', 'price', 'created_at', 'updated_at']
+        read_only_fields = ['teacher', 'created_at', 'updated_at']
+    
+    def get_subject_name(self, obj):
+        if obj.subject:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.subject.name_ar if lang == 'ar' else obj.subject.name_en
+        return None
+    
+    def get_grade_name(self, obj):
+        if obj.grade:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.grade.name_ar if lang == 'ar' else obj.grade.name_en
+        return None
+    
+    def validate(self, attrs):
+        # Grade is required for school students
+        if attrs.get('student_type') == 'school_student' and not attrs.get('grade'):
+            raise serializers.ValidationError({
+                'grade': 'Grade is required for school students.'
+            })
+        # Grade should not be set for university students
+        if attrs.get('student_type') == 'university_student' and attrs.get('grade'):
+            raise serializers.ValidationError({
+                'grade': 'Grade should not be set for university students.'
+            })
+        return attrs
