@@ -411,10 +411,12 @@ class CourseViewSet(viewsets.ModelViewSet):
         chapters_data = []
         total_videos = 0
         total_quizzes = 0
+        total_sections = 0
         
         for chapter in chapters:
             sections_data = []
             for section in chapter.sections.all().order_by('order', 'id'):
+                total_sections += 1
                 videos_data = []
                 for video in section.videos.all().order_by('order', 'id'):
                     # Get video URL - prefer video_file if uploaded, otherwise use video_url
@@ -484,11 +486,11 @@ class CourseViewSet(viewsets.ModelViewSet):
                 'title': course.name,
                 'description': course.description,
                 'image_url': course.image.url if course.image else None,
-                'enrolled_students': 0,  # TODO: Calculate from enrollments
             },
             'chapters': chapters_data,
             'total_videos': total_videos,
             'total_quizzes': total_quizzes,
+            'total_sections': total_sections,
         }, status=status.HTTP_200_OK)
 
 

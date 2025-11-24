@@ -790,16 +790,33 @@ const AvailabilityCalendar: React.FC = () => {
                   : `${monthNames[selectedMonth.getMonth()]} ${selectedMonth.getFullYear()}`}
               </h3>
               <div className="flex flex-col gap-1">
-                <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-dark-200 rounded">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                  </svg>
-                </button>
-                <button onClick={() => changeMonth(1)} className="p-1 hover:bg-dark-200 rounded">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                {language === 'ar' ? (
+                  <>
+                    <button onClick={() => changeMonth(1)} className="p-1 hover:bg-dark-200 rounded">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-dark-200 rounded">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-dark-200 rounded">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button onClick={() => changeMonth(1)} className="p-1 hover:bg-dark-200 rounded">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -845,19 +862,39 @@ const AvailabilityCalendar: React.FC = () => {
             <div className="bg-dark-100 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-dark-200 rounded">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={language === 'ar' ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"} />
-                    </svg>
-                  </button>
-                  <button onClick={goToToday} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-200 rounded">
-                    {getText('Today', 'اليوم')}
-                  </button>
-                  <button onClick={() => changeWeek(1)} className="p-2 hover:bg-dark-200 rounded">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={language === 'ar' ? "M15 19l-7-7 7-7" : "M9 5l7 7-7 7"} />
-                    </svg>
-                  </button>
+                  {language === 'ar' ? (
+                    <>
+                      <button onClick={() => changeWeek(1)} className="p-2 hover:bg-dark-200 rounded">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <button onClick={goToToday} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-200 rounded">
+                        {getText('Today', 'اليوم')}
+                      </button>
+                      <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-dark-200 rounded">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-dark-200 rounded">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <button onClick={goToToday} className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-200 rounded">
+                        {getText('Today', 'اليوم')}
+                      </button>
+                      <button onClick={() => changeWeek(1)} className="p-2 hover:bg-dark-200 rounded">
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 hover:bg-dark-200 rounded cursor-pointer">
                   <span className="text-sm font-medium text-gray-300">{formatWeekRange()}</span>

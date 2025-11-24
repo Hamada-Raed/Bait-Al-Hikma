@@ -54,6 +54,7 @@ interface CourseStructureResponse {
   chapters?: Chapter[];
   total_videos?: number;
   total_quizzes?: number;
+  total_sections?: number;
   error?: string;
 }
 
@@ -83,6 +84,9 @@ const PreviewCourse: React.FC = () => {
   const [descriptionExpanded, setDescriptionExpanded] = useState<boolean>(false);
   const [currentMaterialIndex, setCurrentMaterialIndex] = useState<number>(0);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialItem | null>(null);
+  const [totalSections, setTotalSections] = useState<number>(0);
+  const [totalVideos, setTotalVideos] = useState<number>(0);
+  const [totalQuizzes, setTotalQuizzes] = useState<number>(0);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -145,6 +149,9 @@ const PreviewCourse: React.FC = () => {
       if (response.ok && data.course && data.chapters) {
         setCourse(data.course);
         setChapters(data.chapters);
+        setTotalSections(data.total_sections || 0);
+        setTotalVideos(data.total_videos || 0);
+        setTotalQuizzes(data.total_quizzes || 0);
         // Expand all chapters by default
         const allChapterIds = new Set(data.chapters.map(ch => ch.id));
         setExpandedChapters(allChapterIds);
@@ -314,32 +321,36 @@ const PreviewCourse: React.FC = () => {
               </div>
               
               <div className="info-stats">
-                <div className="stat-item">
-                  <div className="stat-icon">📚</div>
-                  <div className="stat-details">
-                    <span className="stat-value">{chapters.length}</span>
-                    <span className="stat-label">{getText('Chapters', 'فصول')}</span>
+                <div className="stat-row">
+                  <div className="stat-item">
+                    <div className="stat-icon">📚</div>
+                    <div className="stat-details">
+                      <span className="stat-value">{chapters.length}</span>
+                      <span className="stat-label">{getText('Chapters', 'فصول')}</span>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <div className="stat-icon">📑</div>
+                    <div className="stat-details">
+                      <span className="stat-value">{totalSections}</span>
+                      <span className="stat-label">{getText('Sections', 'أقسام')}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="stat-item">
-                  <div className="stat-icon">🎥</div>
-                  <div className="stat-details">
-                    <span className="stat-value">{course.total_videos || 0}</span>
-                    <span className="stat-label">{getText('Videos', 'فيديوهات')}</span>
+                <div className="stat-row">
+                  <div className="stat-item">
+                    <div className="stat-icon">🎥</div>
+                    <div className="stat-details">
+                      <span className="stat-value">{totalVideos}</span>
+                      <span className="stat-label">{getText('Videos', 'فيديوهات')}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-icon">📝</div>
-                  <div className="stat-details">
-                    <span className="stat-value">{course.total_quizzes || 0}</span>
-                    <span className="stat-label">{getText('Quizzes', 'اختبارات')}</span>
-                  </div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-icon">👥</div>
-                  <div className="stat-details">
-                    <span className="stat-value">{course.enrolled_students || 0}</span>
-                    <span className="stat-label">{getText('Students', 'طلاب')}</span>
+                  <div className="stat-item">
+                    <div className="stat-icon">📝</div>
+                    <div className="stat-details">
+                      <span className="stat-value">{totalQuizzes}</span>
+                      <span className="stat-label">{getText('Quizzes', 'اختبارات')}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -369,17 +380,14 @@ const PreviewCourse: React.FC = () => {
                   onClick={handlePreviousMaterial}
                   disabled={currentMaterialIndex === 0}
                 >
-                  ← {getText('Previous', 'السابق')}
+                  {getText('Previous', 'السابق')}
                 </button>
-                <span className="nav-position">
-                  {getText('Material', 'مادة')} {currentMaterialIndex + 1} {getText('of', 'من')} {orderedMaterials.length}
-                </span>
                 <button
                   className="nav-btn next-btn"
                   onClick={handleNextMaterial}
                   disabled={currentMaterialIndex === orderedMaterials.length - 1}
                 >
-                  {getText('Next', 'التالي')} →
+                  {getText('Next', 'التالي')}
                 </button>
               </div>
             )}
@@ -411,14 +419,6 @@ const PreviewCourse: React.FC = () => {
                             <p>{getText('No video URL provided', 'لم يتم توفير رابط الفيديو')}</p>
                           </div>
                         )}
-                        <div className="material-display-meta">
-                          <span className="material-display-location">
-                            {selectedMaterial.chapterTitle} → {selectedMaterial.sectionTitle}
-                          </span>
-                          <span className="material-display-duration">
-                            ⏱️ {videoData.duration_minutes} {getText('min', 'دقيقة')}
-                          </span>
-                        </div>
                       </div>
                     );
                   })()
@@ -436,14 +436,6 @@ const PreviewCourse: React.FC = () => {
                           <p className="quiz-preview-note">
                             {getText('This is a preview. Quiz questions will be displayed here when implemented.', 'هذه معاينة. سيتم عرض أسئلة الاختبار هنا عند التنفيذ.')}
                           </p>
-                        </div>
-                        <div className="material-display-meta">
-                          <span className="material-display-location">
-                            {selectedMaterial.chapterTitle} → {selectedMaterial.sectionTitle}
-                          </span>
-                          <span className="material-display-duration">
-                            ⏱️ {quizData.duration_minutes} {getText('min', 'دقيقة')}
-                          </span>
                         </div>
                       </div>
                     );
@@ -500,36 +492,42 @@ const PreviewCourse: React.FC = () => {
                                   {/* Videos */}
                                   {section.videos
                                     .sort((a, b) => a.order - b.order)
-                                    .map((video) => (
-                                      <div
-                                        key={`video-${video.id}`}
-                                        className={`structure-item ${video.is_locked ? 'structure-item-locked' : ''}`}
-                                        onClick={() => scrollToMaterial(video.id, 'video', true)}
-                                      >
-                                        <span className="item-icon">📹</span>
-                                        <span className="item-title-structure">{video.title}</span>
-                                        {video.is_locked && (
-                                          <span className="lock-icon-structure">🔒</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                    .map((video) => {
+                                      const isSelected = selectedMaterial?.type === 'video' && selectedMaterial.data.id === video.id;
+                                      return (
+                                        <div
+                                          key={`video-${video.id}`}
+                                          className={`structure-item ${video.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
+                                          onClick={() => scrollToMaterial(video.id, 'video', true)}
+                                        >
+                                          <span className="item-icon">📹</span>
+                                          <span className="item-title-structure">{video.title}</span>
+                                          {video.is_locked && (
+                                            <span className="lock-icon-structure">🔒</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
 
                                   {/* Quizzes */}
                                   {section.quizzes
                                     .sort((a, b) => a.order - b.order)
-                                    .map((quiz) => (
-                                      <div
-                                        key={`quiz-${quiz.id}`}
-                                        className={`structure-item ${quiz.is_locked ? 'structure-item-locked' : ''}`}
-                                        onClick={() => scrollToMaterial(quiz.id, 'quiz', true)}
-                                      >
-                                        <span className="item-icon">📝</span>
-                                        <span className="item-title-structure">{quiz.title}</span>
-                                        {quiz.is_locked && (
-                                          <span className="lock-icon-structure">🔒</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                    .map((quiz) => {
+                                      const isSelected = selectedMaterial?.type === 'quiz' && selectedMaterial.data.id === quiz.id;
+                                      return (
+                                        <div
+                                          key={`quiz-${quiz.id}`}
+                                          className={`structure-item ${quiz.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
+                                          onClick={() => scrollToMaterial(quiz.id, 'quiz', true)}
+                                        >
+                                          <span className="item-icon">📝</span>
+                                          <span className="item-title-structure">{quiz.title}</span>
+                                          {quiz.is_locked && (
+                                            <span className="lock-icon-structure">🔒</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                 </div>
                               )}
                             </div>
