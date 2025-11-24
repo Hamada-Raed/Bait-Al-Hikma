@@ -81,6 +81,7 @@ const PreviewCourse: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
   const [orderedMaterials, setOrderedMaterials] = useState<MaterialItem[]>([]);
   const [descriptionExpanded, setDescriptionExpanded] = useState<boolean>(false);
+  const [currentMaterialIndex, setCurrentMaterialIndex] = useState<number>(0);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -186,10 +187,20 @@ const PreviewCourse: React.FC = () => {
     });
   };
 
-  const scrollToMaterial = (materialId: number, type: 'video' | 'quiz'): void => {
+  const scrollToMaterial = (materialId: number, type: 'video' | 'quiz', updateIndex: boolean = false): void => {
     const elementId = `${type}-${materialId}`;
     const element = document.getElementById(elementId);
     if (element) {
+      // Find the index of this material
+      if (updateIndex) {
+        const index = orderedMaterials.findIndex(m => 
+          m.data.id === materialId && m.type === type
+        );
+        if (index !== -1) {
+          setCurrentMaterialIndex(index);
+        }
+      }
+      
       element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       // Highlight briefly
       element.classList.add('material-highlight');
@@ -198,6 +209,31 @@ const PreviewCourse: React.FC = () => {
       }, 2000);
     }
   };
+
+  const handlePreviousMaterial = (): void => {
+    if (currentMaterialIndex > 0) {
+      const newIndex = currentMaterialIndex - 1;
+      setCurrentMaterialIndex(newIndex);
+      const material = orderedMaterials[newIndex];
+      scrollToMaterial(material.data.id, material.type);
+    }
+  };
+
+  const handleNextMaterial = (): void => {
+    if (currentMaterialIndex < orderedMaterials.length - 1) {
+      const newIndex = currentMaterialIndex + 1;
+      setCurrentMaterialIndex(newIndex);
+      const material = orderedMaterials[newIndex];
+      scrollToMaterial(material.data.id, material.type);
+    }
+  };
+
+  // Update current index when materials change
+  useEffect(() => {
+    if (orderedMaterials.length > 0 && currentMaterialIndex >= orderedMaterials.length) {
+      setCurrentMaterialIndex(0);
+    }
+  }, [orderedMaterials.length]);
 
   if (loading) {
     return (
@@ -309,9 +345,28 @@ const PreviewCourse: React.FC = () => {
 
           {/* Middle Section - Ordered Materials */}
           <div className="materials-content">
-            <div className="materials-header">
-              <h2>{getText('Course Materials', 'مواد الدورة')}</h2>
-            </div>
+            {/* Top Navigation Bar */}
+            {orderedMaterials.length > 0 && (
+              <div className="materials-navigation-top">
+                <button
+                  className="nav-btn prev-btn"
+                  onClick={handlePreviousMaterial}
+                  disabled={currentMaterialIndex === 0}
+                >
+                  ← {getText('Previous', 'السابق')}
+                </button>
+                <span className="nav-position">
+                  {getText('Material', 'مادة')} {currentMaterialIndex + 1} {getText('of', 'من')} {orderedMaterials.length}
+                </span>
+                <button
+                  className="nav-btn next-btn"
+                  onClick={handleNextMaterial}
+                  disabled={currentMaterialIndex === orderedMaterials.length - 1}
+                >
+                  {getText('Next', 'التالي')} →
+                </button>
+              </div>
+            )}
 
             <div className="materials-list">
               {orderedMaterials.length === 0 ? (
@@ -411,7 +466,7 @@ const PreviewCourse: React.FC = () => {
                                       <div
                                         key={`video-${video.id}`}
                                         className={`structure-item ${video.is_locked ? 'structure-item-locked' : ''}`}
-                                        onClick={() => scrollToMaterial(video.id, 'video')}
+                                        onClick={() => scrollToMaterial(video.id, 'video', true)}
                                       >
                                         <span className="item-icon">📹</span>
                                         <span className="item-title-structure">{video.title}</span>
@@ -428,7 +483,7 @@ const PreviewCourse: React.FC = () => {
                                       <div
                                         key={`quiz-${quiz.id}`}
                                         className={`structure-item ${quiz.is_locked ? 'structure-item-locked' : ''}`}
-                                        onClick={() => scrollToMaterial(quiz.id, 'quiz')}
+                                        onClick={() => scrollToMaterial(quiz.id, 'quiz', true)}
                                       >
                                         <span className="item-icon">📝</span>
                                         <span className="item-title-structure">{quiz.title}</span>
