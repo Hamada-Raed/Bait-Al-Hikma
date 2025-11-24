@@ -616,46 +616,147 @@ const PricingTab: React.FC<PricingTabProps> = ({ user, subjects, grades, countri
         </div>
       ) : (
         <div className="space-y-4">
-          {prices.map((price) => (
-            <div key={price.id} className="bg-dark-200 rounded-lg p-6 border border-dark-400">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <span className="text-white font-semibold">
-                      {price.student_type_display}
-                    </span>
-                    {price.grade_name && (
-                      <span className="text-gray-400">- {price.grade_name}</span>
-                    )}
+          {(() => {
+            // Group prices by student_type and subject
+            const groupedPrices = prices.reduce((acc, price) => {
+              const key = `${price.student_type}_${price.subject}`;
+              if (!acc[key]) {
+                acc[key] = {
+                  student_type: price.student_type,
+                  student_type_display: price.student_type_display,
+                  subject: price.subject,
+                  subject_name: price.subject_name,
+                  prices: [],
+                };
+              }
+              acc[key].prices.push(price);
+              return acc;
+            }, {} as Record<string, {
+              student_type: string;
+              student_type_display: string;
+              subject: number;
+              subject_name: string;
+              prices: PrivateLessonPrice[];
+            }>);
+
+            return Object.values(groupedPrices).map((group, groupIndex) => {
+              // Check if all prices are the same
+              const allSamePrice = group.prices.every(p => p.price === group.prices[0].price);
+              const priceValue = parseFloat(group.prices[0].price);
+              
+              // Sort grades by grade_number if available, or by name
+              const sortedPrices = [...group.prices].sort((a, b) => {
+                if (a.grade && b.grade) {
+                  // Find grade objects to compare
+                  const gradeA = availableGrades.find(g => g.id === a.grade);
+                  const gradeB = availableGrades.find(g => g.id === b.grade);
+                  if (gradeA && gradeB) {
+                    return (gradeA.grade_number || 0) - (gradeB.grade_number || 0);
+                  }
+                }
+                return (a.grade_name || '').localeCompare(b.grade_name || '');
+              });
+
+              return (
+                <div key={`${group.student_type}_${group.subject}`} className="bg-dark-200 rounded-lg p-6 border border-dark-400">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-4 mb-2">
+                        <span className="text-white font-semibold">
+                          {group.student_type_display}
+                        </span>
+                      </div>
+                      <p className="text-gray-300 mb-3">
+                        {getText('Subject', 'المادة')}: {group.subject_name}
+                      </p>
+                      
+                      {/* Grades list */}
+                      {group.student_type === 'school_student' && sortedPrices.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-gray-400 text-sm mb-2">{getText('Grades', 'الصفوف')}:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {sortedPrices.map((price) => (
+                              <span
+                                key={price.id}
+                                className="px-3 py-1 bg-dark-300 rounded-lg text-gray-300 text-sm border border-dark-400"
+                              >
+                                {price.grade_name || getText('Grade', 'الصف')}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Price display */}
+                      {userCurrency && (
+                        <p className="text-primary-400 font-bold text-lg">
+                          {allSamePrice ? (
+                            <>
+                              {priceValue.toLocaleString()} {userCurrency.name} / {getText('hour', 'ساعة')}
+                            </>
+                          ) : (
+                            <>
+                              {getText('Prices vary by grade', 'الأسعار تختلف حسب الصف')}
+                            </>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditPrice(sortedPrices[0])}
+                        className="px-4 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 font-semibold rounded-lg transition-colors"
+                      >
+                        {getText('Edit', 'تعديل')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (window.confirm(getText('Are you sure you want to delete all prices for this subject?', 'هل أنت متأكد من حذف جميع الأسعار لهذه المادة؟'))) {
+                            // Delete all prices in the group
+                            try {
+                              const csrfToken = await ensureCsrfToken();
+                              const headers: HeadersInit = {};
+                              if (csrfToken) {
+                                headers['X-CSRFToken'] = csrfToken;
+                              }
+
+                              const deletePromises = group.prices.map(async (p) => {
+                                const response = await fetch(`${API_BASE_URL}/private-lesson-prices/${p.id}/`, {
+                                  method: 'DELETE',
+                                  credentials: 'include',
+                                  headers,
+                                });
+                                return response.ok;
+                              });
+
+                              await Promise.all(deletePromises);
+                              
+                              // Refresh prices list
+                              const fetchResponse = await fetch(`${API_BASE_URL}/private-lesson-prices/`, {
+                                credentials: 'include',
+                              });
+                              if (fetchResponse.ok) {
+                                const data = await fetchResponse.json();
+                                setPrices(Array.isArray(data) ? data : (data.results || []));
+                                setSuccess(getText('Prices deleted successfully!', 'تم حذف الأسعار بنجاح!'));
+                              }
+                            } catch (err) {
+                              setError(getText('Failed to delete some prices.', 'فشل حذف بعض الأسعار.'));
+                            }
+                          }
+                        }}
+                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold rounded-lg transition-colors"
+                      >
+                        {getText('Delete', 'حذف')}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-gray-300 mb-2">
-                    {getText('Subject', 'المادة')}: {price.subject_name}
-                  </p>
-                  {userCurrency && (
-                    <p className="text-primary-400 font-bold text-lg">
-                      {parseFloat(price.price).toLocaleString()} {userCurrency.name} / {getText('hour', 'ساعة')}
-                    </p>
-                  )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleEditPrice(price)}
-                    className="px-4 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 font-semibold rounded-lg transition-colors"
-                  >
-                    {getText('Edit', 'تعديل')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePrice(price.id)}
-                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold rounded-lg transition-colors"
-                  >
-                    {getText('Delete', 'حذف')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            });
+          })()}
         </div>
       )}
     </div>
