@@ -59,6 +59,7 @@ const Profile: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'profile' | 'pricing' | 'payment'>('profile');
   
   const [formData, setFormData] = useState({
     first_name: user?.first_name || '',
@@ -321,6 +322,47 @@ const Profile: React.FC = () => {
             {getText('Profile', 'الملف الشخصي')}
           </h1>
 
+          {/* Tabs Navigation */}
+          <div className="flex border-b border-dark-400 mb-6">
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className={`px-6 py-3 font-medium text-sm transition-colors ${
+                activeTab === 'profile'
+                  ? 'text-primary-400 border-b-2 border-primary-400'
+                  : 'text-gray-400 hover:text-gray-300'
+              }`}
+            >
+              {getText('Profile', 'الملف الشخصي')}
+            </button>
+            {user?.user_type === 'teacher' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('pricing')}
+                  className={`px-6 py-3 font-medium text-sm transition-colors ${
+                    activeTab === 'pricing'
+                      ? 'text-primary-400 border-b-2 border-primary-400'
+                      : 'text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  {getText('Pricing', 'التسعير')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('payment')}
+                  className={`px-6 py-3 font-medium text-sm transition-colors ${
+                    activeTab === 'payment'
+                      ? 'text-primary-400 border-b-2 border-primary-400'
+                      : 'text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  {getText('Payment', 'الدفع')}
+                </button>
+              </>
+            )}
+          </div>
+
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg">
               <p className="text-red-400 text-sm">{error}</p>
@@ -333,7 +375,9 @@ const Profile: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <form onSubmit={handleSubmit} className="space-y-6">
             {/* Profile Picture */}
             <div className="flex flex-col items-center mb-8">
               <div className="relative">
@@ -614,6 +658,61 @@ const Profile: React.FC = () => {
               </button>
             </div>
           </form>
+          )}
+
+          {/* Pricing Tab - Only for teachers */}
+          {activeTab === 'pricing' && user?.user_type === 'teacher' && (
+            <div className="space-y-6">
+              <div className="text-center py-12">
+                <svg
+                  className="w-16 h-16 text-gray-400 mx-auto mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  {getText('Pricing Settings', 'إعدادات التسعير')}
+                </h3>
+                <p className="text-gray-400">
+                  {getText('Pricing management will be available soon.', 'إدارة التسعير ستكون متاحة قريباً.')}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Payment Tab - Only for teachers */}
+          {activeTab === 'payment' && user?.user_type === 'teacher' && (
+            <div className="space-y-6">
+              <div className="text-center py-12">
+                <svg
+                  className="w-16 h-16 text-gray-400 mx-auto mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                  />
+                </svg>
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  {getText('Payment Information', 'معلومات الدفع')}
+                </h3>
+                <p className="text-gray-400">
+                  {getText('Payment settings will be available soon.', 'إعدادات الدفع ستكون متاحة قريباً.')}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
