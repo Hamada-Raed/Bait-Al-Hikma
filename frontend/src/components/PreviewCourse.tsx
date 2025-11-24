@@ -92,10 +92,7 @@ const PreviewCourse: React.FC = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-  const [expandedChapters, setExpandedChapters] = useState<Set<number>>(new Set());
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
   const [orderedMaterials, setOrderedMaterials] = useState<MaterialItem[]>([]);
-  const [descriptionExpanded, setDescriptionExpanded] = useState<boolean>(false);
   const [currentMaterialIndex, setCurrentMaterialIndex] = useState<number>(0);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialItem | null>(null);
   const [totalSections, setTotalSections] = useState<number>(0);
@@ -104,6 +101,29 @@ const PreviewCourse: React.FC = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+
+  // Storage key for this course
+  const getStorageKey = () => `preview_course_${courseId}`;
+
+  // Save current state to localStorage
+  const saveMaterialState = (): void => {
+    if (!courseId || !selectedMaterial) return;
+    
+    const state = {
+      materialId: selectedMaterial.data.id,
+      type: selectedMaterial.type,
+      materialIndex: currentMaterialIndex,
+      questionIndex: currentQuestionIndex,
+      chapterId: selectedMaterial.chapterId,
+      sectionId: selectedMaterial.sectionId,
+    };
+    
+    try {
+      localStorage.setItem(getStorageKey(), JSON.stringify(state));
+    } catch (err) {
+      console.error('Failed to save material state:', err);
+    }
+  };
 
   useEffect(() => {
     if (!courseId) {
@@ -167,14 +187,6 @@ const PreviewCourse: React.FC = () => {
         setTotalSections(data.total_sections || 0);
         setTotalVideos(data.total_videos || 0);
         setTotalQuizzes(data.total_quizzes || 0);
-        // Expand all chapters by default
-        const allChapterIds = new Set(data.chapters.map(ch => ch.id));
-        setExpandedChapters(allChapterIds);
-        // Expand all sections by default
-        const allSectionIds = new Set(
-          data.chapters.flatMap(ch => ch.sections.map(s => s.id))
-        );
-        setExpandedSections(allSectionIds);
       } else {
         setError(data.error || 'Failed to load course');
       }
@@ -186,30 +198,6 @@ const PreviewCourse: React.FC = () => {
     }
   };
 
-  const toggleChapter = (chapterId: number): void => {
-    setExpandedChapters(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(chapterId)) {
-        newSet.delete(chapterId);
-      } else {
-        newSet.add(chapterId);
-      }
-      return newSet;
-    });
-  };
-
-  const toggleSection = (sectionId: number): void => {
-    setExpandedSections(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(sectionId)) {
-        newSet.delete(sectionId);
-      } else {
-        newSet.add(sectionId);
-      }
-      return newSet;
-    });
-  };
-
   const scrollToMaterial = (materialId: number, type: 'video' | 'quiz', updateIndex: boolean = false): void => {
     // Find the material and update the selected material
     const index = orderedMaterials.findIndex(m => 
@@ -218,6 +206,7 @@ const PreviewCourse: React.FC = () => {
     if (index !== -1) {
       setCurrentMaterialIndex(index);
       setSelectedMaterial(orderedMaterials[index]);
+      // State will be saved by the useEffect hook
     }
   };
 
@@ -228,6 +217,7 @@ const PreviewCourse: React.FC = () => {
     if (index !== -1) {
       setCurrentMaterialIndex(index);
       setSelectedMaterial(material);
+      // State will be saved by the useEffect hook
     }
   };
 
@@ -252,17 +242,52 @@ const PreviewCourse: React.FC = () => {
     }
   };
 
-  // Update current index when materials change
+  // Restore saved state when materials are loaded
   useEffect(() => {
-    if (orderedMaterials.length > 0) {
-      if (currentMaterialIndex >= orderedMaterials.length) {
-        setCurrentMaterialIndex(0);
+    if (orderedMaterials.length > 0 && !selectedMaterial) {
+      // Try to restore saved state first
+      const savedState = localStorage.getItem(getStorageKey());
+      if (savedState) {
+        try {
+          const state = JSON.parse(savedState);
+          const { materialId, type, materialIndex, questionIndex } = state;
+          
+          // Find the material
+          const material = orderedMaterials.find(m => 
+            m.data.id === materialId && m.type === type
+          );
+          
+          if (material) {
+            // Restore material
+            const index = typeof materialIndex === 'number' && materialIndex >= 0 && materialIndex < orderedMaterials.length
+              ? materialIndex
+              : orderedMaterials.indexOf(material);
+            
+            if (index !== -1) {
+              setCurrentMaterialIndex(index);
+              setSelectedMaterial(material);
+              
+              // Restore question index for quizzes
+              if (type === 'quiz' && typeof questionIndex === 'number' && questionIndex >= 0) {
+                const quizData = material.data as Quiz;
+                if (quizData.questions && questionIndex < quizData.questions.length) {
+                  setCurrentQuestionIndex(questionIndex);
+                }
+              }
+              return; // Exit early if restored
+            }
+          }
+        } catch (err) {
+          console.error('Failed to restore material state:', err);
+        }
       }
-      // Set initial selected material if none is selected
-      if (!selectedMaterial) {
-        setSelectedMaterial(orderedMaterials[0]);
-        setCurrentMaterialIndex(0);
-      }
+      
+      // If no saved state or restore failed, use first material
+      setSelectedMaterial(orderedMaterials[0]);
+      setCurrentMaterialIndex(0);
+    } else if (orderedMaterials.length > 0 && currentMaterialIndex >= orderedMaterials.length) {
+      setCurrentMaterialIndex(0);
+      setSelectedMaterial(orderedMaterials[0]);
     }
   }, [orderedMaterials.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -272,6 +297,13 @@ const PreviewCourse: React.FC = () => {
       setSelectedMaterial(orderedMaterials[currentMaterialIndex]);
     }
   }, [currentMaterialIndex, orderedMaterials]);
+
+  // Save state whenever selected material or question index changes
+  useEffect(() => {
+    if (selectedMaterial && orderedMaterials.length > 0) {
+      saveMaterialState();
+    }
+  }, [selectedMaterial, currentMaterialIndex, currentQuestionIndex]);
 
   // Reset question index when quiz changes
   useEffect(() => {
@@ -306,92 +338,11 @@ const PreviewCourse: React.FC = () => {
     );
   }
 
-  const lockedCount = orderedMaterials.filter(m => m.data.is_locked).length;
-  const unlockedCount = orderedMaterials.length - lockedCount;
-
   return (
     <div className={`preview-course-teacher ${language === 'ar' ? 'rtl' : ''}`}>
       <Header />
       <div className="preview-course-container">
         <div className="preview-course-layout">
-          {/* General Info Card - Left for EN, Right for AR */}
-          <div className="info-card">
-            <div className="info-card-header">
-              <h2>{getText('Course Information', 'معلومات الدورة')}</h2>
-            </div>
-            <div className="info-card-content">
-              <div className="info-item">
-                <h3 className="course-title-info">{course.title}</h3>
-              </div>
-              
-              <div className="info-item">
-                <div className="course-description-wrapper">
-                  <p className={`course-description-info ${descriptionExpanded ? 'expanded' : 'collapsed'}`}>
-                    {course.description}
-                  </p>
-                  {course.description && course.description.length > 150 && (
-                    <button
-                      onClick={() => setDescriptionExpanded(!descriptionExpanded)}
-                      className="description-toggle"
-                    >
-                      {descriptionExpanded 
-                        ? getText('Show Less', 'عرض أقل') 
-                        : getText('Show More', 'عرض المزيد')}
-                    </button>
-                  )}
-                </div>
-              </div>
-              
-              <div className="info-stats">
-                <div className="stat-row">
-                  <div className="stat-item">
-                    <div className="stat-icon">📚</div>
-                    <div className="stat-details">
-                      <span className="stat-value">{chapters.length}</span>
-                      <span className="stat-label">{getText('Chapters', 'فصول')}</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <div className="stat-icon">📑</div>
-                    <div className="stat-details">
-                      <span className="stat-value">{totalSections}</span>
-                      <span className="stat-label">{getText('Sections', 'أقسام')}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="stat-row">
-                  <div className="stat-item">
-                    <div className="stat-icon">🎥</div>
-                    <div className="stat-details">
-                      <span className="stat-value">{totalVideos}</span>
-                      <span className="stat-label">{getText('Videos', 'فيديوهات')}</span>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <div className="stat-icon">📝</div>
-                    <div className="stat-details">
-                      <span className="stat-value">{totalQuizzes}</span>
-                      <span className="stat-label">{getText('Quizzes', 'اختبارات')}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="lock-status-summary">
-                <div className="lock-stat unlocked">
-                  <span className="lock-stat-icon">✓</span>
-                  <span className="lock-stat-value">{unlockedCount}</span>
-                  <span className="lock-stat-label">{getText('Unlocked', 'مفتوح')}</span>
-                </div>
-                <div className="lock-stat locked">
-                  <span className="lock-stat-icon">🔒</span>
-                  <span className="lock-stat-value">{lockedCount}</span>
-                  <span className="lock-stat-label">{getText('Locked', 'مقفل')}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Middle Section - Ordered Materials */}
           <div className="materials-content">
             {/* Top Navigation Bar */}
@@ -529,98 +480,6 @@ const PreviewCourse: React.FC = () => {
                 <p>{getText('Select a material from the course structure to view it', 'اختر مادة من هيكل الدورة لعرضها')}</p>
               </div>
             )}
-          </div>
-
-          {/* Structure Card - Right for EN, Left for AR */}
-          <div className="structure-card">
-            <div className="structure-card-header">
-              <h2>{getText('Course Structure', 'هيكل الدورة')}</h2>
-            </div>
-            <div className="structure-card-content">
-              {chapters.length === 0 ? (
-                <div className="no-structure">
-                  <p>{getText('No chapters available', 'لا توجد فصول متاحة')}</p>
-                </div>
-              ) : (
-                <div className="structure-tree">
-                  {chapters.map((chapter) => (
-                    <div key={chapter.id} className="structure-chapter">
-                      <div
-                        className="structure-chapter-header"
-                        onClick={() => toggleChapter(chapter.id)}
-                      >
-                        <span className="expand-icon">
-                          {expandedChapters.has(chapter.id) ? '▼' : '▶'}
-                        </span>
-                        <span className="chapter-title-structure">{chapter.title}</span>
-                      </div>
-
-                      {expandedChapters.has(chapter.id) && (
-                        <div className="structure-chapter-content">
-                          {chapter.sections.map((section) => (
-                            <div key={section.id} className="structure-section">
-                              <div
-                                className="structure-section-header"
-                                onClick={() => toggleSection(section.id)}
-                              >
-                                <span className="expand-icon-small">
-                                  {expandedSections.has(section.id) ? '▼' : '▶'}
-                                </span>
-                                <span className="section-title-structure">{section.title}</span>
-                              </div>
-
-                              {expandedSections.has(section.id) && (
-                                <div className="structure-section-content">
-                                  {/* Videos */}
-                                  {section.videos
-                                    .sort((a, b) => a.order - b.order)
-                                    .map((video) => {
-                                      const isSelected = selectedMaterial?.type === 'video' && selectedMaterial.data.id === video.id;
-                                      return (
-                                        <div
-                                          key={`video-${video.id}`}
-                                          className={`structure-item ${video.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
-                                          onClick={() => scrollToMaterial(video.id, 'video', true)}
-                                        >
-                                          <span className="item-icon">📹</span>
-                                          <span className="item-title-structure">{video.title}</span>
-                                          {video.is_locked && (
-                                            <span className="lock-icon-structure">🔒</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-
-                                  {/* Quizzes */}
-                                  {section.quizzes
-                                    .sort((a, b) => a.order - b.order)
-                                    .map((quiz) => {
-                                      const isSelected = selectedMaterial?.type === 'quiz' && selectedMaterial.data.id === quiz.id;
-                                      return (
-                                        <div
-                                          key={`quiz-${quiz.id}`}
-                                          className={`structure-item ${quiz.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
-                                          onClick={() => scrollToMaterial(quiz.id, 'quiz', true)}
-                                        >
-                                          <span className="item-icon">📝</span>
-                                          <span className="item-title-structure">{quiz.title}</span>
-                                          {quiz.is_locked && (
-                                            <span className="lock-icon-structure">🔒</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
