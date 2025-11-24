@@ -1,6 +1,83 @@
 # Dar-Al-ill (دار العلم)
 
-An educational platform that connects students with teachers, offering courses, quizzes, private lessons, and more.
+<div align="center">
+  <img src="docs/images/logo.png" alt="Dar-Al-ill Logo" width="200"/>
+  
+  **Your Gateway to Quality Education**
+  
+  [![React](https://img.shields.io/badge/React-19.2.0-blue.svg)](https://reactjs.org/)
+  [![Django](https://img.shields.io/badge/Django-5.2.8-green.svg)](https://www.djangoproject.com/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-blue.svg)](https://www.typescriptlang.org/)
+</div>
+
+## 📖 About
+
+**Dar-Al-ill** (دار العلم), maneing "House of Knowledge" in Arabic, is a comprehensive educational platform designed to transform the learning experience by connecting students with expert teachers in a personalized, flexible, and engaging environment.
+
+### What We Offer
+
+Dar-Al-ill serves as a bridge between learners and educators, providing a complete ecosystem for online education. Whether you're a school student seeking help with your curriculum, a university student looking to supplement your studies, or an educator wanting to share your expertise, our platform offers the tools and resources you need to excel.
+
+#### For Students
+
+- **Personalized Learning Paths**: Courses tailored to your grade level, country, track, and major
+- **Flexible Scheduling**: Learn at your own pace with courses designed to fit your schedule
+- **Interactive Content**: Engage with multimedia courses, video lessons, and interactive quizzes
+- **Private Tutoring**: Book one-on-one sessions with qualified teachers based on your availability
+- **Progress Tracking**: Monitor your learning journey and achievements as you complete courses
+
+#### For Teachers
+
+- **Course Creation Tools**: Build comprehensive courses with chapters, videos, and quizzes
+- **Availability Management**: Set your schedule and let students book private lessons
+- **Student Engagement**: Track student progress and provide personalized feedback
+- **Flexible Pricing**: Set your own rates for private lessons based on your expertise
+- **Approval System**: Quality-controlled course creation ensures high educational standards
+
+#### For Administrators
+
+- **Platform Management**: Oversee all courses, users, and content
+- **Quality Control**: Review and approve courses before they go live
+- **User Management**: Manage student and teacher accounts
+- **Analytics**: Monitor platform usage and educational outcomes
+
+### Key Differentiators
+
+- 🌍 **Multi-language Support**: Fully bilingual interface in English and Arabic with RTL support
+- 🎯 **Personalized Experience**: Content adapted to your educational level, country, and learning path
+- 📚 **Comprehensive Curriculum**: From school subjects to university majors, we cover all educational levels
+- 👥 **Community-Driven**: Connect with fellow students and teachers in a supportive learning community
+- 🔒 **Quality Assured**: All courses go through an approval process to ensure educational excellence
+
+## 📸 Screenshots
+
+### Homepage
+![Homepage](docs/images/homepage.png)
+*Beautiful landing page with hero section, features, and call-to-action*
+
+### Dashboard
+![Dashboard](docs/images/dashboard.png)
+*Role-specific dashboards for students, teachers, and administrators*
+
+### Course Creation
+![Course Creation](docs/images/create-course.png)
+*Intuitive interface for teachers to create and manage courses*
+
+### Course Preview
+![Course Preview](docs/images/course-preview.png)
+*Interactive course viewer with chapters, videos, and quizzes*
+
+### Availability Calendar
+![Availability Calendar](docs/images/availability-calendar.png)
+*Teachers can set their availability and students can book private lessons*
+
+### Quiz Interface
+![Quiz Interface](docs/images/quiz.png)
+*Interactive quizzes with images and multiple question types*
+
+### Profile Management
+![Profile](docs/images/profile.png)
+*Comprehensive user profiles with educational information*
 
 ## 🚀 Features
 
@@ -191,6 +268,29 @@ npm run build
 - CORS is configured for local development
 - Media files are stored in the `media/` directory
 - Migrations should be run after pulling new changes
+
+## 📷 Adding Screenshots
+
+To add screenshots to this README:
+
+1. Create a `docs/images/` directory in the project root:
+   ```bash
+   mkdir -p docs/images
+   ```
+
+2. Add your screenshots to the `docs/images/` directory with the following names:
+   - `logo.png` - Platform logo
+   - `homepage.png` - Homepage screenshot
+   - `dashboard.png` - Dashboard screenshot
+   - `create-course.png` - Course creation interface
+   - `course-preview.png` - Course preview page
+   - `availability-calendar.png` - Availability calendar
+   - `quiz.png` - Quiz interface
+   - `profile.png` - User profile page
+
+3. The images will automatically appear in the README above.
+
+**Note**: You can also add more screenshots by updating the image paths in the README.
 
 ## 🤝 Contributing
 
