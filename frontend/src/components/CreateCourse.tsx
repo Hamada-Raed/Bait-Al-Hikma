@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import Header from './Header';
 import { ensureCsrfToken } from '../utils/csrf';
+import './CreateCourse.css';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -39,8 +40,12 @@ const CreateCourse: React.FC = () => {
   const { user } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingNavigation = useRef<(() => void) | null>(null);
+  const previousLocation = useRef<string>(location.pathname);
+  const isNavigatingAway = useRef<boolean>(false);
   
   const courseId = searchParams.get('id');
   const isEditMode = !!courseId;
@@ -55,6 +60,13 @@ const CreateCourse: React.FC = () => {
   const [error, setError] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [wordCount, setWordCount] = useState(0);
+  
+  // Confirmation dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
+  const [confirmCallback, setConfirmCallback] = useState<(() => void) | null>(null);
+  const [confirmMessage, setConfirmMessage] = useState<string>('');
+  const [confirmRequiresCheckbox, setConfirmRequiresCheckbox] = useState<boolean>(false);
+  const [confirmCheckboxChecked, setConfirmCheckboxChecked] = useState<boolean>(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -73,10 +85,229 @@ const CreateCourse: React.FC = () => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
   };
 
+  // Storage key for form data
+  const getStorageKey = () => 'create_course_draft';
+
+  // Check if form has data
+  const hasFormData = (): boolean => {
+    return !!(
+      formData.name.trim() ||
+      formData.description.trim() ||
+      formData.subject ||
+      formData.country ||
+      formData.grade ||
+      formData.track ||
+      previewImage
+    );
+  };
+
+  // Save form data to localStorage
+  const saveFormData = (): void => {
+    if (isEditMode) return; // Don't save in edit mode
+    
+    try {
+      const dataToSave = {
+        formData,
+        previewImage,
+      };
+      localStorage.setItem(getStorageKey(), JSON.stringify(dataToSave));
+    } catch (err) {
+      console.error('Failed to save form data:', err);
+    }
+  };
+
+  // Restore form data from localStorage
+  const restoreFormData = (): void => {
+    if (isEditMode) return; // Don't restore in edit mode
+    
+    try {
+      const savedData = localStorage.getItem(getStorageKey());
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.formData) {
+          setFormData(parsed.formData);
+        }
+        if (parsed.previewImage) {
+          setPreviewImage(parsed.previewImage);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to restore form data:', err);
+    }
+  };
+
+  // Clear saved form data
+  const clearFormData = (): void => {
+    try {
+      localStorage.removeItem(getStorageKey());
+    } catch (err) {
+      console.error('Failed to clear form data:', err);
+    }
+  };
+
+  // Show confirmation dialog
+  const showConfirmation = (message: string, onConfirm: () => void, requiresCheckbox: boolean = false): void => {
+    setConfirmMessage(message);
+    setConfirmCallback(() => onConfirm);
+    setConfirmRequiresCheckbox(requiresCheckbox);
+    setConfirmCheckboxChecked(false);
+    setShowConfirmDialog(true);
+  };
+
+  // Handle confirmation dialog response
+  const handleConfirm = (confirmed: boolean): void => {
+    if (confirmed && confirmRequiresCheckbox && !confirmCheckboxChecked) {
+      return;
+    }
+    
+    setShowConfirmDialog(false);
+    if (confirmed && confirmCallback) {
+      confirmCallback();
+    } else {
+      // If user cancels, prevent navigation
+      isNavigatingAway.current = false;
+      if (pendingNavigation.current) {
+        pendingNavigation.current = null;
+      }
+      // Go back to previous location if navigation was attempted
+      if (previousLocation.current && location.pathname !== previousLocation.current) {
+        window.history.pushState(null, '', previousLocation.current);
+      }
+    }
+    setConfirmCallback(null);
+    setConfirmMessage('');
+    setConfirmRequiresCheckbox(false);
+    setConfirmCheckboxChecked(false);
+  };
+
+  // Intercept browser back/forward button using popstate
+  useEffect(() => {
+    if (isEditMode) return;
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (hasFormData() && !isNavigatingAway.current) {
+        const message = language === 'ar'
+          ? 'هل أنت متأكد من الإلغاء؟ سيتم فقدان جميع البيانات غير المحفوظة.'
+          : 'Are you sure you want to leave? All unsaved data will be lost.';
+        
+        pendingNavigation.current = () => {
+          clearFormData();
+          isNavigatingAway.current = true;
+          window.history.back();
+        };
+        
+        // Restore current location
+        window.history.pushState(null, '', location.pathname);
+        showConfirmation(message, () => {
+          if (pendingNavigation.current) {
+            pendingNavigation.current();
+            pendingNavigation.current = null;
+          }
+        });
+      }
+    };
+
+    // Push current state to history stack
+    window.history.pushState(null, '', location.pathname);
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [formData, previewImage, isEditMode, location.pathname, language]);
+
+  // Track location changes to detect programmatic navigation
+  useEffect(() => {
+    // Update previous location on mount or when edit mode changes
+    if (previousLocation.current === '' || isEditMode) {
+      previousLocation.current = location.pathname;
+      return;
+    }
+
+    // If location changed and we have form data and didn't confirm navigation
+    if (location.pathname !== previousLocation.current && hasFormData() && !isNavigatingAway.current) {
+      const message = language === 'ar'
+        ? 'هل أنت متأكد من الإلغاء؟ سيتم فقدان جميع البيانات غير المحفوظة.'
+        : 'Are you sure you want to leave? All unsaved data will be lost.';
+      
+      // Store the attempted navigation path
+      const targetPath = location.pathname;
+      
+      // Prevent the navigation by going back
+      window.history.pushState(null, '', previousLocation.current);
+      // Force React Router to update
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      
+      pendingNavigation.current = () => {
+        clearFormData();
+        isNavigatingAway.current = true;
+        navigate(targetPath);
+      };
+      
+      showConfirmation(message, () => {
+        if (pendingNavigation.current) {
+          pendingNavigation.current();
+          pendingNavigation.current = null;
+        }
+      });
+    } else {
+      previousLocation.current = location.pathname;
+      isNavigatingAway.current = false;
+    }
+  }, [location.pathname, isEditMode, language, navigate]);
+
+  // Handle browser beforeunload (close/refresh page)
+  // Note: We can't show a custom dialog for beforeunload, but we'll still show browser's default
+  // The custom dialog will be shown for all other navigation attempts
+  useEffect(() => {
+    if (isEditMode) return; // Don't block in edit mode
+    
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasFormData()) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome requires returnValue to be set
+        return ''; // Some browsers require return value
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [formData, previewImage, isEditMode]);
+
+  // Intercept navigation attempts (for cancel button and other internal navigation)
+  const handleNavigation = (path: string) => {
+    if (!isEditMode && hasFormData()) {
+      const message = language === 'ar'
+        ? 'هل أنت متأكد من الإلغاء؟ سيتم فقدان جميع البيانات غير المحفوظة.'
+        : 'Are you sure you want to leave? All unsaved data will be lost.';
+      
+      pendingNavigation.current = () => {
+        clearFormData();
+        navigate(path);
+      };
+      
+      showConfirmation(message, () => {
+        if (pendingNavigation.current) {
+          pendingNavigation.current();
+          pendingNavigation.current = null;
+        }
+      });
+    } else {
+      navigate(path);
+    }
+  };
+
   useEffect(() => {
     if (!user || user.user_type !== 'teacher') {
       navigate('/dashboard');
       return;
+    }
+
+    // Restore form data from localStorage if not in edit mode
+    if (!isEditMode) {
+      restoreFormData();
     }
 
     const fetchData = async () => {
@@ -208,6 +439,13 @@ const CreateCourse: React.FC = () => {
     const words = formData.description.trim().split(/\s+/).filter(word => word.length > 0);
     setWordCount(words.length);
   }, [formData.description]);
+
+  // Save form data to localStorage whenever it changes (only in create mode)
+  useEffect(() => {
+    if (!isEditMode) {
+      saveFormData();
+    }
+  }, [formData, previewImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter grades based on selected country
   useEffect(() => {
@@ -455,6 +693,8 @@ const CreateCourse: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Clear saved form data on successful submission
+        clearFormData();
         navigate('/dashboard');
       } else {
         const errorMessage = data.error || data.message || 
@@ -672,7 +912,7 @@ const CreateCourse: React.FC = () => {
                     </p>
                     <button
                       type="button"
-                      onClick={() => navigate('/profile')}
+                      onClick={() => handleNavigation('/profile')}
                       className="mt-2 text-primary-400 hover:text-primary-300 text-sm font-medium underline"
                     >
                       {getText('Go to Profile', 'الذهاب إلى الملف الشخصي')}
@@ -776,7 +1016,19 @@ const CreateCourse: React.FC = () => {
             <div className="flex gap-4">
               <button
                 type="button"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => {
+                  if (hasFormData()) {
+                    const message = language === 'ar'
+                      ? 'هل أنت متأكد من الإلغاء؟ سيتم فقدان جميع البيانات غير المحفوظة.'
+                      : 'Are you sure you want to cancel? All unsaved data will be lost.';
+                    showConfirmation(message, () => {
+                      clearFormData();
+                      navigate('/dashboard');
+                    });
+                  } else {
+                    navigate('/dashboard');
+                  }
+                }}
                 className="flex-1 py-3 bg-dark-300 text-white font-semibold rounded-xl hover:bg-dark-400 transition-all"
               >
                 {getText('Cancel', 'إلغاء')}
@@ -795,6 +1047,54 @@ const CreateCourse: React.FC = () => {
           </form>
         </div>
       </main>
+
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="confirm-dialog-overlay" onClick={() => handleConfirm(false)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-dialog-icon">⚠️</div>
+            <h3 className="confirm-dialog-title">
+              {language === 'ar' ? 'تأكيد' : 'Confirmation'}
+            </h3>
+            <p className="confirm-dialog-message">{confirmMessage}</p>
+            
+            {/* Checkbox */}
+            {confirmRequiresCheckbox && (
+              <div className="confirm-dialog-checkbox">
+                <label className="confirm-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={confirmCheckboxChecked}
+                    onChange={(e) => setConfirmCheckboxChecked(e.target.checked)}
+                    className="confirm-checkbox-input"
+                  />
+                  <span className="confirm-checkbox-text">
+                    {language === 'ar' 
+                      ? 'أفهم أن هذا الإجراء لا يمكن التراجع عنه'
+                      : 'I understand this action cannot be undone'}
+                  </span>
+                </label>
+              </div>
+            )}
+            
+            <div className="confirm-dialog-actions">
+              <button 
+                className="confirm-btn confirm-btn-cancel" 
+                onClick={() => handleConfirm(false)}
+              >
+                {language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                className="confirm-btn confirm-btn-confirm" 
+                onClick={() => handleConfirm(true)}
+                disabled={confirmRequiresCheckbox && !confirmCheckboxChecked}
+              >
+                {language === 'ar' ? 'تأكيد' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
