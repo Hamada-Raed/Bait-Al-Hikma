@@ -123,3 +123,13 @@ Partner with Bait Al-Hikma to provide your students with additional learning res
 7. **Global Community**: Join a diverse community of learners and educators from around the world
 8. **Bilingual Support**: Fully accessible in both English and Arabic
 
+## Screenshots: 
+
+<img width="2502" height="1287" alt="Screenshot 2025-11-24 185233" src="https://github.com/user-attachments/assets/a4ec38c2-d0fb-43d8-9b66-73823ddd0f88" />
+<img width="2503" height="1293" alt="Screenshot 2025-11-24 185255" src="https://github.com/user-attachments/assets/e9716d77-609b-42c8-8cce-1449dc5f56d1" />
+<img width="2502" height="1276" alt="Screenshot 2025-11-24 185307" src="https://github.com/user-attachments/assets/eff1a6ac-4775-4403-a652-af98e37953bf" />
+<img width="2524" height="1276" alt="Screenshot 2025-11-24 185415" src="https://github.com/user-attachments/assets/1d58a253-8a64-47f8-aacb-3a9e61a403bc" />
+<img width="2498" height="1287" alt="Screenshot 2025-11-24 185427" src="https://github.com/user-attachments/assets/b884d4d1-c7f7-4b2a-999b-8c2775f1ec19" />
+
+
+
