@@ -417,11 +417,19 @@ class CourseViewSet(viewsets.ModelViewSet):
             for section in chapter.sections.all().order_by('order', 'id'):
                 videos_data = []
                 for video in section.videos.all().order_by('order', 'id'):
+                    # Get video URL - prefer video_file if uploaded, otherwise use video_url
+                    video_url_value = None
+                    if video.video_file:
+                        # Build absolute URL for uploaded video file
+                        video_url_value = request.build_absolute_uri(video.video_file.url)
+                    elif video.video_url:
+                        video_url_value = video.video_url
+                    
                     videos_data.append({
                         'id': video.id,
                         'title': video.title,
                         'description': video.description,
-                        'video_url': video.video_url,
+                        'video_url': video_url_value,
                         'duration_minutes': video.duration_minutes,
                         'is_locked': video.is_locked,
                         'order': video.order

@@ -82,6 +82,7 @@ const PreviewCourse: React.FC = () => {
   const [orderedMaterials, setOrderedMaterials] = useState<MaterialItem[]>([]);
   const [descriptionExpanded, setDescriptionExpanded] = useState<boolean>(false);
   const [currentMaterialIndex, setCurrentMaterialIndex] = useState<number>(0);
+  const [selectedMaterial, setSelectedMaterial] = useState<MaterialItem | null>(null);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -188,27 +189,28 @@ const PreviewCourse: React.FC = () => {
   };
 
   const scrollToMaterial = (materialId: number, type: 'video' | 'quiz', updateIndex: boolean = false): void => {
-    const elementId = `${type}-${materialId}`;
-    const element = document.getElementById(elementId);
-    if (element) {
-      // Find the index of this material
-      if (updateIndex) {
-        const index = orderedMaterials.findIndex(m => 
-          m.data.id === materialId && m.type === type
-        );
-        if (index !== -1) {
-          setCurrentMaterialIndex(index);
-        }
-      }
-      
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Highlight briefly
-      element.classList.add('material-highlight');
-      setTimeout(() => {
-        element.classList.remove('material-highlight');
-      }, 2000);
+    // Find the material and update the selected material
+    const index = orderedMaterials.findIndex(m => 
+      m.data.id === materialId && m.type === type
+    );
+    if (index !== -1) {
+      setCurrentMaterialIndex(index);
+      setSelectedMaterial(orderedMaterials[index]);
     }
   };
+
+  const handleMaterialClick = (material: MaterialItem): void => {
+    const index = orderedMaterials.findIndex(m => 
+      m.data.id === material.data.id && m.type === material.type
+    );
+    if (index !== -1) {
+      setCurrentMaterialIndex(index);
+      setSelectedMaterial(material);
+    }
+  };
+
+  // Check if user is teacher (can view locked materials)
+  const isTeacher = user?.user_type === 'teacher';
 
   const handlePreviousMaterial = (): void => {
     if (currentMaterialIndex > 0) {
@@ -230,10 +232,24 @@ const PreviewCourse: React.FC = () => {
 
   // Update current index when materials change
   useEffect(() => {
-    if (orderedMaterials.length > 0 && currentMaterialIndex >= orderedMaterials.length) {
-      setCurrentMaterialIndex(0);
+    if (orderedMaterials.length > 0) {
+      if (currentMaterialIndex >= orderedMaterials.length) {
+        setCurrentMaterialIndex(0);
+      }
+      // Set initial selected material if none is selected
+      if (!selectedMaterial) {
+        setSelectedMaterial(orderedMaterials[0]);
+        setCurrentMaterialIndex(0);
+      }
     }
-  }, [orderedMaterials.length]);
+  }, [orderedMaterials.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update selected material when index changes
+  useEffect(() => {
+    if (orderedMaterials.length > 0 && currentMaterialIndex >= 0 && currentMaterialIndex < orderedMaterials.length) {
+      setSelectedMaterial(orderedMaterials[currentMaterialIndex]);
+    }
+  }, [currentMaterialIndex, orderedMaterials]);
 
   if (loading) {
     return (
@@ -368,55 +384,77 @@ const PreviewCourse: React.FC = () => {
               </div>
             )}
 
-            <div className="materials-list">
-              {orderedMaterials.length === 0 ? (
-                <div className="no-materials">
-                  <p>{getText('No materials available', 'لا توجد مواد متاحة')}</p>
-                </div>
-              ) : (
-                orderedMaterials.map((material) => {
-                  const isLocked = material.data.is_locked;
-                  const materialId = `${material.type}-${material.data.id}`;
-
-                  return (
-                    <div
-                      key={materialId}
-                      id={materialId}
-                      className={`material-item ${isLocked ? 'material-locked' : 'material-unlocked'}`}
-                    >
-                      <div className="material-item-header">
-                        <div className="material-type-badge">
-                          {material.type === 'video' ? '📹' : '📝'} {material.type === 'video' ? getText('Video', 'فيديو') : getText('Quiz', 'اختبار')}
-                        </div>
-                        {isLocked && (
-                          <div className="lock-badge">
-                            <span className="lock-icon-small">🔒</span>
-                            <span>{getText('Locked', 'مقفل')}</span>
+            {/* Video/Quiz Display Area */}
+            {selectedMaterial ? (
+              <div className="material-display-area">
+                {selectedMaterial.type === 'video' ? (
+                  (() => {
+                    const videoData = selectedMaterial.data as Video;
+                    return (
+                      <div className="video-display">
+                        <h3 className="material-display-title">{videoData.title}</h3>
+                        {videoData.description && (
+                          <p className="material-display-description">{videoData.description}</p>
+                        )}
+                        {videoData.video_url ? (
+                          <div className="video-player-container">
+                            <video
+                              controls
+                              className="video-player"
+                              src={videoData.video_url.startsWith('http') ? videoData.video_url : `http://localhost:8000${videoData.video_url}`}
+                            >
+                              {getText('Your browser does not support the video tag.', 'متصفحك لا يدعم تشغيل الفيديو.')}
+                            </video>
+                          </div>
+                        ) : (
+                          <div className="no-video-url">
+                            <p>{getText('No video URL provided', 'لم يتم توفير رابط الفيديو')}</p>
                           </div>
                         )}
-                      </div>
-
-                      <h4 className="material-item-title">{material.data.title}</h4>
-                      
-                      {material.data.description && (
-                        <p className="material-item-description">{material.data.description}</p>
-                      )}
-
-                      <div className="material-item-footer">
-                        <div className="material-meta">
-                          <span className="material-location">
-                            {material.chapterTitle} → {material.sectionTitle}
+                        <div className="material-display-meta">
+                          <span className="material-display-location">
+                            {selectedMaterial.chapterTitle} → {selectedMaterial.sectionTitle}
                           </span>
-                          <span className="material-duration">
-                            ⏱️ {material.data.duration_minutes} {getText('min', 'دقيقة')}
+                          <span className="material-display-duration">
+                            ⏱️ {videoData.duration_minutes} {getText('min', 'دقيقة')}
                           </span>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    );
+                  })()
+                ) : (
+                  (() => {
+                    const quizData = selectedMaterial.data as Quiz;
+                    return (
+                      <div className="quiz-display">
+                        <h3 className="material-display-title">{quizData.title}</h3>
+                        {quizData.description && (
+                          <p className="material-display-description">{quizData.description}</p>
+                        )}
+                        <div className="quiz-info">
+                          <p>{getText('Quiz Duration', 'مدة الاختبار')}: {quizData.duration_minutes} {getText('minutes', 'دقيقة')}</p>
+                          <p className="quiz-preview-note">
+                            {getText('This is a preview. Quiz questions will be displayed here when implemented.', 'هذه معاينة. سيتم عرض أسئلة الاختبار هنا عند التنفيذ.')}
+                          </p>
+                        </div>
+                        <div className="material-display-meta">
+                          <span className="material-display-location">
+                            {selectedMaterial.chapterTitle} → {selectedMaterial.sectionTitle}
+                          </span>
+                          <span className="material-display-duration">
+                            ⏱️ {quizData.duration_minutes} {getText('min', 'دقيقة')}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            ) : (
+              <div className="no-material-selected">
+                <p>{getText('Select a material from the course structure to view it', 'اختر مادة من هيكل الدورة لعرضها')}</p>
+              </div>
+            )}
           </div>
 
           {/* Structure Card - Right for EN, Left for AR */}

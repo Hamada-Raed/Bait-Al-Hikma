@@ -937,6 +937,7 @@ const AvailabilityCalendar: React.FC = () => {
                       const isPast = isSlotInPast(dateIdx, hourIdx);
                       const isSelected = isSlotSelected(dateIdx, hourIdx);
                       const consecutive = isConsecutiveSlot(dateIdx, hourIdx);
+                      const block = isAvailable ? getAvailabilityBlock(dateIdx, hourIdx) : null;
                       
                       return (
                         <div
@@ -974,6 +975,11 @@ const AvailabilityCalendar: React.FC = () => {
                             ${isAvailable && consecutive.hasNext ? 'border-b-0' : ''}
                           `}
                         >
+                          {isAvailable && consecutive.isStart && block?.title && (
+                            <div className="absolute top-1 left-1 right-1 px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded text-white text-xs font-medium truncate z-10">
+                              {block.title}
+                            </div>
+                          )}
                           {hourIdx < timeSlots.length - 1 && !isAvailable && (
                             <div className="absolute inset-x-0 bottom-0 border-t border-dashed border-dark-300" />
                           )}
