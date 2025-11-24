@@ -10,7 +10,7 @@ from .models import (
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
-        fields = ['id', 'name_en', 'name_ar', 'code']
+        fields = ['id', 'name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol']
 
 
 class GradeSerializer(serializers.ModelSerializer):
@@ -52,7 +52,7 @@ class TeacherSubjectSerializer(serializers.ModelSerializer):
 class PlatformSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlatformSettings
-        fields = ['name_en', 'name_ar', 'logo_url']
+        fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage']
 
 
 class HeroSectionSerializer(serializers.ModelSerializer):

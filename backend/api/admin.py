@@ -7,8 +7,9 @@ from .models import (
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
-    list_display = ['name_en', 'name_ar', 'code']
+    list_display = ['name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol']
     search_fields = ['name_en', 'name_ar']
+    fields = ['name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol']
 
 
 @admin.register(Grade)
@@ -52,7 +53,8 @@ class TeacherSubjectAdmin(admin.ModelAdmin):
 
 @admin.register(PlatformSettings)
 class PlatformSettingsAdmin(admin.ModelAdmin):
-    list_display = ['name_en', 'name_ar', 'updated_at']
+    list_display = ['name_en', 'name_ar', 'platform_commission_percentage', 'updated_at']
+    fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage']
     
     def has_add_permission(self, request):
         # Only allow one instance

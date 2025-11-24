@@ -13,6 +13,8 @@ interface Country {
   name_en: string;
   name_ar: string;
   code: string;
+  currency_code?: string;
+  currency_symbol?: string;
 }
 
 interface Subject {
@@ -60,6 +62,9 @@ const CreateCourse: React.FC = () => {
   const [error, setError] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [wordCount, setWordCount] = useState(0);
+  const [platformCommission, setPlatformCommission] = useState<number>(25); // Default 25%
+  const [selectedCountryCurrency, setSelectedCountryCurrency] = useState<{code: string, symbol: string, name: string} | null>(null);
+  const [teacherCountry, setTeacherCountry] = useState<number | null>(null);
   
   // Confirmation dialog state
   const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
@@ -83,6 +88,18 @@ const CreateCourse: React.FC = () => {
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getName = (item: Country | Subject | Grade | Track) => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
+  };
+
+  // Get currency name based on country code
+  const getCurrencyName = (countryCode?: string): string => {
+    if (!countryCode) return '';
+    const code = countryCode.toUpperCase();
+    if (code === 'JOR') {
+      return language === 'ar' ? 'دينار' : 'Dinar';
+    } else if (code === 'PSE') {
+      return language === 'ar' ? 'شيكل' : 'Shekel';
+    }
+    return '';
   };
 
   // Storage key for form data
@@ -333,6 +350,11 @@ const CreateCourse: React.FC = () => {
         setAllGrades(gradesData.results || gradesData);
         setTracks(tracksData.results || tracksData);
 
+        // Store teacher's country for university courses
+        if (teacherData && teacherData.country) {
+          setTeacherCountry(teacherData.country);
+        }
+
         // Filter subjects to only show teacher's selected subjects
         const allSubjects = allSubjectsData.results || allSubjectsData;
         
@@ -358,6 +380,58 @@ const CreateCourse: React.FC = () => {
 
     fetchData();
   }, [user, navigate]);
+
+  // Fetch platform settings to get commission percentage
+  useEffect(() => {
+    const fetchPlatformSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/platform-settings/current/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.platform_commission_percentage !== undefined) {
+            setPlatformCommission(parseFloat(data.platform_commission_percentage));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching platform settings:', err);
+      }
+    };
+    fetchPlatformSettings();
+  }, []);
+
+  // Update currency when country changes or for university courses use teacher's country
+  useEffect(() => {
+    if (formData.country) {
+      // School course - use selected country
+      const countryId = parseInt(formData.country);
+      const selectedCountry = countries.find(c => c.id === countryId);
+      if (selectedCountry && selectedCountry.currency_code && selectedCountry.currency_symbol) {
+        setSelectedCountryCurrency({
+          code: selectedCountry.currency_code,
+          symbol: selectedCountry.currency_symbol,
+          name: getCurrencyName(selectedCountry.code)
+        });
+      } else {
+        setSelectedCountryCurrency(null);
+      }
+    } else if (formData.course_type === 'university' && teacherCountry) {
+      // University course - use teacher's country
+      const teacherCountryData = countries.find(c => c.id === teacherCountry);
+      if (teacherCountryData && teacherCountryData.currency_code && teacherCountryData.currency_symbol) {
+        setSelectedCountryCurrency({
+          code: teacherCountryData.currency_code,
+          symbol: teacherCountryData.currency_symbol,
+          name: getCurrencyName(teacherCountryData.code)
+        });
+      } else {
+        setSelectedCountryCurrency(null);
+      }
+    } else {
+      setSelectedCountryCurrency(null);
+    }
+  }, [formData.country, formData.course_type, countries, teacherCountry, language]);
 
   // Fetch course data when in edit mode
   useEffect(() => {
@@ -545,6 +619,19 @@ const CreateCourse: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    // Validate price input - only allow positive integers
+    if (name === 'price') {
+      if (value === '' || (parseInt(value) >= 0 && value === parseInt(value).toString() && !value.includes('.'))) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+        }));
+      }
+      setError('');
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value,
@@ -732,6 +819,19 @@ const CreateCourse: React.FC = () => {
     return false;
   };
 
+  // Calculate net price (price after commission) - returns integer
+  const calculateNetPrice = (grossPrice: number): number => {
+    if (!grossPrice || grossPrice <= 0) return 0;
+    const commissionAmount = (grossPrice * platformCommission) / 100;
+    return Math.round(grossPrice - commissionAmount);
+  };
+
+  // Calculate commission amount - returns integer
+  const calculateCommissionAmount = (grossPrice: number): number => {
+    if (!grossPrice || grossPrice <= 0) return 0;
+    return Math.round((grossPrice * platformCommission) / 100);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-dark-50 flex items-center justify-center">
@@ -844,39 +944,112 @@ const CreateCourse: React.FC = () => {
               )}
             </div>
 
-            {/* Language and Price */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Language */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {getText('Teaching Language', 'لغة التدريس')} *
+              </label>
+              <select
+                name="language"
+                value={formData.language}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="ar">{getText('Arabic', 'العربية')}</option>
+                <option value="en">{getText('English', 'الإنجليزية')}</option>
+                <option value="both">{getText('Both', 'كلاهما')}</option>
+              </select>
+            </div>
+
+            {/* Country (for school courses) - Moved before Price */}
+            {formData.course_type === 'school' && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Teaching Language', 'لغة التدريس')} *
+                  {getText('Country', 'البلد')} *
                 </label>
                 <select
-                  name="language"
-                  value={formData.language}
+                  name="country"
+                  value={formData.country}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="ar">{getText('Arabic', 'العربية')}</option>
-                  <option value="en">{getText('English', 'الإنجليزية')}</option>
-                  <option value="both">{getText('Both', 'كلاهما')}</option>
+                  <option value="">{getText('Select Country', 'اختر البلد')}</option>
+                  {countries.map((country) => (
+                    <option key={country.id} value={country.id}>
+                      {getName(country)}
+                    </option>
+                  ))}
                 </select>
+                {selectedCountryCurrency && selectedCountryCurrency.name && (
+                  <p className="mt-2 text-sm text-gray-400">
+                    {getText('Currency', 'العملة')}: <span className="text-primary-400 font-medium">{selectedCountryCurrency.name}</span>
+                  </p>
+                )}
               </div>
+            )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Price', 'السعر')}
-                </label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.01"
-                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder={getText('Enter price (0 for free)', 'أدخل السعر (0 للمجاني)')}
-                />
+            {/* Price Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {getText('Price', 'السعر')}
+              </label>
+              
+              <div className="space-y-4">
+                {/* Gross Price Input */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2">
+                    {getText('Course Price', 'سعر الدورة')}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      name="price"
+                      value={formData.price}
+                      onChange={handleChange}
+                      min="0"
+                      step="1"
+                      className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-20 transition-all"
+                      placeholder={getText('Enter price (0 for free)', 'أدخل السعر (0 للمجاني)')}
+                    />
+                    {selectedCountryCurrency && selectedCountryCurrency.name && (
+                      <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none font-medium">
+                        {selectedCountryCurrency.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Price Breakdown - Show if price > 0 */}
+                {formData.price && parseFloat(formData.price) > 0 && selectedCountryCurrency && (
+                  <div className="bg-dark-300 border border-dark-400 rounded-lg p-5 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">{getText('Course Price', 'سعر الدورة')}:</span>
+                      <span className="text-white font-semibold">
+                        {Math.round(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">
+                        {getText('Platform Fee', 'رسوم المنصة')} ({platformCommission}%):
+                      </span>
+                      <span className="text-red-400 font-semibold">
+                        -{calculateCommissionAmount(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
+                      </span>
+                    </div>
+                    <div className="border-t border-dark-400 pt-3 mt-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300 font-semibold text-base">
+                          {getText('You Will Receive', 'ستحصل على')}:
+                        </span>
+                        <span className="text-green-400 font-bold text-xl">
+                          {calculateNetPrice(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -896,6 +1069,12 @@ const CreateCourse: React.FC = () => {
                   <option value="school">{getText('School', 'مدرسي')}</option>
                   <option value="university">{getText('University', 'جامعي')}</option>
                 </select>
+                {/* Show currency for university courses */}
+                {formData.course_type === 'university' && selectedCountryCurrency && selectedCountryCurrency.name && (
+                  <p className="mt-2 text-sm text-gray-400">
+                    {getText('Currency', 'العملة')}: <span className="text-primary-400 font-medium">{selectedCountryCurrency.name}</span>
+                  </p>
+                )}
               </div>
 
               <div>
@@ -937,28 +1116,6 @@ const CreateCourse: React.FC = () => {
               </div>
             </div>
 
-            {/* Country (for school courses) */}
-            {formData.course_type === 'school' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Country', 'البلد')} *
-                </label>
-                <select
-                  name="country"
-                  value={formData.country}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{getText('Select Country', 'اختر البلد')}</option>
-                  {countries.map((country) => (
-                    <option key={country.id} value={country.id}>
-                      {getName(country)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             {/* Grade (for school courses) */}
             {formData.course_type === 'school' && formData.country && (

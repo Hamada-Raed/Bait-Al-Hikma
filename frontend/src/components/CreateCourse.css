@@ -173,3 +173,8 @@
   flex-direction: row-reverse;
 }
 
+/* Tooltip Animation */
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+

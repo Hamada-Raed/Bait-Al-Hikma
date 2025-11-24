@@ -5,6 +5,8 @@ class Country(models.Model):
     name_en = models.CharField(max_length=100)
     name_ar = models.CharField(max_length=100)
     code = models.CharField(max_length=3, unique=True)
+    currency_code = models.CharField(max_length=3, default='USD', help_text='ISO 4217 currency code')
+    currency_symbol = models.CharField(max_length=10, default='$', help_text='Currency symbol')
     
     class Meta:
         verbose_name_plural = "Countries"
@@ -208,6 +210,12 @@ class PlatformSettings(models.Model):
     name_en = models.CharField(max_length=100, default='Bait Al-Hikma')
     name_ar = models.CharField(max_length=100, default='بيت الحكمة')
     logo_url = models.URLField(blank=True, null=True)
+    platform_commission_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=25.00,
+        help_text='Platform commission percentage (e.g., 25.00 for 25%)'
+    )
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -226,7 +234,8 @@ class PlatformSettings(models.Model):
     def load(cls):
         obj, created = cls.objects.get_or_create(pk=1, defaults={
             'name_en': 'Bait Al-Hikma',
-            'name_ar': 'بيت الحكمة'
+            'name_ar': 'بيت الحكمة',
+            'platform_commission_percentage': 25.00
         })
         return obj
 

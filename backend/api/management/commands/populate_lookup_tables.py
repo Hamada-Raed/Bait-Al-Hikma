@@ -13,17 +13,31 @@ class Command(BaseCommand):
             code='PSE',
             defaults={
                 'name_en': 'Palestine',
-                'name_ar': 'فلسطين'
+                'name_ar': 'فلسطين',
+                'currency_code': 'ILS',
+                'currency_symbol': '₪'
             }
         )
+        # Update currency if country already exists
+        if not _:
+            palestine.currency_code = 'ILS'
+            palestine.currency_symbol = '₪'
+            palestine.save()
         
         jordan, _ = Country.objects.get_or_create(
             code='JOR',
             defaults={
                 'name_en': 'Jordan',
-                'name_ar': 'الأردن'
+                'name_ar': 'الأردن',
+                'currency_code': 'JOD',
+                'currency_symbol': 'د.أ'
             }
         )
+        # Update currency if country already exists
+        if not _:
+            jordan.currency_code = 'JOD'
+            jordan.currency_symbol = 'د.أ'
+            jordan.save()
         
         self.stdout.write(self.style.SUCCESS('Countries created'))
         
