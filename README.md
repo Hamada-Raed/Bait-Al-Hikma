@@ -1,17 +1,5 @@
 # Bait Al-Hikma (بيت الحكمة)
 
-<div align="center">
-  <img src="docs/images/logo.png" alt="Bait Al-Hikma Logo" width="200"/>
-  
-  **Your Gateway to Quality Education**
-  
-  [![React](https://img.shields.io/badge/React-19.2.0-blue.svg)](https://reactjs.org/)
-  [![Django](https://img.shields.io/badge/Django-5.2.8-green.svg)](https://www.djangoproject.com/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-4.9.5-blue.svg)](https://www.typescriptlang.org/)
-</div>
-
-## 📖 About
-
 **Bait Al-Hikma** (بيت الحكمة), meaning "House of Wisdom" in Arabic, is a comprehensive educational platform designed to transform the learning experience by connecting students with expert teachers in a personalized, flexible, and engaging environment.
 
 Inspired by the historic House of Wisdom in Baghdad, which was a center of learning and knowledge during the Islamic Golden Age, Bait Al-Hikma brings together students and educators in a modern digital space where knowledge flows freely and learning knows no boundaries.
@@ -54,36 +42,6 @@ Bait Al-Hikma serves as a bridge between learners and educators, providing a com
 - 🔒 **Quality Assured**: All courses go through an approval process to ensure educational excellence and maintain high standards
 - 💰 **Flexible Pricing**: Teachers can set their own rates for private lessons, and pricing adapts to different currencies based on the student's country
 - 📅 **Smart Scheduling**: Advanced availability management allows teachers to set their schedules and students to book lessons seamlessly
-
-## 📸 Screenshots
-
-### Homepage
-![Homepage](docs/images/homepage.png)
-*Beautiful landing page with hero section showcasing the platform's mission, key features, and a clear call-to-action to get started*
-
-### Dashboard
-![Dashboard](docs/images/dashboard.png)
-*Role-specific dashboards that provide students, teachers, and administrators with personalized views of their courses, progress, and platform activities*
-
-### Course Creation
-![Course Creation](docs/images/create-course.png)
-*Intuitive interface for teachers to create and manage courses, add chapters, upload videos, and create interactive quizzes*
-
-### Course Preview
-![Course Preview](docs/images/course-preview.png)
-*Interactive course viewer where students can navigate through chapters, watch video lessons, and take quizzes to test their understanding*
-
-### Availability Calendar
-![Availability Calendar](docs/images/availability-calendar.png)
-*Teachers can set their availability for private lessons, and students can easily book sessions that fit their schedule*
-
-### Quiz Interface
-![Quiz Interface](docs/images/quiz.png)
-*Interactive quizzes with images and multiple question types that help students assess their understanding and track their progress*
-
-### Profile Management
-![Profile](docs/images/profile.png)
-*Comprehensive user profiles where students and teachers can manage their information, educational background, and preferences*
 
 ## 🚀 Core Features
 
@@ -165,75 +123,3 @@ Partner with Bait Al-Hikma to provide your students with additional learning res
 7. **Global Community**: Join a diverse community of learners and educators from around the world
 8. **Bilingual Support**: Fully accessible in both English and Arabic
 
-## 🚀 Getting Started
-
-### For Students
-
-1. **Sign Up**: Create your account and select your educational level (school or university)
-2. **Complete Your Profile**: Add your country, grade, track, and major information
-3. **Browse Courses**: Explore available courses that match your educational needs
-4. **Enroll**: Join courses that interest you and start learning
-5. **Book Private Lessons**: Schedule one-on-one sessions with teachers when you need extra help
-
-### For Teachers
-
-1. **Sign Up**: Create your teacher account
-2. **Complete Your Profile**: Add your teaching subjects, experience, and qualifications
-3. **Wait for Approval**: Your account will be reviewed by administrators
-4. **Create Courses**: Once approved, start creating courses with chapters, videos, and quizzes
-5. **Set Availability**: Configure your schedule for private lesson bookings
-6. **Start Teaching**: Share your knowledge and help students succeed
-
-## 📷 Adding Screenshots
-
-To add screenshots to this README:
-
-1. Create a `docs/images/` directory in the project root:
-   ```bash
-   mkdir -p docs/images
-   ```
-
-2. Add your screenshots to the `docs/images/` directory with the following names:
-   - `logo.png` - Platform logo
-   - `homepage.png` - Homepage screenshot
-   - `dashboard.png` - Dashboard screenshot
-   - `create-course.png` - Course creation interface
-   - `course-preview.png` - Course preview page
-   - `availability-calendar.png` - Availability calendar
-   - `quiz.png` - Quiz interface
-   - `profile.png` - User profile page
-
-3. The images will automatically appear in the README above.
-
-**Note**: You can also add more screenshots by updating the image paths in the README.
-
-## 🤝 Contributing
-
-We welcome contributions to Bait Al-Hikma! Whether you're fixing bugs, adding features, or improving documentation, your help makes the platform better for everyone.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## 📄 License
-
-[Add your license here]
-
-## 👥 Authors
-
-[Add author information here]
-
-## 🙏 Acknowledgments
-
-Bait Al-Hikma is inspired by the historic House of Wisdom (بيت الحكمة) in Baghdad, which served as a major intellectual center during the Islamic Golden Age. Just as the original House of Wisdom brought together scholars, translators, and students from diverse backgrounds, our platform aims to create a modern digital space where knowledge is shared freely and learning flourishes.
-
-## 📞 Contact
-
-For questions, support, or partnership inquiries, please [add contact information here].
-
----
-
-<div align="center">
-  <strong>Bait Al-Hikma - Where Knowledge Meets Innovation</strong>
-</div>
