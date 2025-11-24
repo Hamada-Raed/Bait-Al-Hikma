@@ -401,10 +401,9 @@ const CreateCourse: React.FC = () => {
     fetchPlatformSettings();
   }, []);
 
-  // Update currency when country changes or for university courses use teacher's country
+  // Update currency when country changes (for both school and university courses)
   useEffect(() => {
     if (formData.country) {
-      // School course - use selected country
       const countryId = parseInt(formData.country);
       const selectedCountry = countries.find(c => c.id === countryId);
       if (selectedCountry && selectedCountry.currency_code && selectedCountry.currency_symbol) {
@@ -416,22 +415,10 @@ const CreateCourse: React.FC = () => {
       } else {
         setSelectedCountryCurrency(null);
       }
-    } else if (formData.course_type === 'university' && teacherCountry) {
-      // University course - use teacher's country
-      const teacherCountryData = countries.find(c => c.id === teacherCountry);
-      if (teacherCountryData && teacherCountryData.currency_code && teacherCountryData.currency_symbol) {
-        setSelectedCountryCurrency({
-          code: teacherCountryData.currency_code,
-          symbol: teacherCountryData.currency_symbol,
-          name: getCurrencyName(teacherCountryData.code)
-        });
-      } else {
-        setSelectedCountryCurrency(null);
-      }
     } else {
       setSelectedCountryCurrency(null);
     }
-  }, [formData.country, formData.course_type, countries, teacherCountry, language]);
+  }, [formData.country, countries, language]);
 
   // Fetch course data when in edit mode
   useEffect(() => {
@@ -699,8 +686,8 @@ const CreateCourse: React.FC = () => {
       setError(getText('Subject is required.', 'المادة مطلوبة.'));
       return false;
     }
-    if (formData.course_type === 'school' && !formData.country) {
-      setError(getText('Country is required for school courses.', 'البلد مطلوب للدورات المدرسية.'));
+    if (!formData.country) {
+      setError(getText('Country is required.', 'البلد مطلوب.'));
       return false;
     }
     if (formData.course_type === 'school' && !formData.grade) {
@@ -746,9 +733,9 @@ const CreateCourse: React.FC = () => {
       formDataToSend.append('price', formData.price || '0');
       formDataToSend.append('course_type', formData.course_type);
       formDataToSend.append('subject', formData.subject);
+      formDataToSend.append('country', formData.country);
       
       if (formData.course_type === 'school') {
-        formDataToSend.append('country', formData.country);
         formDataToSend.append('grade', formData.grade);
         if (formData.track) {
           formDataToSend.append('track', formData.track);
@@ -944,26 +931,25 @@ const CreateCourse: React.FC = () => {
               )}
             </div>
 
-            {/* Language */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                {getText('Teaching Language', 'لغة التدريس')} *
-              </label>
-              <select
-                name="language"
-                value={formData.language}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="ar">{getText('Arabic', 'العربية')}</option>
-                <option value="en">{getText('English', 'الإنجليزية')}</option>
-                <option value="both">{getText('Both', 'كلاهما')}</option>
-              </select>
-            </div>
+            {/* Teaching Language and Country - Same Line */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  {getText('Teaching Language', 'لغة التدريس')} *
+                </label>
+                <select
+                  name="language"
+                  value={formData.language}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="ar">{getText('Arabic', 'العربية')}</option>
+                  <option value="en">{getText('English', 'الإنجليزية')}</option>
+                  <option value="both">{getText('Both', 'كلاهما')}</option>
+                </select>
+              </div>
 
-            {/* Country (for school courses) - Moved before Price */}
-            {formData.course_type === 'school' && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   {getText('Country', 'البلد')} *
@@ -982,74 +968,6 @@ const CreateCourse: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                {selectedCountryCurrency && selectedCountryCurrency.name && (
-                  <p className="mt-2 text-sm text-gray-400">
-                    {getText('Currency', 'العملة')}: <span className="text-primary-400 font-medium">{selectedCountryCurrency.name}</span>
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Price Section */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                {getText('Price', 'السعر')}
-              </label>
-              
-              <div className="space-y-4">
-                {/* Gross Price Input */}
-                <div>
-                  <label className="block text-xs text-gray-400 mb-2">
-                    {getText('Course Price', 'سعر الدورة')}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleChange}
-                      min="0"
-                      step="1"
-                      className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 pr-20 transition-all"
-                      placeholder={getText('Enter price (0 for free)', 'أدخل السعر (0 للمجاني)')}
-                    />
-                    {selectedCountryCurrency && selectedCountryCurrency.name && (
-                      <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none font-medium">
-                        {selectedCountryCurrency.name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Price Breakdown - Show if price > 0 */}
-                {formData.price && parseFloat(formData.price) > 0 && selectedCountryCurrency && (
-                  <div className="bg-dark-300 border border-dark-400 rounded-lg p-5 space-y-3 shadow-sm">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-400">{getText('Course Price', 'سعر الدورة')}:</span>
-                      <span className="text-white font-semibold">
-                        {Math.round(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-400">
-                        {getText('Platform Fee', 'رسوم المنصة')} ({platformCommission}%):
-                      </span>
-                      <span className="text-red-400 font-semibold">
-                        -{calculateCommissionAmount(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
-                      </span>
-                    </div>
-                    <div className="border-t border-dark-400 pt-3 mt-1">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-300 font-semibold text-base">
-                          {getText('You Will Receive', 'ستحصل على')}:
-                        </span>
-                        <span className="text-green-400 font-bold text-xl">
-                          {calculateNetPrice(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1069,12 +987,6 @@ const CreateCourse: React.FC = () => {
                   <option value="school">{getText('School', 'مدرسي')}</option>
                   <option value="university">{getText('University', 'جامعي')}</option>
                 </select>
-                {/* Show currency for university courses */}
-                {formData.course_type === 'university' && selectedCountryCurrency && selectedCountryCurrency.name && (
-                  <p className="mt-2 text-sm text-gray-400">
-                    {getText('Currency', 'العملة')}: <span className="text-primary-400 font-medium">{selectedCountryCurrency.name}</span>
-                  </p>
-                )}
               </div>
 
               <div>
@@ -1168,6 +1080,64 @@ const CreateCourse: React.FC = () => {
                 </select>
               </div>
             )}
+
+            {/* Price Section - Moved to the end */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {getText('Price', 'السعر')}
+              </label>
+              
+              <div className="space-y-4">
+                {/* Gross Price Input */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2">
+                    {getText('Course Price', 'سعر الدورة')}
+                  </label>
+                  <div>
+                    <input
+                      type="number"
+                      name="price"
+                      value={formData.price}
+                      onChange={handleChange}
+                      min="0"
+                      step="1"
+                      className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                      placeholder={getText('Enter price (0 for free)', 'أدخل السعر (0 للمجاني)')}
+                    />
+                  </div>
+                </div>
+
+                {/* Price Breakdown - Show if price > 0 */}
+                {formData.price && parseFloat(formData.price) > 0 && selectedCountryCurrency && (
+                  <div className="bg-dark-300 border border-dark-400 rounded-lg p-5 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">{getText('Course Price', 'سعر الدورة')}:</span>
+                      <span className="text-white font-semibold">
+                        {Math.round(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">
+                        {getText('Platform Fee', 'رسوم المنصة')} ({platformCommission}%):
+                      </span>
+                      <span className="text-red-400 font-semibold">
+                        -{calculateCommissionAmount(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
+                      </span>
+                    </div>
+                    <div className="border-t border-dark-400 pt-3 mt-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300 font-semibold text-base">
+                          {getText('You Will Receive', 'ستحصل على')}:
+                        </span>
+                        <span className="text-green-400 font-bold text-xl">
+                          {calculateNetPrice(parseFloat(formData.price)).toLocaleString()} {selectedCountryCurrency.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Submit Buttons */}
             <div className="flex gap-4">

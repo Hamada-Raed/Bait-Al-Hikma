@@ -278,10 +278,10 @@ class CourseSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, attrs):
-        # If course type is school, country is required
-        if attrs.get('course_type') == 'school' and not attrs.get('country'):
+        # Country is required for both school and university courses
+        if not attrs.get('country'):
             raise serializers.ValidationError({
-                'country': 'Country is required for school courses.'
+                'country': 'Country is required.'
             })
         
         # If course type is school and grade is 11 or 12, track is required
