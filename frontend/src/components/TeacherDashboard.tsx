@@ -364,8 +364,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   };
 
   const handlePreview = (courseId: number) => {
-    // TODO: Navigate to preview course page
-    console.log('Preview course:', courseId);
+    navigate(`/preview-course/${courseId}`);
   };
 
   const handleDeleteClick = (courseId: number) => {

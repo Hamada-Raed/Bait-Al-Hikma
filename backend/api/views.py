@@ -475,6 +475,7 @@ class CourseViewSet(viewsets.ModelViewSet):
                 'id': course.id,
                 'title': course.name,
                 'description': course.description,
+                'image_url': course.image.url if course.image else None,
                 'enrolled_students': 0,  # TODO: Calculate from enrollments
             },
             'chapters': chapters_data,
