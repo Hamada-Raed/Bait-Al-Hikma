@@ -186,7 +186,7 @@ class CourseSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     video_count = serializers.SerializerMethodField()
     quiz_count = serializers.SerializerMethodField()
-    document_count = serializers.SerializerMethodField()
+    enrollment_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Course
@@ -195,7 +195,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'course_type', 'country', 'country_name', 'subject', 'subject_name', 
             'grade', 'grade_name', 'track', 'track_name',
             'status', 'created_at', 'updated_at', 'teacher', 'teacher_name',
-            'video_count', 'quiz_count', 'document_count'
+            'video_count', 'quiz_count', 'enrollment_count'
         ]
         read_only_fields = ['teacher', 'created_at', 'updated_at']
     
@@ -251,15 +251,22 @@ class CourseSerializer(serializers.ModelSerializer):
         return None
     
     def get_video_count(self, obj):
-        # TODO: Implement when video model is created
-        return 0
+        """Count all videos in all sections of all chapters for this course"""
+        from .models import Video
+        from django.db.models import Count
+        # Use a more efficient query with joins
+        return Video.objects.filter(section__chapter__course=obj).count()
     
     def get_quiz_count(self, obj):
-        # TODO: Implement when quiz model is created
-        return 0
+        """Count all quizzes in all sections of all chapters for this course"""
+        from .models import Quiz
+        # Use a more efficient query with joins
+        return Quiz.objects.filter(section__chapter__course=obj).count()
     
-    def get_document_count(self, obj):
-        # TODO: Implement when document model is created
+    def get_enrollment_count(self, obj):
+        """Count enrolled students for this course"""
+        # TODO: Implement when enrollment model is created
+        # For now, return 0 as there's no enrollment model yet
         return 0
     
     def validate_description(self, value):

@@ -204,6 +204,7 @@ const ManageCourse: React.FC = () => {
   const [dragActiveQuizImage, setDragActiveQuizImage] = useState<boolean>(false);
   const quizImageInputRef = useRef<HTMLInputElement>(null);
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [quizImagePreview, setQuizImagePreview] = useState<string | null>(null);
   
   // Confirmation dialog state
   const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
@@ -211,6 +212,10 @@ const ManageCourse: React.FC = () => {
   const [confirmMessage, setConfirmMessage] = useState<string>('');
   const [confirmRequiresCheckbox, setConfirmRequiresCheckbox] = useState<boolean>(false);
   const [confirmCheckboxChecked, setConfirmCheckboxChecked] = useState<boolean>(false);
+
+  // Error popup state
+  const [showErrorPopup, setShowErrorPopup] = useState<boolean>(false);
+  const [errorPopupMessage, setErrorPopupMessage] = useState<string>('');
 
   // Drag and drop states
   const [draggedChapter, setDraggedChapter] = useState<Chapter | null>(null);
@@ -397,6 +402,15 @@ const ManageCourse: React.FC = () => {
 
     fetchCourseStructure();
   }, [courseId, navigate, user]);
+
+  // Clean up preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (quizImagePreview) {
+        URL.revokeObjectURL(quizImagePreview);
+      }
+    };
+  }, [quizImagePreview]);
 
   // Helper function to get auth headers
   const getAuthHeaders = async (): Promise<HeadersInit> => {
@@ -960,6 +974,12 @@ const ManageCourse: React.FC = () => {
         : 'Are you sure? All unsaved data will be lost.';
       
       showConfirmation(message, () => {
+        // Clean up preview URL
+        if (quizImagePreview) {
+          URL.revokeObjectURL(quizImagePreview);
+          setQuizImagePreview(null);
+        }
+        
         setShowQuizModal(false);
         setQuizModalSection(null);
         setEditingQuiz(null);
@@ -985,6 +1005,12 @@ const ManageCourse: React.FC = () => {
       return;
     }
 
+    // Clean up preview URL
+    if (quizImagePreview) {
+      URL.revokeObjectURL(quizImagePreview);
+      setQuizImagePreview(null);
+    }
+    
     setShowQuizModal(false);
     setQuizModalSection(null);
     setEditingQuiz(null);
@@ -1027,6 +1053,9 @@ const ManageCourse: React.FC = () => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('image/')) {
+        // Create preview URL
+        const previewUrl = URL.createObjectURL(file);
+        setQuizImagePreview(previewUrl);
         setCurrentQuestion({ ...currentQuestion, image_file: file, question_image: file.name });
       } else {
         alert('Please upload an image file');
@@ -1038,6 +1067,9 @@ const ManageCourse: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.type.startsWith('image/')) {
+        // Create preview URL
+        const previewUrl = URL.createObjectURL(file);
+        setQuizImagePreview(previewUrl);
         setCurrentQuestion({ ...currentQuestion, image_file: file, question_image: file.name });
       } else {
         alert('Please upload an image file');
@@ -1095,7 +1127,8 @@ const ManageCourse: React.FC = () => {
 
     const hasCorrect = currentQuestion.options.some(opt => opt.is_correct);
     if (!hasCorrect) {
-      alert(t.selectCorrectAnswer);
+      setErrorPopupMessage(t.selectCorrectAnswer);
+      setShowErrorPopup(true);
       return;
     }
 
@@ -1125,6 +1158,12 @@ const ManageCourse: React.FC = () => {
       });
     }
 
+    // Clean up preview URL
+    if (quizImagePreview) {
+      URL.revokeObjectURL(quizImagePreview);
+      setQuizImagePreview(null);
+    }
+    
     setCurrentQuestion({
       question_text: '',
       question_type: 'text',
@@ -1143,6 +1182,13 @@ const ManageCourse: React.FC = () => {
   const handleEditExistingQuestion = (index: number): void => {
     const question = quizForm.questions[index];
     if (!question) return;
+    
+    // Clean up any existing preview URL
+    if (quizImagePreview) {
+      URL.revokeObjectURL(quizImagePreview);
+      setQuizImagePreview(null);
+    }
+    
     setCurrentQuestion({
       question_text: question.question_text || '',
       question_type: question.question_type || 'text',
@@ -1210,21 +1256,70 @@ const ManageCourse: React.FC = () => {
     const order = section ? section.quizzes.length : 0;
 
     try {
-      const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
-        method: 'POST',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({
+      // Check if any question has an image file
+      const hasImageFiles = quizForm.questions.some(q => q.image_file);
+      
+      let body: FormData | string;
+      let headers: HeadersInit;
+      
+      if (hasImageFiles) {
+        // Use FormData when images are present
+        const formData = new FormData();
+        formData.append('section_id', (quizModalSection || 0).toString());
+        formData.append('title', quizForm.title);
+        formData.append('description', quizForm.description);
+        formData.append('duration_minutes', (parseInt(quizForm.duration_minutes.toString()) || 10).toString());
+        formData.append('order', order.toString());
+        
+        // Add questions as JSON string
+        const questionsData = quizForm.questions.map((q, idx) => {
+          const questionData: any = {
+            question_text: q.question_text,
+            question_type: q.question_type,
+            options: q.options.map(opt => ({
+              option_text: opt.option_text,
+              is_correct: opt.is_correct
+            }))
+          };
+          // Add image file to FormData with indexed key
+          if (q.image_file) {
+            formData.append(`question_image_${idx}`, q.image_file);
+          }
+          return questionData;
+        });
+        formData.append('questions', JSON.stringify(questionsData));
+        
+        body = formData;
+        // Don't set Content-Type for FormData - browser will set it with boundary
+        const authHeaders = await getAuthHeaders();
+        headers = {
+          ...Object.fromEntries(Object.entries(authHeaders).filter(([key]) => key.toLowerCase() !== 'content-type')),
+        };
+      } else {
+        // Use JSON when no images
+        body = JSON.stringify({
           section_id: quizModalSection,
           title: quizForm.title,
           description: quizForm.description,
           duration_minutes: parseInt(quizForm.duration_minutes.toString()) || 10,
           questions: quizForm.questions.map(q => ({
-            ...q,
-            image_file: undefined
+            question_text: q.question_text,
+            question_type: q.question_type,
+            options: q.options.map(opt => ({
+              option_text: opt.option_text,
+              is_correct: opt.is_correct
+            }))
           })),
           order: order
-        }),
+        });
+        headers = await getAuthHeaders();
+      }
+      
+      const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: body,
       });
 
       const data = await response.json();
@@ -1767,20 +1862,68 @@ const ManageCourse: React.FC = () => {
     setError(''); // Clear any previous errors
 
     try {
-      const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
-        method: 'PUT',
-        headers: await getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({
+      // Check if any question has an image file
+      const hasImageFiles = quizForm.questions.some(q => q.image_file);
+      
+      let body: FormData | string;
+      let headers: HeadersInit;
+      
+      if (hasImageFiles) {
+        // Use FormData when images are present
+        const formData = new FormData();
+        formData.append('quiz_id', editingQuiz.id.toString());
+        formData.append('title', quizForm.title);
+        formData.append('description', quizForm.description);
+        formData.append('duration_minutes', (parseInt(quizForm.duration_minutes.toString()) || 10).toString());
+        
+        // Add questions as JSON string
+        const questionsData = quizForm.questions.map((q, idx) => {
+          const questionData: any = {
+            question_text: q.question_text,
+            question_type: q.question_type,
+            options: q.options.map(opt => ({
+              option_text: opt.option_text,
+              is_correct: opt.is_correct
+            }))
+          };
+          // Add image file to FormData with indexed key
+          if (q.image_file) {
+            formData.append(`question_image_${idx}`, q.image_file);
+          }
+          return questionData;
+        });
+        formData.append('questions', JSON.stringify(questionsData));
+        
+        body = formData;
+        // Don't set Content-Type for FormData - browser will set it with boundary
+        const authHeaders = await getAuthHeaders();
+        headers = {
+          ...Object.fromEntries(Object.entries(authHeaders).filter(([key]) => key.toLowerCase() !== 'content-type')),
+        };
+      } else {
+        // Use JSON when no images
+        body = JSON.stringify({
           quiz_id: editingQuiz.id,
           title: quizForm.title,
           description: quizForm.description,
           duration_minutes: parseInt(quizForm.duration_minutes.toString()) || 10,
           questions: quizForm.questions.map(q => ({
-            ...q,
-            image_file: undefined
+            question_text: q.question_text,
+            question_type: q.question_type,
+            options: q.options.map(opt => ({
+              option_text: opt.option_text,
+              is_correct: opt.is_correct
+            }))
           })),
-        }),
+        });
+        headers = await getAuthHeaders();
+      }
+      
+      const response = await fetch('http://localhost:8000/api/manage-section-quiz/', {
+        method: 'PUT',
+        headers: headers,
+        credentials: 'include',
+        body: body,
       });
 
       if (response.ok) {
@@ -2578,11 +2721,29 @@ const ManageCourse: React.FC = () => {
                         />
                         {currentQuestion.image_file ? (
                           <div className="file-selected">
-                            <span className="file-icon">🖼️</span>
-                            <span className="file-name">{currentQuestion.image_file.name}</span>
-                            <span className="file-size">
-                              ({(currentQuestion.image_file.size / 1024).toFixed(2)} KB)
-                            </span>
+                            {quizImagePreview ? (
+                              <div className="image-preview-container">
+                                <img 
+                                  src={quizImagePreview} 
+                                  alt="Question preview" 
+                                  className="image-preview"
+                                />
+                                <div className="file-info-overlay">
+                                  <span className="file-name">{currentQuestion.image_file.name}</span>
+                                  <span className="file-size">
+                                    ({(currentQuestion.image_file.size / 1024).toFixed(2)} KB)
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="file-icon">🖼️</span>
+                                <span className="file-name">{currentQuestion.image_file.name}</span>
+                                <span className="file-size">
+                                  ({(currentQuestion.image_file.size / 1024).toFixed(2)} KB)
+                                </span>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="drag-drop-content">
@@ -2638,7 +2799,7 @@ const ManageCourse: React.FC = () => {
                     onClick={addQuestionToQuiz}
                     className="btn-add-question"
                   >
-                    {editingQuestionIndex !== null ? t.updateQuestion : t.addQuestion}
+                    {editingQuiz ? t.addQuestion : (editingQuestionIndex !== null ? t.updateQuestion : t.addQuestion)}
                   </button>
                 </div>
                 
@@ -2721,6 +2882,28 @@ const ManageCourse: React.FC = () => {
                   disabled={confirmRequiresCheckbox && !confirmCheckboxChecked}
                 >
                   {language === 'ar' ? 'تأكيد' : 'Confirm'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Popup */}
+        {showErrorPopup && (
+          <div className="confirm-dialog-overlay" onClick={() => setShowErrorPopup(false)}>
+            <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="confirm-dialog-icon">⚠️</div>
+              <h3 className="confirm-dialog-title">
+                {language === 'ar' ? 'تنبيه' : 'Warning'}
+              </h3>
+              <p className="confirm-dialog-message">{errorPopupMessage}</p>
+              
+              <div className="confirm-dialog-actions">
+                <button 
+                  className="confirm-btn confirm-btn-confirm" 
+                  onClick={() => setShowErrorPopup(false)}
+                >
+                  {language === 'ar' ? 'حسناً' : 'OK'}
                 </button>
               </div>
             </div>

@@ -25,6 +25,19 @@ interface Video {
   order: number;
 }
 
+interface QuestionOption {
+  option_text: string;
+  is_correct: boolean;
+}
+
+interface Question {
+  question_text: string;
+  question_type: 'text' | 'image';
+  question_image: string;
+  question_image_url?: string | null;
+  options: QuestionOption[];
+}
+
 interface Quiz {
   id: number;
   title: string;
@@ -32,6 +45,7 @@ interface Quiz {
   duration_minutes: number;
   is_locked: boolean;
   order: number;
+  questions?: Question[];
 }
 
 interface Section {
@@ -87,6 +101,7 @@ const PreviewCourse: React.FC = () => {
   const [totalSections, setTotalSections] = useState<number>(0);
   const [totalVideos, setTotalVideos] = useState<number>(0);
   const [totalQuizzes, setTotalQuizzes] = useState<number>(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -258,6 +273,13 @@ const PreviewCourse: React.FC = () => {
     }
   }, [currentMaterialIndex, orderedMaterials]);
 
+  // Reset question index when quiz changes
+  useEffect(() => {
+    if (selectedMaterial?.type === 'quiz') {
+      setCurrentQuestionIndex(0);
+    }
+  }, [selectedMaterial]);
+
   if (loading) {
     return (
       <div className={`preview-course-teacher ${language === 'ar' ? 'rtl' : ''}`}>
@@ -425,18 +447,78 @@ const PreviewCourse: React.FC = () => {
                 ) : (
                   (() => {
                     const quizData = selectedMaterial.data as Quiz;
+                    const questions = quizData.questions || [];
+                    const currentQuestion = questions[currentQuestionIndex];
+                    
                     return (
-                      <div className="quiz-display">
-                        <h3 className="material-display-title">{quizData.title}</h3>
-                        {quizData.description && (
-                          <p className="material-display-description">{quizData.description}</p>
+                      <div className="quiz-display">                       
+                        {questions.length > 0 ? (
+                          <div className="quiz-question-container">
+                            {/* Question Content */}
+                            <div className="quiz-question-content">
+                              {/* Question Image or Text */}
+                              {currentQuestion.question_type === 'image' && (currentQuestion.question_image_url || currentQuestion.question_image) ? (
+                                <div className="quiz-question-image-container">
+                                  <img 
+                                    src={currentQuestion.question_image_url || currentQuestion.question_image}
+                                    alt={getText('Question image', 'صورة السؤال')}
+                                    className="quiz-question-image"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      const container = target.parentElement;
+                                      if (container) {
+                                        container.innerHTML = `<div class="quiz-question-text"><p>${currentQuestion.question_text || getText('Image failed to load', 'فشل تحميل الصورة')}</p></div>`;
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="quiz-question-text">
+                                  <p>{currentQuestion.question_text}</p>
+                                </div>
+                              )}
+                              
+                              {/* Answer Options */}
+                              <div className="quiz-options">
+                                {currentQuestion.options.map((option, index) => (
+                                  <div 
+                                    key={index}
+                                    className={`quiz-option ${option.is_correct ? 'quiz-option-correct' : ''}`}
+                                  >
+                                    <span className="quiz-option-text">{option.option_text}</span>
+                                    {option.is_correct && (
+                                      <span className="quiz-option-checkmark">✓</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* Navigation Buttons Below Quiz */}
+                            {questions.length > 1 && (
+                              <div className="quiz-navigation-bottom">
+                                <button
+                                  className="quiz-nav-btn quiz-nav-prev"
+                                  onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+                                  disabled={currentQuestionIndex === 0}
+                                >
+                                  {getText('Previous', 'السابق')}
+                                </button>
+                                <button
+                                  className="quiz-nav-btn quiz-nav-next"
+                                  onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+                                  disabled={currentQuestionIndex === questions.length - 1}
+                                >
+                                  {getText('Next', 'التالي')}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="quiz-no-questions">
+                            <p>{getText('No questions available', 'لا توجد أسئلة متاحة')}</p>
+                          </div>
                         )}
-                        <div className="quiz-info">
-                          <p>{getText('Quiz Duration', 'مدة الاختبار')}: {quizData.duration_minutes} {getText('minutes', 'دقيقة')}</p>
-                          <p className="quiz-preview-note">
-                            {getText('This is a preview. Quiz questions will be displayed here when implemented.', 'هذه معاينة. سيتم عرض أسئلة الاختبار هنا عند التنفيذ.')}
-                          </p>
-                        </div>
                       </div>
                     );
                   })()

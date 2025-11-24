@@ -1,3 +1,4 @@
+import json
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -448,10 +449,18 @@ class CourseViewSet(viewsets.ModelViewSet):
                                 'option_text': option.option_text,
                                 'is_correct': option.is_correct
                             })
+                        # Get question image URL - build absolute URL if image exists
+                        question_image_url = None
+                        question_image = ''
+                        if question.question_image:
+                            question_image_url = request.build_absolute_uri(question.question_image.url)
+                            question_image = question.question_image.url  # Relative path
+                        
                         questions_data.append({
                             'question_text': question.question_text,
                             'question_type': question.question_type,
-                            'question_image': question.question_image.url if question.question_image else '',
+                            'question_image': question_image,
+                            'question_image_url': question_image_url,
                             'options': options_data
                         })
                     quizzes_data.append({
@@ -1029,7 +1038,12 @@ def manage_section_quiz(request):
         description = request.data.get('description', '')
         duration_minutes = int(request.data.get('duration_minutes', 10))
         order = int(request.data.get('order', 0))
-        questions_data = request.data.get('questions', [])
+        # Handle questions - could be JSON string (from FormData) or list (from JSON)
+        questions_data_raw = request.data.get('questions', [])
+        if isinstance(questions_data_raw, str):
+            questions_data = json.loads(questions_data_raw)
+        else:
+            questions_data = questions_data_raw
         
         if not section_id or not title:
             return Response({'error': 'section_id and title are required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1065,9 +1079,12 @@ def manage_section_quiz(request):
             )
             
             # Handle image upload if present
-            if q_data.get('question_type') == 'image' and 'question_image' in request.FILES:
-                # This would need to be handled differently - images in questions array
-                pass
+            # Images are sent as files with keys like 'question_image_0', 'question_image_1', etc.
+            if q_data.get('question_type') == 'image':
+                image_key = f'question_image_{q_idx}'
+                if image_key in request.FILES:
+                    question.question_image = request.FILES[image_key]
+                    question.save()
             
             # Create options
             options_data = q_data.get('options', [])
@@ -1087,7 +1104,12 @@ def manage_section_quiz(request):
         description = request.data.get('description')
         duration_minutes = request.data.get('duration_minutes')
         is_locked = request.data.get('is_locked')
-        questions_data = request.data.get('questions', [])
+        # Handle questions - could be JSON string (from FormData) or list (from JSON)
+        questions_data_raw = request.data.get('questions', [])
+        if isinstance(questions_data_raw, str):
+            questions_data = json.loads(questions_data_raw)
+        else:
+            questions_data = questions_data_raw
         
         if not quiz_id:
             return Response({'error': 'quiz_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1120,6 +1142,14 @@ def manage_section_quiz(request):
                     question_type=q_data.get('question_type', 'text'),
                     order=q_idx
                 )
+                
+                # Handle image upload if present
+                # Images are sent as files with keys like 'question_image_0', 'question_image_1', etc.
+                if q_data.get('question_type') == 'image':
+                    image_key = f'question_image_{q_idx}'
+                    if image_key in request.FILES:
+                        question.question_image = request.FILES[image_key]
+                        question.save()
                 
                 # Create options
                 options_data = q_data.get('options', [])
