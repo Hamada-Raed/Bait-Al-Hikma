@@ -18,6 +18,7 @@ const translations: Record<Language, Record<string, string>> = {
   en: {
     'nav.courses': 'Courses',
     'nav.teachers': 'Teachers',
+    'nav.students': 'Students',
     'nav.about': 'About Us',
     'nav.contact': 'Contact Us',
     'auth.login': 'Log In',
@@ -87,6 +88,7 @@ const translations: Record<Language, Record<string, string>> = {
   ar: {
     'nav.courses': 'الدورات',
     'nav.teachers': 'المعلمون',
+    'nav.students': 'الطلاب',
     'nav.about': 'من نحن',
     'nav.contact': 'اتصل بنا',
     'auth.login': 'تسجيل الدخول',
