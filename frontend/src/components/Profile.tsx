@@ -920,10 +920,22 @@ const Profile: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: value,
+      };
+
+      if (name === 'grade') {
+        const selectedGrade = grades.find(g => g.id.toString() === value);
+        const allowsTrack = selectedGrade ? [11, 12].includes(selectedGrade.grade_number) : false;
+        if (!allowsTrack) {
+          updated.track = '';
+        }
+      }
+
+      return updated;
+    });
     setError('');
     setSuccess('');
   };
@@ -1041,6 +1053,9 @@ const Profile: React.FC = () => {
   const getName = (item: Country | Subject | Grade | Track | Major) => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
   };
+
+  const selectedGrade = formData.grade ? grades.find(g => g.id.toString() === formData.grade) : null;
+  const shouldShowTrackField = !!(selectedGrade && [11, 12].includes(selectedGrade.grade_number));
 
   if (loading) {
     return (
@@ -1316,7 +1331,7 @@ const Profile: React.FC = () => {
                   </select>
                 </div>
 
-                {formData.grade && (
+                {shouldShowTrackField && (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       {getText('Track', 'المسار')}
@@ -1326,8 +1341,9 @@ const Profile: React.FC = () => {
                       value={formData.track}
                       onChange={handleChange}
                       className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      required
                     >
-                      <option value="">{getText('Select Track', 'اختر المسار')} ({getText('Optional', 'اختياري')})</option>
+                      <option value="">{getText('Select Track', 'اختر المسار')}</option>
                       {tracks.map((track) => (
                         <option key={track.id} value={track.id}>
                           {getName(track)}
