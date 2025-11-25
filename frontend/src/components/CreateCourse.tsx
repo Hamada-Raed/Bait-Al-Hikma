@@ -88,8 +88,7 @@ interface Major {
     price: '',
     course_type: 'school' as 'school' | 'university',
     country: '',
-    subject: '',
-    major: '',
+    subjects: [] as number[],
     grade: '',
     track: '',
   });
@@ -119,7 +118,7 @@ interface Major {
     return !!(
       formData.name.trim() ||
       formData.description.trim() ||
-      formData.subject ||
+      formData.subjects.length > 0 ||
       formData.country ||
       formData.grade ||
       formData.track ||
@@ -339,12 +338,11 @@ interface Major {
     const fetchData = async () => {
       try {
         // Fetch all required data including teacher's profile to get their subjects
-        const [countriesRes, allSubjectsRes, gradesRes, tracksRes, majorsRes, teacherRes] = await Promise.all([
+        const [countriesRes, allSubjectsRes, gradesRes, tracksRes, teacherRes] = await Promise.all([
           fetch(`${API_BASE_URL}/countries/`),
           fetch(`${API_BASE_URL}/subjects/`),
           fetch(`${API_BASE_URL}/grades/`),
           fetch(`${API_BASE_URL}/tracks/`),
-          fetch(`${API_BASE_URL}/majors/`),
           fetch(`${API_BASE_URL}/users/me/`, {
             credentials: 'include',
           }),
@@ -354,13 +352,11 @@ interface Major {
         const allSubjectsData = await allSubjectsRes.json();
         const gradesData = await gradesRes.json();
         const tracksData = await tracksRes.json();
-        const majorsData = await majorsRes.json();
         const teacherData = await teacherRes.json();
 
         setCountries(countriesData.results || countriesData);
         setAllGrades(gradesData.results || gradesData);
         setTracks(tracksData.results || tracksData);
-        setMajors(majorsData.results || majorsData);
 
         // Store teacher's country for university courses
         if (teacherData && teacherData.country) {
@@ -453,8 +449,7 @@ interface Major {
               price: course.price?.toString() || '0',
               course_type: course.course_type || 'school',
               country: course.country?.toString() || '',
-              subject: course.subject?.toString() || '',
-              major: course.major?.toString() || '',
+              subjects: course.subject ? [course.subject] : [],
               grade: course.grade?.toString() || '',
               track: course.track?.toString() || '',
             });
@@ -617,6 +612,16 @@ interface Major {
     setError('');
   };
 
+  const handleSubjectToggle = (subjectId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      subjects: prev.subjects.includes(subjectId)
+        ? prev.subjects.filter(id => id !== subjectId)
+        : [...prev.subjects, subjectId]
+    }));
+    setError('');
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -651,16 +656,12 @@ interface Major {
       setError(getText('Description must be 150 words or less.', 'يجب أن يكون الوصف 150 كلمة أو أقل.'));
       return false;
     }
-    if (!formData.subject) {
-      setError(getText('Subject is required.', 'المادة مطلوبة.'));
+    if (formData.subjects.length === 0) {
+      setError(getText('At least one subject is required.', 'يجب اختيار مادة واحدة على الأقل.'));
       return false;
     }
     if (!formData.country) {
       setError(getText('Country is required.', 'البلد مطلوب.'));
-      return false;
-    }
-    if (formData.course_type === 'university' && !formData.major) {
-      setError(getText('Major is required for university courses.', 'التخصص مطلوب للدورات الجامعية.'));
       return false;
     }
     if (formData.course_type === 'school' && !formData.grade) {
@@ -711,17 +712,16 @@ interface Major {
       formDataToSend.append('language', formData.language);
       formDataToSend.append('price', formData.price || '0');
       formDataToSend.append('course_type', formData.course_type);
-      formDataToSend.append('subject', formData.subject);
+      // Send the first selected subject (Course model has single subject field)
+      if (formData.subjects.length > 0) {
+        formDataToSend.append('subject', formData.subjects[0].toString());
+      }
       formDataToSend.append('country', formData.country);
       
       if (formData.course_type === 'school') {
         formDataToSend.append('grade', formData.grade);
         if (formData.track) {
           formDataToSend.append('track', formData.track);
-        }
-      } else if (formData.course_type === 'university') {
-        if (formData.major) {
-          formDataToSend.append('major', formData.major);
         }
       }
 
@@ -914,8 +914,8 @@ interface Major {
               )}
             </div>
 
-            {/* Teaching Language and Country - Same Line */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Teaching Language, Country, and Course Type - Same Line */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   {getText('Teaching Language', 'لغة التدريس')} *
@@ -952,10 +952,7 @@ interface Major {
                   ))}
                 </select>
               </div>
-            </div>
 
-            {/* Course Type and Subject */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   {getText('Course Type', 'نوع الدورة')} *
@@ -971,69 +968,55 @@ interface Major {
                   <option value="university">{getText('University', 'جامعي')}</option>
                 </select>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Subject', 'المادة')} *
-                </label>
-                {subjects.length === 0 ? (
-                  <div className="w-full px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                    <p className="text-yellow-400 text-sm">
-                      {getText(
-                        'No subjects selected. Please go to your profile and select the subjects you teach.',
-                        'لم يتم اختيار أي مواد. يرجى الذهاب إلى ملفك الشخصي واختيار المواد التي تدرسها.'
-                      )}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleNavigation('/profile')}
-                      className="mt-2 text-primary-400 hover:text-primary-300 text-sm font-medium underline"
-                    >
-                      {getText('Go to Profile', 'الذهاب إلى الملف الشخصي')}
-                    </button>
-                  </div>
-                ) : (
-                  <select
-                    name="subject"
-                    value={formData.subject}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">{getText('Select Subject', 'اختر المادة')}</option>
-                    {subjects.map((subject) => (
-                      <option key={subject.id} value={subject.id}>
-                        {getName(subject)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
             </div>
 
+            {/* Subject */}
+            <div>
 
-            {/* Major (for university courses) */}
-            {formData.course_type === 'university' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Major', 'التخصص')} *
-                </label>
-                <select
-                  name="major"
-                  value={formData.major}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{getText('Select Major', 'اختر التخصص')}</option>
-                  {majors.map((major) => (
-                    <option key={major.id} value={major.id}>
-                      {language === 'ar' ? major.name_ar : major.name_en}
-                    </option>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                {getText('Subject', 'المادة')} *
+              </label>
+              {subjects.length === 0 ? (
+                <div className="w-full px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <p className="text-yellow-400 text-sm">
+                    {getText(
+                      'No subjects selected. Please go to your profile and select the subjects you teach.',
+                      'لم يتم اختيار أي مواد. يرجى الذهاب إلى ملفك الشخصي واختيار المواد التي تدرسها.'
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigation('/profile')}
+                    className="mt-2 text-primary-400 hover:text-primary-300 text-sm font-medium underline"
+                  >
+                    {getText('Go to Profile', 'الذهاب إلى الملف الشخصي')}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {subjects.map((subject) => (
+                    <label
+                      key={subject.id}
+                      className="flex items-center space-x-2 rtl:space-x-reverse p-3 bg-dark-200 rounded-lg cursor-pointer hover:bg-dark-300 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.subjects.includes(subject.id)}
+                        onChange={() => handleSubjectToggle(subject.id)}
+                        className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-white text-sm">{getName(subject)}</span>
+                    </label>
                   ))}
-                </select>
-              </div>
-            )}
+                </div>
+              )}
+              {formData.subjects.length === 0 && subjects.length > 0 && (
+                <p className="text-gray-400 text-sm mt-2">
+                  {getText('Please select at least one subject.', 'يرجى اختيار مادة واحدة على الأقل.')}
+                </p>
+              )}
+            </div>
+
 
             {/* Grade (for school courses) */}
             {formData.course_type === 'school' && formData.country && (
