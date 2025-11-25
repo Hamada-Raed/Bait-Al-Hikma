@@ -399,6 +399,14 @@ class CourseViewSet(viewsets.ModelViewSet):
                 # Level 2: Filter by country
                 if user.country_id:
                     queryset = queryset.filter(country_id=user.country_id)
+                
+                # Level 3: Filter by major
+                # Show courses that match the student's major OR courses without a major (for backward compatibility)
+                if user.major_id:
+                    from django.db.models import Q
+                    queryset = queryset.filter(
+                        Q(major_id=user.major_id) | Q(major__isnull=True)
+                    )
 
             # Debug logging (can be removed after testing)
             import logging

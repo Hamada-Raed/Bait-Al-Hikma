@@ -52,8 +52,16 @@ const CreateCourse: React.FC = () => {
   const courseId = searchParams.get('id');
   const isEditMode = !!courseId;
   
+interface Major {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  code: string;
+}
+
   const [countries, setCountries] = useState<Country[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [majors, setMajors] = useState<Major[]>([]);
   const [allGrades, setAllGrades] = useState<Grade[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -81,12 +89,13 @@ const CreateCourse: React.FC = () => {
     course_type: 'school' as 'school' | 'university',
     country: '',
     subject: '',
+    major: '',
     grade: '',
     track: '',
   });
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
-  const getName = (item: Country | Subject | Grade | Track) => {
+  const getName = (item: Country | Subject | Grade | Track | Major) => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
   };
 
@@ -330,11 +339,12 @@ const CreateCourse: React.FC = () => {
     const fetchData = async () => {
       try {
         // Fetch all required data including teacher's profile to get their subjects
-        const [countriesRes, allSubjectsRes, gradesRes, tracksRes, teacherRes] = await Promise.all([
+        const [countriesRes, allSubjectsRes, gradesRes, tracksRes, majorsRes, teacherRes] = await Promise.all([
           fetch(`${API_BASE_URL}/countries/`),
           fetch(`${API_BASE_URL}/subjects/`),
           fetch(`${API_BASE_URL}/grades/`),
           fetch(`${API_BASE_URL}/tracks/`),
+          fetch(`${API_BASE_URL}/majors/`),
           fetch(`${API_BASE_URL}/users/me/`, {
             credentials: 'include',
           }),
@@ -344,11 +354,13 @@ const CreateCourse: React.FC = () => {
         const allSubjectsData = await allSubjectsRes.json();
         const gradesData = await gradesRes.json();
         const tracksData = await tracksRes.json();
+        const majorsData = await majorsRes.json();
         const teacherData = await teacherRes.json();
 
         setCountries(countriesData.results || countriesData);
         setAllGrades(gradesData.results || gradesData);
         setTracks(tracksData.results || tracksData);
+        setMajors(majorsData.results || majorsData);
 
         // Store teacher's country for university courses
         if (teacherData && teacherData.country) {
@@ -442,6 +454,7 @@ const CreateCourse: React.FC = () => {
               course_type: course.course_type || 'school',
               country: course.country?.toString() || '',
               subject: course.subject?.toString() || '',
+              major: course.major?.toString() || '',
               grade: course.grade?.toString() || '',
               track: course.track?.toString() || '',
             });
@@ -646,6 +659,10 @@ const CreateCourse: React.FC = () => {
       setError(getText('Country is required.', 'البلد مطلوب.'));
       return false;
     }
+    if (formData.course_type === 'university' && !formData.major) {
+      setError(getText('Major is required for university courses.', 'التخصص مطلوب للدورات الجامعية.'));
+      return false;
+    }
     if (formData.course_type === 'school' && !formData.grade) {
       setError(getText('Grade is required for school courses.', 'الصف مطلوب للدورات المدرسية.'));
       return false;
@@ -701,6 +718,10 @@ const CreateCourse: React.FC = () => {
         formDataToSend.append('grade', formData.grade);
         if (formData.track) {
           formDataToSend.append('track', formData.track);
+        }
+      } else if (formData.course_type === 'university') {
+        if (formData.major) {
+          formDataToSend.append('major', formData.major);
         }
       }
 
@@ -990,6 +1011,29 @@ const CreateCourse: React.FC = () => {
               </div>
             </div>
 
+
+            {/* Major (for university courses) */}
+            {formData.course_type === 'university' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  {getText('Major', 'التخصص')} *
+                </label>
+                <select
+                  name="major"
+                  value={formData.major}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">{getText('Select Major', 'اختر التخصص')}</option>
+                  {majors.map((major) => (
+                    <option key={major.id} value={major.id}>
+                      {language === 'ar' ? major.name_ar : major.name_en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Grade (for school courses) */}
             {formData.course_type === 'school' && formData.country && (

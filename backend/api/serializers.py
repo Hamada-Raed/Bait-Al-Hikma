@@ -182,6 +182,7 @@ class CourseSerializer(serializers.ModelSerializer):
     subject_name = serializers.SerializerMethodField()
     grade_name = serializers.SerializerMethodField()
     track_name = serializers.SerializerMethodField()
+    major_name = serializers.SerializerMethodField()
     country_name = serializers.SerializerMethodField()
     teacher_name = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
@@ -194,7 +195,7 @@ class CourseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'image', 'image_url', 'language', 'price',
             'course_type', 'country', 'country_name', 'subject', 'subject_name', 
-            'grade', 'grade_name', 'track', 'track_name',
+            'grade', 'grade_name', 'track', 'track_name', 'major', 'major_name',
             'status', 'created_at', 'updated_at', 'teacher', 'teacher_name',
             'video_count', 'quiz_count', 'enrollment_count'
         ]
@@ -228,6 +229,16 @@ class CourseSerializer(serializers.ModelSerializer):
             else:
                 lang = 'en'
             return obj.track.name_ar if lang == 'ar' else obj.track.name_en
+        return None
+    
+    def get_major_name(self, obj):
+        if obj.major:
+            request = self.context.get('request')
+            if request and hasattr(request, 'LANGUAGE_CODE'):
+                lang = request.LANGUAGE_CODE
+            else:
+                lang = 'en'
+            return obj.major.name_ar if lang == 'ar' else obj.major.name_en
         return None
     
     def get_country_name(self, obj):

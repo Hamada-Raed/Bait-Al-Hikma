@@ -159,9 +159,12 @@ class Course(models.Model):
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True,
                                help_text='Required for school courses')
     subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
-    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True)
+    grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True,
+                             help_text='Required for school courses')
     track = models.ForeignKey(Track, on_delete=models.SET_NULL, null=True, blank=True,
                              help_text='Required if course is for grade 11 or 12')
+    major = models.ForeignKey(Major, on_delete=models.SET_NULL, null=True, blank=True,
+                             help_text='Required for university courses')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
