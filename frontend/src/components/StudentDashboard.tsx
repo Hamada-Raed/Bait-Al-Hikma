@@ -33,6 +33,7 @@ interface Course {
   progress_status?: 'enrolled' | 'in_progress' | 'completed';
   progress_percentage?: number;
   teacher_name?: string;
+  teacher?: number | null;
   country?: number | null;
   grade?: number | null;
   track?: number | null;
@@ -49,7 +50,16 @@ interface GradeDetails {
   name_ar?: string;
 }
 
-type TabType = 'matching' | 'all' | 'in_progress' | 'completed';
+interface TeacherRecommendation {
+  teacherId: number;
+  teacherName: string;
+  courseCount: number;
+  subjectNames: string[];
+  gradeNames: string[];
+  languages: string[];
+}
+
+type TabType = 'matching' | 'all' | 'in_progress' | 'completed' | 'teachers';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { t, language } = useLanguage();
@@ -60,6 +70,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [gradeDetails, setGradeDetails] = useState<GradeDetails | null>(null);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+  const getLanguageLabel = (code: string) => {
+    switch (code) {
+      case 'ar':
+        return getText('Arabic', 'العربية');
+      case 'en':
+        return getText('English', 'الإنجليزية');
+      case 'both':
+        return getText('Arabic & English', 'العربية والإنجليزية');
+      default:
+        return code.toUpperCase();
+    }
+  };
+  const handleBookPrivateLesson = (teacherId: number) => {
+    console.log('Book private lesson with teacher:', teacherId);
+  };
 
   const fetchEnrolledCourses = async () => {
     try {
@@ -178,6 +203,56 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     : [];
 
   const matchingCount = matchingCourses.length;
+  const recommendationMap = matchingCourses.reduce((acc, course) => {
+    if (!course.teacher && course.teacher !== 0) {
+      return acc;
+    }
+    const teacherId = course.teacher;
+    if (teacherId === null || teacherId === undefined) {
+      return acc;
+    }
+    if (!acc.has(teacherId)) {
+      acc.set(teacherId, {
+        teacherId,
+        teacherName: course.teacher_name || getText('Unknown Teacher', 'معلم غير معروف'),
+        courseCount: 0,
+        subjectNames: new Set<string>(),
+        gradeNames: new Set<string>(),
+        languages: new Set<string>(),
+      });
+    }
+    const entry = acc.get(teacherId)!;
+    entry.courseCount += 1;
+    if (course.subject_name) {
+      entry.subjectNames.add(course.subject_name);
+    }
+    if (course.grade_name) {
+      entry.gradeNames.add(course.grade_name);
+    }
+    if (course.language) {
+      entry.languages.add(course.language);
+    }
+    return acc;
+  }, new Map<number, {
+    teacherId: number;
+    teacherName: string;
+    courseCount: number;
+    subjectNames: Set<string>;
+    gradeNames: Set<string>;
+    languages: Set<string>;
+  }>());
+
+  const teacherRecommendations: TeacherRecommendation[] = Array.from(recommendationMap.values())
+    .map((entry) => ({
+      teacherId: entry.teacherId,
+      teacherName: entry.teacherName,
+      courseCount: entry.courseCount,
+      subjectNames: Array.from(entry.subjectNames),
+      gradeNames: Array.from(entry.gradeNames),
+      languages: Array.from(entry.languages),
+    }))
+    .sort((a, b) => b.courseCount - a.courseCount);
+  const recommendedTeachersCount = teacherRecommendations.length;
 
   const toggleDescription = (courseId: number) => {
     setExpandedDescriptions(prev => {
@@ -210,8 +285,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const completedCount = courses.filter(c => c.progress_status === 'completed').length;
 
   const isMatchingTab = activeTab === 'matching';
-  const shouldShowProfileNotice = isMatchingTab && !hasMatchingProfileData;
-  const filteredCourses = shouldShowProfileNotice ? [] : getFilteredCourses();
+  const isTeacherTab = activeTab === 'teachers';
+  const shouldShowMatchingProfileNotice = isMatchingTab && !hasMatchingProfileData;
+  const filteredCourses = shouldShowMatchingProfileNotice ? [] : getFilteredCourses();
 
   return (
     <div className="space-y-6">
@@ -278,6 +354,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             </div>
           </button>
           <button
+            onClick={() => setActiveTab('teachers')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'teachers'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>{getText('Teachers', 'المعلمون')}</span>
+              <span className="text-xs bg-dark-300 px-2 py-0.5 rounded-full text-gray-300">
+                {recommendedTeachersCount}
+              </span>
+            </div>
+          </button>
+          <button
             onClick={() => setActiveTab('all')}
             className={`px-6 py-3 font-medium text-sm transition-colors ${
               activeTab === 'all'
@@ -309,13 +400,135 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           </button>
         </div>
 
-        {/* Courses List */}
+        {/* Courses / Teachers Content */}
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
             <p className="mt-4 text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</p>
           </div>
-        ) : shouldShowProfileNotice ? (
+        ) : isTeacherTab ? (
+          !hasMatchingProfileData ? (
+            <div className="text-center py-12">
+              <svg
+                className="mx-auto h-12 w-12 text-yellow-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"
+                />
+              </svg>
+              <p className="mt-4 text-gray-300">
+                {getText(
+                  'Add a bit more profile info so we can recommend the right teachers for you.',
+                  'أضف بعض المعلومات إلى ملفك حتى نتمكن من ترشيح المعلمين المناسبين لك.'
+                )}
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                {getText('Missing', 'البيانات الناقصة')}: {missingProfileFields.join(', ')}
+              </p>
+            </div>
+          ) : recommendedTeachersCount === 0 ? (
+            <div className="text-center py-12">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                />
+              </svg>
+              <p className="mt-4 text-gray-400">
+                {getText('No teachers match your criteria yet.', 'لا يوجد معلمون يطابقون معاييرك بعد.')}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-dark-300">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      {getText('Teacher', 'المعلم')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      {getText('Subjects & Grades', 'المواد والصفوف')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      {getText('Matching Courses', 'الدورات المطابقة')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      {getText('Languages', 'اللغات')}
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                      {getText('Action', 'الإجراء')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-300">
+                  {teacherRecommendations.map((teacher) => (
+                    <tr key={teacher.teacherId} className="hover:bg-dark-200/50 transition-colors">
+                      <td className="px-4 py-4">
+                        <div className="font-semibold text-white">{teacher.teacherName}</div>
+                        <p className="text-sm text-gray-400 mt-1">
+                          {getText(
+                            'Highly rated in your matching courses',
+                            'يحظى بتقييم عالٍ في الدورات التي تناسبك'
+                          )}
+                        </p>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {teacher.subjectNames.map((subject) => (
+                            <span key={subject} className="px-2 py-1 bg-dark-200 text-xs rounded-full text-gray-200">
+                              {subject}
+                            </span>
+                          ))}
+                        </div>
+                        {teacher.gradeNames.length > 0 && (
+                          <p className="text-xs text-gray-500 mt-2">
+                            {getText('Grades', 'الصفوف')}: {teacher.gradeNames.join(', ')}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-gray-200 font-semibold">
+                        {teacher.courseCount}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {teacher.languages.map((lang) => (
+                            <span
+                              key={lang}
+                              className="px-2 py-1 bg-primary-500/10 text-primary-200 text-xs rounded-full border border-primary-500/40"
+                            >
+                              {getLanguageLabel(lang)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <button
+                          onClick={() => handleBookPrivateLesson(teacher.teacherId)}
+                          className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white text-sm font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
+                        >
+                          {getText('Book Private Lesson', 'حجز درس خاص')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : shouldShowMatchingProfileNotice ? (
           <div className="text-center py-12">
             <svg
               className="mx-auto h-12 w-12 text-yellow-400"

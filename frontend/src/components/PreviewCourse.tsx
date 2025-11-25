@@ -453,6 +453,7 @@ const PreviewCourse: React.FC = () => {
       return newSet;
     });
   };
+  
 
   const toggleSection = (sectionId: number): void => {
     setExpandedSections(prev => {
