@@ -85,6 +85,154 @@ interface MaterialItem {
 // Separate component for video player to avoid hooks violation
 const VideoPlayerComponent: React.FC<{ videoData: Video; getText: (en: string, ar: string) => string }> = ({ videoData, getText }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const activeStreamsRef = useRef<MediaStream[]>([]);
+  const originalGetDisplayMediaRef = useRef<((constraints?: MediaStreamConstraints) => Promise<MediaStream>) | null>(null);
+
+  // Screen recording detection - Intercept getDisplayMedia() calls
+  useEffect(() => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      return;
+    }
+
+    // Store original function
+    originalGetDisplayMediaRef.current = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+
+    // Intercept getDisplayMedia calls
+    navigator.mediaDevices.getDisplayMedia = async function(constraints?: MediaStreamConstraints): Promise<MediaStream> {
+      const stream = await originalGetDisplayMediaRef.current!(constraints);
+      
+      // Recording detected!
+      setIsRecording(true);
+      activeStreamsRef.current.push(stream);
+      
+      // Pause video immediately
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+      
+      // Monitor when recording stops (tracks end)
+      const videoTracks = stream.getVideoTracks();
+      const audioTracks = stream.getAudioTracks();
+      
+      const handleTrackEnd = () => {
+        // Check if all tracks are ended
+        const allTracksEnded = [...videoTracks, ...audioTracks].every(track => track.readyState === 'ended');
+        
+        if (allTracksEnded) {
+          // Remove stream from active list
+          activeStreamsRef.current = activeStreamsRef.current.filter(s => s !== stream);
+          
+          // If no active streams, recording has stopped
+          if (activeStreamsRef.current.length === 0) {
+            setIsRecording(false);
+          }
+        }
+      };
+      
+      // Listen for track end events
+      videoTracks.forEach(track => {
+        track.addEventListener('ended', handleTrackEnd);
+      });
+      
+      audioTracks.forEach(track => {
+        track.addEventListener('ended', handleTrackEnd);
+      });
+      
+      return stream;
+    };
+
+    // Cleanup: restore original function
+    return () => {
+      if (originalGetDisplayMediaRef.current && navigator.mediaDevices) {
+        navigator.mediaDevices.getDisplayMedia = originalGetDisplayMediaRef.current;
+      }
+    };
+  }, []);
+
+  // Monitor active MediaStream tracks - Periodic checks for recording indicators
+  useEffect(() => {
+    const checkForActiveRecording = () => {
+      // Check if there are any active display media streams
+      // This is a fallback check in case we missed the initial detection
+      if (activeStreamsRef.current.length > 0) {
+        // Verify streams are still active
+        activeStreamsRef.current = activeStreamsRef.current.filter(stream => {
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          const hasActiveTracks = [...videoTracks, ...audioTracks].some(track => track.readyState === 'live');
+          
+          if (!hasActiveTracks) {
+            // Stream ended, remove it
+            return false;
+          }
+          return true;
+        });
+        
+        // Update recording state based on active streams
+        if (activeStreamsRef.current.length === 0 && isRecording) {
+          setIsRecording(false);
+        } else if (activeStreamsRef.current.length > 0 && !isRecording) {
+          setIsRecording(true);
+        }
+      }
+    };
+
+    // Check every 500ms for active recording
+    recordingCheckIntervalRef.current = setInterval(checkForActiveRecording, 500);
+
+    return () => {
+      if (recordingCheckIntervalRef.current) {
+        clearInterval(recordingCheckIntervalRef.current);
+      }
+    };
+  }, [isRecording]);
+
+  // Automatically pause video when recording is detected
+  useEffect(() => {
+    if (isRecording && videoRef.current) {
+      if (!videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+    }
+  }, [isRecording]);
+
+  // Prevent playback while recording is active
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handlePlay = (e: Event) => {
+      if (isRecording) {
+        e.preventDefault();
+        video.pause();
+      }
+    };
+
+    const handlePlayAttempt = () => {
+      if (isRecording) {
+        video.pause();
+      }
+    };
+
+    // Also prevent programmatic play
+    const handleCanPlay = () => {
+      if (isRecording) {
+        video.pause();
+      }
+    };
+
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('playing', handlePlayAttempt);
+    video.addEventListener('canplay', handleCanPlay);
+
+    return () => {
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('playing', handlePlayAttempt);
+      video.removeEventListener('canplay', handleCanPlay);
+    };
+  }, [isRecording]);
 
   // Prevent common keyboard shortcuts and text selection
   useEffect(() => {
@@ -124,9 +272,19 @@ const VideoPlayerComponent: React.FC<{ videoData: Video; getText: (en: string, a
 
   return (
     <div className="video-display">
-      <h3 className="material-display-title">{videoData.title}</h3>
-      {videoData.description && (
-        <p className="material-display-description">{videoData.description}</p>
+      {isRecording && (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: '#ff4444',
+          color: 'white',
+          borderRadius: '6px',
+          marginBottom: '15px',
+          textAlign: 'center',
+          fontWeight: '500',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+        }}>
+          {getText('Screen recording detected. Video playback has been paused.', 'تم اكتشاف تسجيل الشاشة. تم إيقاف تشغيل الفيديو.')}
+        </div>
       )}
       {videoData.video_url ? (
         <div className="video-player-container">

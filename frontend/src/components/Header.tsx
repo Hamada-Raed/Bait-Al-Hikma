@@ -104,6 +104,12 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               {t('nav.about')}
             </a>
             <button
+              onClick={() => navigate('/contact?focus=private-lessons')}
+              className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
+            >
+              {t('nav.privateLessons')}
+            </button>
+            <button
               onClick={() => navigate('/contact')}
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
             >
@@ -315,6 +321,15 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               >
                 {t('nav.about')}
               </a>
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                navigate('/contact?focus=private-lessons');
+              }}
+              className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200 text-left rtl:text-right w-full"
+            >
+              {t('nav.privateLessons')}
+            </button>
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
