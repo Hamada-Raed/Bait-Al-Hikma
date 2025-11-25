@@ -68,18 +68,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<number>>(new Set());
   const [gradeDetails, setGradeDetails] = useState<GradeDetails | null>(null);
-  
-  // Filter state for teachers
-  const [teacherFilters, setTeacherFilters] = useState({
-    country: user.country || null,
-    grades: user.grade ? [user.grade] : [] as number[],
-    subjects: [] as number[],
-  });
-  const [filteredTeachers, setFilteredTeachers] = useState<TeacherRecommendation[]>([]);
-  const [loadingTeachers, setLoadingTeachers] = useState(false);
-  const [countries, setCountries] = useState<{ id: number; name_en: string; name_ar: string }[]>([]);
-  const [availableGrades, setAvailableGrades] = useState<GradeDetails[]>([]);
-  const [availableSubjects, setAvailableSubjects] = useState<{ id: number; name_en: string; name_ar: string }[]>([]);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -126,128 +114,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   
   useEffect(() => {
     fetchEnrolledCourses();
-    fetchFilterData();
   }, []);
-
-  // Calculate profile matching data (needs to be before useEffect that uses it)
-  const isSchoolStudent = user.user_type === 'school_student';
-  const isUniversityStudent = user.user_type === 'university_student';
-  const gradeNumber = gradeDetails?.grade_number;
-  const requiresTrackFiltering =
-    isSchoolStudent &&
-    ((gradeNumber !== undefined && (gradeNumber === 11 || gradeNumber === 12)) || Boolean(user.track));
-
-  const missingProfileFields: string[] = [];
-  if (!user.country) {
-    missingProfileFields.push(getText('Country', 'الدولة'));
-  }
-  if (isSchoolStudent && !user.grade) {
-    missingProfileFields.push(getText('Grade', 'الصف'));
-  }
-  if (requiresTrackFiltering && !user.track) {
-    missingProfileFields.push(getText('Track', 'المسار'));
-  }
-
-  const hasMatchingProfileData = missingProfileFields.length === 0;
-
-  // Fetch filter data (countries, grades, subjects)
-  const fetchFilterData = async () => {
-    try {
-      const [countriesRes, subjectsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/countries/`, { credentials: 'include' }),
-        fetch(`${API_BASE_URL}/subjects/`, { credentials: 'include' }),
-      ]);
-      
-      const countriesData = await countriesRes.json();
-      const subjectsData = await subjectsRes.json();
-      
-      setCountries(countriesData.results || countriesData);
-      setAvailableSubjects(subjectsData.results || subjectsData);
-      
-      // Fetch grades if country is set
-      if (user.country) {
-        fetch(`${API_BASE_URL}/grades/by_country/?country_id=${user.country}`, { credentials: 'include' })
-          .then(res => res.json())
-          .then(data => {
-            setAvailableGrades(data.results || data);
-          })
-          .catch(err => console.error('Error fetching grades:', err));
-      }
-    } catch (error) {
-      console.error('Error fetching filter data:', error);
-    }
-  };
-
-  // Fetch filtered teachers
-  const fetchFilteredTeachers = async () => {
-    if (!hasMatchingProfileData) return;
-    
-    setLoadingTeachers(true);
-    try {
-      const studentType = user.user_type === 'school_student' ? 'school' : 'university';
-      const params = new URLSearchParams({
-        student_type: studentType,
-      });
-      
-      if (teacherFilters.country) {
-        params.append('country', teacherFilters.country.toString());
-      }
-      
-      if (studentType === 'school' && teacherFilters.grades.length > 0) {
-        teacherFilters.grades.forEach(gradeId => {
-          params.append('grades', gradeId.toString());
-        });
-      } else if (studentType === 'university' && teacherFilters.subjects.length > 0) {
-        teacherFilters.subjects.forEach(subjectId => {
-          params.append('subjects', subjectId.toString());
-        });
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/users/filter_teachers/?${params.toString()}`, {
-        credentials: 'include',
-      });
-      
-      if (response.ok) {
-        const teachersData = await response.json();
-        // Transform to TeacherRecommendation format
-        const transformed = teachersData.map((teacher: any) => ({
-          teacherId: teacher.id,
-          teacherName: `${teacher.first_name} ${teacher.last_name}`,
-          courseCount: 0, // Will be calculated from courses
-          subjectNames: teacher.subjects ? teacher.subjects.map((s: any) => {
-            const subject = availableSubjects.find(sub => sub.id === s);
-            return subject ? (language === 'ar' ? subject.name_ar : subject.name_en) : '';
-          }).filter((n: string) => n) : [],
-          gradeNames: [],
-          languages: [],
-        }));
-        setFilteredTeachers(transformed);
-      }
-    } catch (error) {
-      console.error('Error fetching filtered teachers:', error);
-    } finally {
-      setLoadingTeachers(false);
-    }
-  };
-
-  // Fetch filtered teachers when filters change
-  useEffect(() => {
-    if (activeTab === 'teachers' && hasMatchingProfileData) {
-      fetchFilteredTeachers();
-    }
-  }, [activeTab, teacherFilters, hasMatchingProfileData, gradeDetails]);
-
-  // Fetch grades when country changes
-  useEffect(() => {
-    if (teacherFilters.country) {
-      fetch(`${API_BASE_URL}/grades/by_country/?country_id=${teacherFilters.country}`, { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-          setAvailableGrades(data.results || data);
-        })
-        .catch(err => console.error('Error fetching grades:', err));
-    }
-  }, [teacherFilters.country]);
 
   useEffect(() => {
     const fetchGradeDetails = async () => {
@@ -271,6 +138,26 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
     fetchGradeDetails();
   }, [user.grade]);
+
+  const isSchoolStudent = user.user_type === 'school_student';
+  const isUniversityStudent = user.user_type === 'university_student';
+  const gradeNumber = gradeDetails?.grade_number;
+  const requiresTrackFiltering =
+    isSchoolStudent &&
+    ((gradeNumber !== undefined && (gradeNumber === 11 || gradeNumber === 12)) || Boolean(user.track));
+
+  const missingProfileFields: string[] = [];
+  if (!user.country) {
+    missingProfileFields.push(getText('Country', 'الدولة'));
+  }
+  if (isSchoolStudent && !user.grade) {
+    missingProfileFields.push(getText('Grade', 'الصف'));
+  }
+  if (requiresTrackFiltering && !user.track) {
+    missingProfileFields.push(getText('Track', 'المسار'));
+  }
+
+  const hasMatchingProfileData = missingProfileFields.length === 0;
 
   // Backend now filters courses based on student profile, so all returned courses are matching
   const matchingCourses = hasMatchingProfileData ? courses : [];
@@ -480,98 +367,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             <p className="mt-4 text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</p>
           </div>
         ) : isTeacherTab ? (
-          <>
-            {/* Filter Section */}
-            {hasMatchingProfileData && (
-              <div className="mb-6 p-4 bg-dark-200 rounded-lg border border-dark-300">
-                <h4 className="text-sm font-semibold text-gray-300 mb-4">
-                  {getText('Filter Teachers', 'تصفية المعلمين')}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Country Filter */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-2">
-                      {getText('Country', 'البلد')}
-                    </label>
-                    <select
-                      value={teacherFilters.country || ''}
-                      onChange={(e) => {
-                        const countryId = e.target.value ? parseInt(e.target.value) : null;
-                        setTeacherFilters(prev => ({
-                          ...prev,
-                          country: countryId,
-                          grades: [], // Reset grades when country changes
-                        }));
-                      }}
-                      className="w-full px-3 py-2 bg-dark-100 border border-dark-400 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">{getText('All Countries', 'جميع البلدان')}</option>
-                      {countries.map(country => (
-                        <option key={country.id} value={country.id}>
-                          {language === 'ar' ? country.name_ar : country.name_en}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Grades Filter (for school students) */}
-                  {isSchoolStudent && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-2">
-                        {getText('Grades', 'الصفوف')}
-                      </label>
-                      <select
-                        multiple
-                        value={teacherFilters.grades.map(String)}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                          setTeacherFilters(prev => ({ ...prev, grades: selected }));
-                        }}
-                        className="w-full px-3 py-2 bg-dark-100 border border-dark-400 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px]"
-                      >
-                        {availableGrades.map(grade => (
-                          <option key={grade.id} value={grade.id}>
-                            {language === 'ar' ? grade.name_ar : grade.name_en}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {getText('Hold Ctrl/Cmd to select multiple', 'اضغط Ctrl/Cmd لاختيار عدة صفوف')}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Subjects Filter (for university students) */}
-                  {isUniversityStudent && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-2">
-                        {getText('Subjects', 'المواد')}
-                      </label>
-                      <select
-                        multiple
-                        value={teacherFilters.subjects.map(String)}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                          setTeacherFilters(prev => ({ ...prev, subjects: selected }));
-                        }}
-                        className="w-full px-3 py-2 bg-dark-100 border border-dark-400 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px]"
-                      >
-                        {availableSubjects.map(subject => (
-                          <option key={subject.id} value={subject.id}>
-                            {language === 'ar' ? subject.name_ar : subject.name_en}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {getText('Hold Ctrl/Cmd to select multiple', 'اضغط Ctrl/Cmd لاختيار عدة مواد')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {!hasMatchingProfileData ? (
+          !hasMatchingProfileData ? (
               <div className="text-center py-12">
                 <svg
                   className="mx-auto h-12 w-12 text-yellow-400"
@@ -596,48 +392,49 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                   {getText('Missing', 'البيانات الناقصة')}: {missingProfileFields.join(', ')}
                 </p>
               </div>
-            ) : loadingTeachers ? (
+            ) : recommendedTeachersCount === 0 ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
-                <p className="mt-4 text-gray-400">{getText('Loading teachers...', 'جاري تحميل المعلمين...')}</p>
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  />
+                </svg>
+                <p className="mt-4 text-gray-400">
+                  {getText('No teachers match your criteria yet.', 'لا يوجد معلمون يطابقون معاييرك بعد.')}
+                </p>
               </div>
-            ) : filteredTeachers.length === 0 ? (
-            <div className="text-center py-12">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                />
-              </svg>
-              <p className="mt-4 text-gray-400">
-                {getText('No teachers match your filter criteria.', 'لا يوجد معلمون يطابقون معايير التصفية.')}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-dark-300">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      {getText('Teacher', 'المعلم')}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      {getText('Subjects', 'المواد')}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      {getText('Action', 'الإجراء')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-dark-300">
-                  {filteredTeachers.map((teacher) => (
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-dark-300">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {getText('Teacher', 'المعلم')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {getText('Subjects & Grades', 'المواد والصفوف')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {getText('Matching Courses', 'الدورات المطابقة')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {getText('Languages', 'اللغات')}
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        {getText('Action', 'الإجراء')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dark-300">
+                    {teacherRecommendations.map((teacher) => (
                     <tr key={teacher.teacherId} className="hover:bg-dark-200/50 transition-colors">
                       <td className="px-4 py-4">
                         <div className="font-semibold text-white">{teacher.teacherName}</div>
@@ -668,8 +465,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 </tbody>
               </table>
             </div>
-          )}
-          </>
+          )
         ) : shouldShowMatchingProfileNotice ? (
           <div className="text-center py-12">
             <svg
