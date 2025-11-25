@@ -2580,6 +2580,9 @@ const ManageCourse: React.FC = () => {
                             controls
                             src={videoForm.video_url}
                             className="video-preview-element"
+                            controlsList="nodownload"
+                            disablePictureInPicture
+                            onContextMenu={(e) => e.preventDefault()}
                           >
                             Your browser does not support the video tag.
                           </video>

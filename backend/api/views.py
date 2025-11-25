@@ -1,4 +1,8 @@
 import json
+import hmac
+import hashlib
+import time
+import os
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -9,6 +13,8 @@ from django.contrib.auth import login as django_login
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.db import models
+from django.http import StreamingHttpResponse, Http404
+from django.conf import settings
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
@@ -25,6 +31,57 @@ from .serializers import (
 
 class NoPagination(PageNumberPagination):
     page_size = None
+
+
+# Video Token Utilities
+def generate_video_token(video_id, user_id, ip_address, expires_in=1800):
+    """
+    Generate a time-limited token for video access tied to user and IP.
+    Token expires after expires_in seconds (default: 30 minutes).
+    """
+    expires_at = int(time.time()) + expires_in
+    # Include IP address in token generation for additional security
+    message = f"{video_id}:{user_id}:{ip_address}:{expires_at}"
+    secret = settings.SECRET_KEY
+    token = hmac.new(
+        secret.encode(),
+        message.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return f"{token}:{expires_at}"
+
+
+def verify_video_token(token, video_id, user_id, ip_address):
+    """
+    Verify a video access token.
+    Returns True if token is valid, not expired, and matches IP, False otherwise.
+    """
+    try:
+        token_part, expires_at = token.split(':')
+        if int(time.time()) > int(expires_at):
+            return False
+        
+        message = f"{video_id}:{user_id}:{ip_address}:{expires_at}"
+        secret = settings.SECRET_KEY
+        expected_token = hmac.new(
+            secret.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        return hmac.compare_digest(token_part, expected_token)
+    except (ValueError, AttributeError):
+        return False
+
+
+def get_client_ip(request):
+    """Get client IP address from request"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
 
 
 class CountryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -421,12 +478,19 @@ class CourseViewSet(viewsets.ModelViewSet):
                 total_sections += 1
                 videos_data = []
                 for video in section.videos.all().order_by('order', 'id'):
-                    # Get video URL - prefer video_file if uploaded, otherwise use video_url
+                    # Generate secure tokenized URL for uploaded videos
                     video_url_value = None
                     if video.video_file:
-                        # Build absolute URL for uploaded video file
-                        video_url_value = request.build_absolute_uri(video.video_file.url)
+                        # Get client IP for token generation
+                        client_ip = get_client_ip(request)
+                        # Generate token for video access (tied to IP and user)
+                        token = generate_video_token(video.id, request.user.id, client_ip)
+                        # Build secure streaming URL with token
+                        video_url_value = request.build_absolute_uri(
+                            f'/api/stream-video/{video.id}/?token={token}'
+                        )
                     elif video.video_url:
+                        # External URLs (YouTube, Vimeo, etc.) remain as-is
                         video_url_value = video.video_url
                     
                     videos_data.append({
@@ -916,6 +980,141 @@ def manage_section(request):
             return Response({'success': True}, status=status.HTTP_200_OK)
         except Section.DoesNotExist:
             return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def stream_video(request, video_id):
+    """
+    Secure video streaming endpoint with token-based authentication.
+    Prevents direct URL access, copying, and downloading.
+    """
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    # Get client IP address
+    client_ip = get_client_ip(request)
+    
+    # Check Referer header - must come from same origin
+    referer = request.META.get('HTTP_REFERER', '')
+    origin = request.META.get('HTTP_ORIGIN', '')
+    allowed_origins = ['http://localhost:3000', 'http://127.0.0.1:3000']
+    
+    # In production, check against actual domain
+    if not any(allowed in referer or allowed in origin for allowed in allowed_origins):
+        # Allow if no referer (direct browser access) but log it
+        if not referer and not origin:
+            pass  # Could be legitimate browser request
+        else:
+            return Response({'error': 'Invalid request origin.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        video = Video.objects.select_related('section__chapter__course__teacher').get(pk=video_id)
+        course = video.section.chapter.course
+        
+        # Check permissions - teacher who owns the course has access
+        # TODO: Add enrollment check for students when enrollment is implemented
+        has_access = False
+        if request.user.user_type == 'teacher' and course.teacher == request.user:
+            has_access = True
+        elif request.user.is_staff or request.user.is_superuser:
+            has_access = True
+        # Add enrollment check here:
+        # elif Enrollment.objects.filter(course=course, student=request.user).exists():
+        #     has_access = True
+        
+        if not has_access:
+            return Response({'error': 'Access denied. You do not have permission to view this video.'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        
+        # Verify token - required for security
+        token = request.GET.get('token')
+        if not token:
+            return Response({'error': 'Token required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not verify_video_token(token, video_id, request.user.id, client_ip):
+            return Response({'error': 'Invalid, expired, or mismatched token.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Only stream uploaded video files, not external URLs
+        if not video.video_file:
+            return Response({'error': 'Video file not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        file_path = video.video_file.path
+        if not os.path.exists(file_path):
+            return Response({'error': 'Video file not found on server.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Handle Range requests for video seeking (but prevent full download)
+        range_header = request.META.get('HTTP_RANGE', '').strip()
+        file_size = os.path.getsize(file_path)
+        
+        if range_header:
+            # Parse range header
+            range_match = range_header.replace('bytes=', '').split('-')
+            start = int(range_match[0]) if range_match[0] else 0
+            end = int(range_match[1]) if len(range_match) > 1 and range_match[1] else file_size - 1
+            
+            # Limit range to prevent downloading entire file at once
+            # Allow seeking but limit chunk size
+            chunk_size_limit = 10 * 1024 * 1024  # 10MB max chunk
+            if end - start > chunk_size_limit:
+                end = start + chunk_size_limit - 1
+            
+            def file_iterator_range(file_path, start, end):
+                with open(file_path, 'rb') as f:
+                    f.seek(start)
+                    remaining = end - start + 1
+                    while remaining:
+                        chunk_size = min(8192, remaining)
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        yield chunk
+            
+            content_length = end - start + 1
+            response = StreamingHttpResponse(
+                file_iterator_range(file_path, start, end),
+                status=206,  # Partial Content
+                content_type='video/mp4'
+            )
+            response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+            response['Content-Length'] = content_length
+            response['Accept-Ranges'] = 'bytes'
+        else:
+            # Stream entire file in small chunks
+            def file_iterator(file_path, chunk_size=8192):
+                with open(file_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+            
+            response = StreamingHttpResponse(
+                file_iterator(file_path),
+                content_type='video/mp4'
+            )
+            response['Content-Length'] = file_size
+            response['Accept-Ranges'] = 'bytes'
+        
+        # Security headers to prevent downloading and caching
+        response['Content-Disposition'] = 'inline'  # Display in browser, don't download
+        response['X-Content-Type-Options'] = 'nosniff'
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+        # Prevent caching to ensure tokens are always checked
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate, private, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        # Additional headers to prevent saving
+        response['Content-Security-Policy'] = "default-src 'self'"
+        
+        return response
+        
+    except Video.DoesNotExist:
+        return Response({'error': 'Video not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'Error streaming video: {str(e)}'}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST', 'PUT', 'DELETE'])

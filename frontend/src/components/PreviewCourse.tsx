@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -81,6 +81,81 @@ interface MaterialItem {
   sectionId: number;
   globalOrder: number;
 }
+
+// Separate component for video player to avoid hooks violation
+const VideoPlayerComponent: React.FC<{ videoData: Video; getText: (en: string, ar: string) => string }> = ({ videoData, getText }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Prevent common keyboard shortcuts and text selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Disable F12, Ctrl+Shift+I (DevTools), Ctrl+S (Save), Ctrl+U (View Source)
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+        (e.ctrlKey && e.key === 's') ||
+        (e.ctrlKey && e.key === 'u')
+      ) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    // Disable text selection on video container
+    const style = document.createElement('style');
+    style.textContent = `
+      .video-player-container {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (document.head.contains(style)) {
+        document.head.removeChild(style);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="video-display">
+      <h3 className="material-display-title">{videoData.title}</h3>
+      {videoData.description && (
+        <p className="material-display-description">{videoData.description}</p>
+      )}
+      {videoData.video_url ? (
+        <div className="video-player-container">
+          <video
+            ref={videoRef}
+            controls
+            className="video-player"
+            src={videoData.video_url.startsWith('http') ? videoData.video_url : `http://localhost:8000${videoData.video_url}`}
+            controlsList="nodownload noplaybackrate"
+            disablePictureInPicture
+            onContextMenu={(e) => e.preventDefault()}
+            onDragStart={(e) => e.preventDefault()}
+            style={{ 
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              pointerEvents: 'auto'
+            }}
+          >
+            {getText('Your browser does not support the video tag.', 'متصفحك لا يدعم تشغيل الفيديو.')}
+          </video>
+        </div>
+      ) : (
+        <div className="no-video-url">
+          <p>{getText('No video URL provided', 'لم يتم توفير رابط الفيديو')}</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const PreviewCourse: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
@@ -482,32 +557,10 @@ const PreviewCourse: React.FC = () => {
             {selectedMaterial ? (
               <div className="material-display-area">
                 {selectedMaterial.type === 'video' ? (
-                  (() => {
-                    const videoData = selectedMaterial.data as Video;
-                    return (
-                      <div className="video-display">
-                        <h3 className="material-display-title">{videoData.title}</h3>
-                        {videoData.description && (
-                          <p className="material-display-description">{videoData.description}</p>
-                        )}
-                        {videoData.video_url ? (
-                          <div className="video-player-container">
-                            <video
-                              controls
-                              className="video-player"
-                              src={videoData.video_url.startsWith('http') ? videoData.video_url : `http://localhost:8000${videoData.video_url}`}
-                            >
-                              {getText('Your browser does not support the video tag.', 'متصفحك لا يدعم تشغيل الفيديو.')}
-                            </video>
-                          </div>
-                        ) : (
-                          <div className="no-video-url">
-                            <p>{getText('No video URL provided', 'لم يتم توفير رابط الفيديو')}</p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()
+                  <VideoPlayerComponent 
+                    videoData={selectedMaterial.data as Video}
+                    getText={getText}
+                  />
                 ) : (
                   (() => {
                     const quizData = selectedMaterial.data as Quiz;

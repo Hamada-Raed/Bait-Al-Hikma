@@ -8,7 +8,7 @@ from .views import (
     PrivateLessonPriceViewSet,
     manage_chapter, manage_section, manage_video, manage_section_quiz,
     reorder_chapters, reorder_sections, reorder_videos, reorder_quizzes,
-    submit_contact_message
+    submit_contact_message, stream_video
 )
 
 router = DefaultRouter()
@@ -31,6 +31,8 @@ router.register(r'private-lesson-prices', PrivateLessonPriceViewSet, basename='p
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Secure video streaming endpoint
+    path('stream-video/<int:video_id>/', stream_video, name='stream-video'),
     # Course structure management endpoints
     path('manage-chapter/', manage_chapter, name='manage-chapter'),
     path('manage-section/', manage_section, name='manage-section'),
