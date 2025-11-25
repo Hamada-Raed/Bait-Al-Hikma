@@ -337,14 +337,48 @@ class CourseViewSet(viewsets.ModelViewSet):
     serializer_class = CourseSerializer
     pagination_class = PageNumberPagination
     
+    
     def get_queryset(self):
+        user = self.request.user
+
+        if not user.is_authenticated:
+            return Course.objects.none()
+
         # Teachers can only see their own courses
-        if self.request.user.is_authenticated and self.request.user.user_type == 'teacher':
-            return Course.objects.filter(teacher=self.request.user)
-        # Students can only see published courses
-        elif self.request.user.is_authenticated:
-            return Course.objects.filter(status='published')
-        return Course.objects.none()
+        if user.user_type == 'teacher':
+            return Course.objects.filter(teacher=user)
+
+        # Students see published courses filtered by their profile
+        if user.user_type in ['school_student', 'university_student']:
+            queryset = Course.objects.filter(status='published')
+
+            if user.user_type == 'school_student':
+                queryset = queryset.filter(course_type='school')
+                if user.country_id:
+                    queryset = queryset.filter(country_id=user.country_id)
+                if user.grade_id:
+                    queryset = queryset.filter(grade_id=user.grade_id)
+                    
+                    # Check if grade is 11 or 12, and filter by track if needed
+                    from .models import Grade
+                    try:
+                        grade = Grade.objects.get(id=user.grade_id)
+                        if grade.grade_number in (11, 12):
+                            if user.track_id:
+                                queryset = queryset.filter(track_id=user.track_id)
+                            else:
+                                queryset = queryset.filter(track__isnull=True)
+                    except Grade.DoesNotExist:
+                        pass
+            else:  # university_student
+                queryset = queryset.filter(course_type='university')
+                if user.country_id:
+                    queryset = queryset.filter(country_id=user.country_id)
+
+            return queryset
+
+        # Default for other authenticated users (e.g., admins viewing dashboard)
+        return Course.objects.filter(status='published')
     
     def perform_create(self, serializer):
         # Only teachers can create courses

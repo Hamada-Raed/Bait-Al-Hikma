@@ -98,9 +98,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const fetchEnrolledCourses = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual enrolled courses endpoint when available
-      // For now, fetch all published courses as placeholder
-      const response = await fetch(`${API_BASE_URL}/courses/?status=published`, {
+      // Backend now filters courses based on student profile (country, grade, track)
+      const response = await fetch(`${API_BASE_URL}/courses/`, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -121,6 +120,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     }
   };
 
+  
   useEffect(() => {
     fetchEnrolledCourses();
   }, []);
@@ -168,40 +168,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   const hasMatchingProfileData = missingProfileFields.length === 0;
 
-  const matchingCourses = hasMatchingProfileData
-    ? courses.filter((course) => {
-        const matchesCourseType = isSchoolStudent
-          ? course.course_type === 'school'
-          : isUniversityStudent
-          ? course.course_type === 'university'
-          : true;
-
-        if (!matchesCourseType) {
-          return false;
-        }
-
-        const matchesCountry = idsMatch(course.country, user.country);
-        if (!matchesCountry) {
-          return false;
-        }
-
-        if (isSchoolStudent) {
-          const matchesGrade = idsMatch(course.grade, user.grade);
-
-          if (!matchesGrade) {
-            return false;
-          }
-
-          if (requiresTrackFiltering) {
-            return (
-              idsMatch(course.track, user.track)
-            );
-          }
-        }
-
-        return true;
-      })
-    : [];
+  // Backend now filters courses based on student profile, so all returned courses are matching
+  const matchingCourses = hasMatchingProfileData ? courses : [];
 
   const matchingCount = matchingCourses.length;
   const recommendationMap = matchingCourses.reduce((acc, course) => {
