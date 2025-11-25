@@ -85,6 +85,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const handleBookPrivateLesson = (teacherId: number) => {
     console.log('Book private lesson with teacher:', teacherId);
   };
+  const idsMatch = (
+    a?: number | string | null,
+    b?: number | string | null
+  ) => {
+    if (a === null || a === undefined || b === null || b === undefined) {
+      return false;
+    }
+    return String(a) === String(b);
+  };
 
   const fetchEnrolledCourses = async () => {
     try {
@@ -171,19 +180,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           return false;
         }
 
-        const matchesCountry =
-          Boolean(user.country) &&
-          Boolean(course.country) &&
-          course.country === user.country;
+        const matchesCountry = idsMatch(course.country, user.country);
         if (!matchesCountry) {
           return false;
         }
 
         if (isSchoolStudent) {
-          const matchesGrade =
-            Boolean(user.grade) &&
-            Boolean(course.grade) &&
-            course.grade === user.grade;
+          const matchesGrade = idsMatch(course.grade, user.grade);
 
           if (!matchesGrade) {
             return false;
@@ -191,9 +194,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
           if (requiresTrackFiltering) {
             return (
-              Boolean(user.track) &&
-              Boolean(course.track) &&
-              course.track === user.track
+              idsMatch(course.track, user.track)
             );
           }
         }
