@@ -10,6 +10,9 @@ interface User {
   user_type: 'school_student' | 'university_student' | 'teacher' | null;
   first_name: string;
   last_name: string;
+  country?: number | null;
+  grade?: number | null;
+  track?: number | null;
 }
 
 interface Course {
@@ -30,20 +33,31 @@ interface Course {
   progress_status?: 'enrolled' | 'in_progress' | 'completed';
   progress_percentage?: number;
   teacher_name?: string;
+  country?: number | null;
+  grade?: number | null;
+  track?: number | null;
 }
 
 interface StudentDashboardProps {
   user: User;
 }
 
-type TabType = 'all' | 'in_progress' | 'completed';
+interface GradeDetails {
+  id: number;
+  grade_number?: number;
+  name_en?: string;
+  name_ar?: string;
+}
+
+type TabType = 'matching' | 'all' | 'in_progress' | 'completed';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { t, language } = useLanguage();
-  const [activeTab, setActiveTab] = useState<TabType>('all');
+  const [activeTab, setActiveTab] = useState<TabType>('matching');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<number>>(new Set());
+  const [gradeDetails, setGradeDetails] = useState<GradeDetails | null>(null);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -77,6 +91,94 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     fetchEnrolledCourses();
   }, []);
 
+  useEffect(() => {
+    const fetchGradeDetails = async () => {
+      if (!user.grade) {
+        setGradeDetails(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/grades/${user.grade}/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setGradeDetails(data);
+        }
+      } catch (error) {
+        console.error('Error fetching grade details:', error);
+      }
+    };
+
+    fetchGradeDetails();
+  }, [user.grade]);
+
+  const isSchoolStudent = user.user_type === 'school_student';
+  const isUniversityStudent = user.user_type === 'university_student';
+  const gradeNumber = gradeDetails?.grade_number;
+  const requiresTrackFiltering =
+    isSchoolStudent &&
+    ((gradeNumber !== undefined && (gradeNumber === 11 || gradeNumber === 12)) || Boolean(user.track));
+
+  const missingProfileFields: string[] = [];
+  if (!user.country) {
+    missingProfileFields.push(getText('Country', 'الدولة'));
+  }
+  if (isSchoolStudent && !user.grade) {
+    missingProfileFields.push(getText('Grade', 'الصف'));
+  }
+  if (requiresTrackFiltering && !user.track) {
+    missingProfileFields.push(getText('Track', 'المسار'));
+  }
+
+  const hasMatchingProfileData = missingProfileFields.length === 0;
+
+  const matchingCourses = hasMatchingProfileData
+    ? courses.filter((course) => {
+        const matchesCourseType = isSchoolStudent
+          ? course.course_type === 'school'
+          : isUniversityStudent
+          ? course.course_type === 'university'
+          : true;
+
+        if (!matchesCourseType) {
+          return false;
+        }
+
+        const matchesCountry =
+          Boolean(user.country) &&
+          Boolean(course.country) &&
+          course.country === user.country;
+        if (!matchesCountry) {
+          return false;
+        }
+
+        if (isSchoolStudent) {
+          const matchesGrade =
+            Boolean(user.grade) &&
+            Boolean(course.grade) &&
+            course.grade === user.grade;
+
+          if (!matchesGrade) {
+            return false;
+          }
+
+          if (requiresTrackFiltering) {
+            return (
+              Boolean(user.track) &&
+              Boolean(course.track) &&
+              course.track === user.track
+            );
+          }
+        }
+
+        return true;
+      })
+    : [];
+
+  const matchingCount = matchingCourses.length;
+
   const toggleDescription = (courseId: number) => {
     setExpandedDescriptions(prev => {
       const newSet = new Set(prev);
@@ -91,6 +193,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   const getFilteredCourses = () => {
     switch (activeTab) {
+      case 'matching':
+        return matchingCourses;
       case 'in_progress':
         return courses.filter(course => course.progress_status === 'in_progress');
       case 'completed':
@@ -105,7 +209,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const inProgressCount = courses.filter(c => c.progress_status === 'in_progress').length;
   const completedCount = courses.filter(c => c.progress_status === 'completed').length;
 
-  const filteredCourses = getFilteredCourses();
+  const isMatchingTab = activeTab === 'matching';
+  const shouldShowProfileNotice = isMatchingTab && !hasMatchingProfileData;
+  const filteredCourses = shouldShowProfileNotice ? [] : getFilteredCourses();
 
   return (
     <div className="space-y-6">
@@ -157,6 +263,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
         {/* Tabs */}
         <div className="flex border-b border-dark-300 mb-6">
           <button
+            onClick={() => setActiveTab('matching')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'matching'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>{getText('Courses', 'الدورات')}</span>
+              <span className="text-xs bg-dark-300 px-2 py-0.5 rounded-full text-gray-300">
+                {matchingCount}
+              </span>
+            </div>
+          </button>
+          <button
             onClick={() => setActiveTab('all')}
             className={`px-6 py-3 font-medium text-sm transition-colors ${
               activeTab === 'all'
@@ -194,6 +315,31 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
             <p className="mt-4 text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</p>
           </div>
+        ) : shouldShowProfileNotice ? (
+          <div className="text-center py-12">
+            <svg
+              className="mx-auto h-12 w-12 text-yellow-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"
+              />
+            </svg>
+            <p className="mt-4 text-gray-300">
+              {getText(
+                'Add a bit more profile info so we can show the right courses for you.',
+                'أضف بعض المعلومات لملفك حتى نعرض لك الدورات المناسبة.'
+              )}
+            </p>
+            <p className="mt-2 text-sm text-gray-500">
+              {getText('Missing', 'البيانات الناقصة')}: {missingProfileFields.join(', ')}
+            </p>
+          </div>
         ) : filteredCourses.length === 0 ? (
           <div className="text-center py-12">
             <svg
@@ -210,7 +356,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
               />
             </svg>
             <p className="mt-4 text-gray-400">
-              {activeTab === 'all'
+              {activeTab === 'matching'
+                ? getText('No courses match your criteria yet.', 'لا توجد دورات مناسبة بعد.')
+                : activeTab === 'all'
                 ? getText('No courses enrolled yet.', 'لم يتم التسجيل في أي دورات بعد.')
                 : activeTab === 'in_progress'
                 ? getText('No courses in progress.', 'لا توجد دورات قيد التنفيذ.')
