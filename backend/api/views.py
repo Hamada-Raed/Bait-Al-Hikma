@@ -212,6 +212,62 @@ class UserViewSet(viewsets.ModelViewSet):
             'error': 'Not authenticated.'
         }, status=status.HTTP_401_UNAUTHORIZED)
     
+    @action(detail=False, methods=['get'])
+    def filter_teachers(self, request):
+        """Filter teachers based on student type, country, grades (for school), or subjects (for university)"""
+        user_type_filter = request.query_params.get('student_type')  # 'school' or 'university'
+        country_id = request.query_params.get('country')
+        grade_ids = request.query_params.getlist('grades')  # For school students
+        subject_ids = request.query_params.getlist('subjects')  # For university students
+        
+        # Start with approved teachers only
+        queryset = User.objects.filter(user_type='teacher', is_approved=True)
+        
+        # Filter by country if provided
+        if country_id:
+            queryset = queryset.filter(country_id=country_id)
+        
+        # Filter by availability type (school or university)
+        if user_type_filter == 'school':
+            # Filter teachers who have availabilities for school students
+            # and optionally filter by grades if provided
+            from .models import Availability
+            availability_query = Availability.objects.filter(
+                for_school_students=True,
+                teacher__is_approved=True
+            )
+            if country_id:
+                availability_query = availability_query.filter(teacher__country_id=country_id)
+            if grade_ids:
+                grade_ids_int = [int(gid) for gid in grade_ids if gid.isdigit()]
+                if grade_ids_int:
+                    availability_query = availability_query.filter(grades__id__in=grade_ids_int).distinct()
+            
+            teacher_ids = availability_query.values_list('teacher_id', flat=True).distinct()
+            queryset = queryset.filter(id__in=teacher_ids)
+            
+        elif user_type_filter == 'university':
+            # Filter teachers who have availabilities for university students
+            # and optionally filter by subjects if provided
+            from .models import Availability
+            availability_query = Availability.objects.filter(
+                for_university_students=True,
+                teacher__is_approved=True
+            )
+            if country_id:
+                availability_query = availability_query.filter(teacher__country_id=country_id)
+            if subject_ids:
+                subject_ids_int = [int(sid) for sid in subject_ids if sid.isdigit()]
+                if subject_ids_int:
+                    availability_query = availability_query.filter(subjects__id__in=subject_ids_int).distinct()
+            
+            teacher_ids = availability_query.values_list('teacher_id', flat=True).distinct()
+            queryset = queryset.filter(id__in=teacher_ids)
+        
+        # Serialize teachers with their subjects
+        serializer = UserSerializer(queryset, many=True, context={'request': request})
+        return Response(serializer.data)
+    
     @action(detail=False, methods=['put', 'patch'])
     def update_profile(self, request):
         if not request.user.is_authenticated:
@@ -821,6 +877,7 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
         for_university_students = request.data.get('for_university_students', False)
         for_school_students = request.data.get('for_school_students', False)
         grade_ids = request.data.get('grade_ids', [])
+        subject_ids = request.data.get('subject_ids', [])
         
         # Group slots by date and calculate start/end hours for each date
         from collections import defaultdict
@@ -865,7 +922,8 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
                 'title': title,
                 'for_university_students': for_university_students,
                 'for_school_students': for_school_students,
-                'grade_ids': grade_ids if for_school_students else []
+                'grade_ids': grade_ids if for_school_students else [],
+                'subject_ids': subject_ids if for_university_students else []
             }, context={'request': request})
             
             if serializer.is_valid():

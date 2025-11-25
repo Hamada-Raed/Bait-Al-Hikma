@@ -367,6 +367,7 @@ class Availability(models.Model):
     for_university_students = models.BooleanField(default=False)
     for_school_students = models.BooleanField(default=False)
     grades = models.ManyToManyField(Grade, blank=True, related_name='availabilities')
+    subjects = models.ManyToManyField(Subject, blank=True, related_name='availabilities', help_text='Subjects for university students')
     is_booked = models.BooleanField(default=False, help_text='Whether this availability has been booked by a student')
     booked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='booked_availabilities')
     booked_at = models.DateTimeField(null=True, blank=True)

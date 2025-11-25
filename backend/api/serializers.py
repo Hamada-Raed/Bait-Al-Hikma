@@ -421,12 +421,14 @@ class CourseSerializer(serializers.ModelSerializer):
 class AvailabilitySerializer(serializers.ModelSerializer):
     grades = serializers.PrimaryKeyRelatedField(many=True, queryset=Grade.objects.all(), required=False)
     grade_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    subjects = serializers.PrimaryKeyRelatedField(many=True, queryset=Subject.objects.all(), required=False)
+    subject_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     is_booked = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Availability
         fields = ['id', 'teacher', 'title', 'date', 'start_hour', 'end_hour', 'for_university_students', 'for_school_students', 
-                  'grades', 'grade_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
+                  'grades', 'grade_ids', 'subjects', 'subject_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
         read_only_fields = ['teacher', 'created_at', 'updated_at', 'is_booked', 'booked_by', 'booked_at']
     
     def validate_title(self, value):
@@ -500,22 +502,36 @@ class AvailabilitySerializer(serializers.ModelSerializer):
                     'grades': 'At least one grade must be selected when school students is selected.'
                 })
         
+        # Validate subjects if university students is selected
+        if attrs.get('for_university_students'):
+            subject_ids = attrs.get('subject_ids', [])
+            if not subject_ids:
+                raise serializers.ValidationError({
+                    'subjects': 'At least one subject must be selected when university students is selected.'
+                })
+        
         return attrs
     
     def create(self, validated_data):
         grade_ids = validated_data.pop('grade_ids', [])
+        subject_ids = validated_data.pop('subject_ids', [])
         availability = Availability.objects.create(**validated_data)
         if grade_ids:
             availability.grades.set(grade_ids)
+        if subject_ids:
+            availability.subjects.set(subject_ids)
         return availability
     
     def update(self, instance, validated_data):
         grade_ids = validated_data.pop('grade_ids', None)
+        subject_ids = validated_data.pop('subject_ids', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         if grade_ids is not None:
             instance.grades.set(grade_ids)
+        if subject_ids is not None:
+            instance.subjects.set(subject_ids)
         return instance
 
 
