@@ -445,6 +445,10 @@ const CreateCourse: React.FC = () => {
               grade: course.grade?.toString() || '',
               track: course.track?.toString() || '',
             });
+            
+            // Note: The grade validation will happen automatically in the useEffect
+            // that filters grades by country (lines 609-622), which will reset
+            // the grade if it doesn't match the country
 
             // Set preview image if exists
             if (course.image_url) {
@@ -512,97 +516,49 @@ const CreateCourse: React.FC = () => {
   useEffect(() => {
     if (formData.country && formData.course_type === 'school') {
       const countryId = parseInt(formData.country);
-      const selectedCountry = countries.find(c => c.id === countryId);
       
-      // Filter grades by country and only include grades 1-12
-      // Handle Palestine and Jordan sharing the same grades
+      // Filter grades by country - ONLY show grades that belong to the selected country
       const filteredGrades = allGrades.filter(grade => {
         // Only include grades 1-12
         if (grade.grade_number && (grade.grade_number < 1 || grade.grade_number > 12)) {
           return false;
         }
         
-        // Check if grade belongs to selected country
-        if (grade.country === countryId) {
-          return true;
-        }
-        
-        // For Palestine and Jordan, they share the same grades
-        // Check if selected country is Palestine or Jordan, and if grade belongs to either
-        if (selectedCountry) {
-          const countryCode = selectedCountry.code.toUpperCase();
-          const isPalestineOrJordan = countryCode === 'PSE' || countryCode === 'JOR';
-          
-          if (isPalestineOrJordan) {
-            // Find the other country (Palestine or Jordan)
-            const otherCountry = countries.find(c => {
-              const code = c.code.toUpperCase();
-              if (countryCode === 'PSE') {
-                return code === 'JOR';
-              } else if (countryCode === 'JOR') {
-                return code === 'PSE';
-              }
-              return false;
-            });
-            
-            // If grade belongs to the other country (Palestine or Jordan), include it
-            if (otherCountry && grade.country === otherCountry.id) {
-              return true;
-            }
-          }
-        }
-        
-        return false;
+        // Check if grade belongs to selected country - EXACT MATCH ONLY
+        return grade.country === countryId;
       });
       
-      // Remove duplicates by grade_number (for Palestine/Jordan case)
-      // Keep only one grade per grade_number
-      const uniqueGrades = filteredGrades.reduce((acc, grade) => {
-        if (grade.grade_number) {
-          const existing = acc.find(g => g.grade_number === grade.grade_number);
-          if (!existing) {
-            acc.push(grade);
-          }
-        } else {
-          // If no grade_number, check by name
-          const existing = acc.find(g => 
-            g.name_en === grade.name_en || g.name_ar === grade.name_ar
-          );
-          if (!existing) {
-            acc.push(grade);
-          }
-        }
-        return acc;
-      }, [] as Grade[]);
-      
       // Sort by grade_number if available, otherwise by name
-      uniqueGrades.sort((a, b) => {
+      filteredGrades.sort((a, b) => {
         if (a.grade_number && b.grade_number) {
           return a.grade_number - b.grade_number;
         }
         return (a.name_en || '').localeCompare(b.name_en || '');
       });
       
-      setGrades(uniqueGrades);
-      
-      // Reset grade and track if country changes
-      if (formData.grade) {
-        const currentGrade = allGrades.find(g => g.id === parseInt(formData.grade));
-        if (currentGrade) {
-          const isCurrentGradeValid = filteredGrades.some(g => g.id === currentGrade.id);
-          if (!isCurrentGradeValid) {
-            setFormData(prev => ({
-              ...prev,
-              grade: '',
-              track: '',
-            }));
-          }
-        }
-      }
+      setGrades(filteredGrades);
     } else {
       setGrades([]);
     }
   }, [formData.country, formData.course_type, allGrades, countries]);
+
+  // Reset grade and track if the selected grade doesn't match the filtered grades
+  // This handles cases where a course is loaded with an invalid grade_id
+  useEffect(() => {
+    if (formData.course_type === 'school' && formData.country && formData.grade && grades.length > 0) {
+      const currentGradeId = parseInt(formData.grade);
+      const isCurrentGradeValid = grades.some(g => g.id === currentGradeId);
+      
+      if (!isCurrentGradeValid) {
+        // Grade doesn't match the country - reset it
+        setFormData(prev => ({
+          ...prev,
+          grade: '',
+          track: '',
+        }));
+      }
+    }
+  }, [grades, formData.country, formData.course_type, formData.grade]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -695,22 +651,28 @@ const CreateCourse: React.FC = () => {
       return false;
     }
     if (formData.course_type === 'school' && formData.grade) {
+      // Check if the selected grade is in the filtered grades list
+      // (grades is already filtered by country, so if it's not in the list, it doesn't match)
       const selectedGrade = grades.find(g => g.id === parseInt(formData.grade));
-      if (selectedGrade) {
-        // Check if it's grade 11 or 12 using grade_number or name
-        const isGrade11Or12 = selectedGrade.grade_number 
-          ? (selectedGrade.grade_number === 11 || selectedGrade.grade_number === 12)
-          : (() => {
-              const gradeNameEn = selectedGrade.name_en.toLowerCase();
-              const gradeNameAr = selectedGrade.name_ar.toLowerCase();
-              return gradeNameEn.includes('11') || gradeNameEn.includes('12') || 
-                     gradeNameAr.includes('11') || gradeNameAr.includes('12');
-            })();
-        
-        if (isGrade11Or12 && !formData.track) {
-          setError(getText('Track is required for grade 11 or 12 courses.', 'المسار مطلوب لدورات الصف 11 أو 12.'));
-          return false;
-        }
+      if (!selectedGrade) {
+        // Grade doesn't match the country - this should be auto-reset, but just in case
+        setError(getText('Please select a valid grade for the selected country.', 'يرجى اختيار صف صالح للبلد المحدد.'));
+        return false;
+      }
+      
+      // Check if it's grade 11 or 12 using grade_number or name
+      const isGrade11Or12 = selectedGrade.grade_number 
+        ? (selectedGrade.grade_number === 11 || selectedGrade.grade_number === 12)
+        : (() => {
+            const gradeNameEn = selectedGrade.name_en.toLowerCase();
+            const gradeNameAr = selectedGrade.name_ar.toLowerCase();
+            return gradeNameEn.includes('11') || gradeNameEn.includes('12') || 
+                   gradeNameAr.includes('11') || gradeNameAr.includes('12');
+          })();
+      
+      if (isGrade11Or12 && !formData.track) {
+        setError(getText('Track is required for grade 11 or 12 courses.', 'المسار مطلوب لدورات الصف 11 أو 12.'));
+        return false;
       }
     }
     return true;

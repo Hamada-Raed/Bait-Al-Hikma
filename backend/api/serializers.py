@@ -16,10 +16,11 @@ class CountrySerializer(serializers.ModelSerializer):
 class GradeSerializer(serializers.ModelSerializer):
     country_name_en = serializers.CharField(source='country.name_en', read_only=True)
     country_name_ar = serializers.CharField(source='country.name_ar', read_only=True)
+    country_code = serializers.CharField(source='country.code', read_only=True)
     
     class Meta:
         model = Grade
-        fields = ['id', 'grade_number', 'name_en', 'name_ar', 'order', 'country', 'country_name_en', 'country_name_ar']
+        fields = ['id', 'grade_number', 'name_en', 'name_ar', 'order', 'country', 'country_name_en', 'country_name_ar', 'country_code']
 
 
 class TrackSerializer(serializers.ModelSerializer):
@@ -269,6 +270,17 @@ class CourseSerializer(serializers.ModelSerializer):
         # For now, return 0 as there's no enrollment model yet
         return 0
     
+    def validate_grade(self, value):
+        """Handle grade field - convert array to single value if needed"""
+        if isinstance(value, list):
+            # If it's a list, take the first non-empty value
+            if len(value) > 0:
+                return next((v for v in value if v and v != ''), None)
+            return None
+        if value == '':
+            return None
+        return value
+    
     def validate_description(self, value):
         # Check word count (approximately 150 words)
         words = value.strip().split()
@@ -277,32 +289,121 @@ class CourseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Description must be 150 words or less.")
         return value
     
+    def to_internal_value(self, data):
+        # Handle FormData where grade might come as an array (QueryDict or already parsed)
+        # Make a mutable copy if needed
+        if hasattr(data, 'getlist'):  # It's a QueryDict
+            data = data.copy()
+            if 'grade' in data:
+                # QueryDict.getlist() returns all values as a list
+                grade_list = data.getlist('grade')
+                if len(grade_list) > 0:
+                    # Take the first non-empty value
+                    grade_value = next((g for g in grade_list if g and g != ''), None)
+                    data['grade'] = grade_value
+                else:
+                    data['grade'] = None
+        elif isinstance(data, dict):
+            # Regular dict - might already have list values from DRF parsing
+            data = data.copy() if not isinstance(data, dict) or hasattr(data, 'copy') else dict(data)
+            if 'grade' in data:
+                grade_value = data.get('grade')
+                if isinstance(grade_value, list):
+                    # It's a list - take first non-empty value
+                    if len(grade_value) > 0:
+                        data['grade'] = next((g for g in grade_value if g and g != ''), None)
+                    else:
+                        data['grade'] = None
+                elif grade_value == '' or grade_value is None:
+                    # Handle empty string or None
+                    data['grade'] = None
+        
+        return super().to_internal_value(data)
+    
     def validate(self, attrs):
         # Country is required for both school and university courses
-        if not attrs.get('country'):
+        country = attrs.get('country') or (self.instance.country if self.instance else None)
+        if not country:
             raise serializers.ValidationError({
                 'country': 'Country is required.'
             })
         
-        # If course type is school and grade is 11 or 12, track is required
-        if attrs.get('course_type') == 'school' and attrs.get('grade'):
-            grade = attrs.get('grade')
-            if grade:
-                # Check grade_number if available
-                if hasattr(grade, 'grade_number'):
-                    if grade.grade_number == 11 or grade.grade_number == 12:
-                        if not attrs.get('track'):
-                            raise serializers.ValidationError({
-                                'track': 'Track is required for grade 11 or 12 courses.'
-                            })
+        # Get country ID (handle both Country object and ID)
+        if hasattr(country, 'id'):
+            country_id = country.id
+        elif hasattr(country, 'pk'):
+            country_id = country.pk
+        else:
+            country_id = int(country) if country else None
+        
+        if not country_id:
+            raise serializers.ValidationError({
+                'country': 'Country is required.'
+            })
+        
+        # If course type is school, validate grade belongs to the selected country
+        course_type = attrs.get('course_type') or (self.instance.course_type if self.instance else None)
+        if course_type == 'school':
+            # Check if country or grade is being updated
+            country_updated = 'country' in attrs
+            grade_updated = 'grade' in attrs
+            
+            # Get grade - from attrs or existing instance
+            grade = attrs.get('grade') if grade_updated else None
+            # Handle empty string as None
+            if grade == '' or grade is None:
+                if self.instance:
+                    grade = self.instance.grade
                 else:
-                    # Fallback to checking name
-                    grade_name = str(grade.name_en if hasattr(grade, 'name_en') else grade)
-                    if '11' in grade_name or '12' in grade_name:
-                        if not attrs.get('track'):
+                    grade = None
+            
+            # Only validate grade-country relationship if we have both country and grade
+            # and if country or grade is being updated
+            if grade and country_id and (country_updated or grade_updated or not self.instance):
+                # Get grade ID
+                if hasattr(grade, 'id'):
+                    grade_id = grade.id
+                elif hasattr(grade, 'pk'):
+                    grade_id = grade.pk
+                else:
+                    try:
+                        # Handle empty string
+                        if grade == '':
+                            grade_id = None
+                        else:
+                            grade_id = int(grade)
+                    except (ValueError, TypeError):
+                        raise serializers.ValidationError({
+                            'grade': 'Invalid grade selected.'
+                        })
+                
+                # Only validate if we have a valid grade_id
+                if grade_id:
+                    # Fetch grade to check its country
+                    from .models import Grade
+                    try:
+                        grade_obj = Grade.objects.get(id=grade_id)
+                        
+                        # Validate: grade must belong to the selected country
+                        if grade_obj.country_id != country_id:
+                            grade_name = grade_obj.name_en or (f'Grade {grade_obj.grade_number}' if grade_obj.grade_number else str(grade_obj))
                             raise serializers.ValidationError({
-                                'track': 'Track is required for grade 11 or 12 courses.'
+                                'grade': f'Grade "{grade_name}" does not belong to the selected country.'
                             })
+                        
+                        # If grade is 11 or 12, track is required
+                        if grade_obj.grade_number in (11, 12):
+                            track = attrs.get('track')
+                            if track is None and self.instance:
+                                track = self.instance.track
+                            if not track:
+                                raise serializers.ValidationError({
+                                    'track': 'Track is required for grade 11 or 12 courses.'
+                                })
+                    except Grade.DoesNotExist:
+                        raise serializers.ValidationError({
+                            'grade': 'Invalid grade selected.'
+                        })
         return attrs
 
 

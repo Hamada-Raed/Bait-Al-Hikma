@@ -41,8 +41,8 @@ class Command(BaseCommand):
         
         self.stdout.write(self.style.SUCCESS('Countries created'))
         
-        # Create Grades for Palestine and Jordan (same structure)
-        grades_data = [
+        # Create Grades for Palestine (separate from Jordan)
+        palestine_grades_data = [
             (1, 'Grade 1', 'الصف الأول'),
             (2, 'Grade 2', 'الصف الثاني'),
             (3, 'Grade 3', 'الصف الثالث'),
@@ -57,17 +57,43 @@ class Command(BaseCommand):
             (12, 'Grade 12', 'الصف الثاني عشر'),
         ]
         
-        for country in [palestine, jordan]:
-            for order, (grade_num, name_en, name_ar) in enumerate(grades_data, 1):
-                Grade.objects.get_or_create(
-                    country=country,
-                    grade_number=grade_num,
-                    defaults={
-                        'name_en': name_en,
-                        'name_ar': name_ar,
-                        'order': order
-                    }
-                )
+        for order, (grade_num, name_en, name_ar) in enumerate(palestine_grades_data, 1):
+            Grade.objects.get_or_create(
+                country=palestine,
+                grade_number=grade_num,
+                defaults={
+                    'name_en': name_en,
+                    'name_ar': name_ar,
+                    'order': order
+                }
+            )
+        
+        # Create Grades for Jordan (separate from Palestine)
+        jordan_grades_data = [
+            (1, 'Grade 1', 'الصف الأول'),
+            (2, 'Grade 2', 'الصف الثاني'),
+            (3, 'Grade 3', 'الصف الثالث'),
+            (4, 'Grade 4', 'الصف الرابع'),
+            (5, 'Grade 5', 'الصف الخامس'),
+            (6, 'Grade 6', 'الصف السادس'),
+            (7, 'Grade 7', 'الصف السابع'),
+            (8, 'Grade 8', 'الصف الثامن'),
+            (9, 'Grade 9', 'الصف التاسع'),
+            (10, 'Grade 10', 'الصف العاشر'),
+            (11, 'Grade 11', 'الصف الحادي عشر'),
+            (12, 'Grade 12', 'الصف الثاني عشر'),
+        ]
+        
+        for order, (grade_num, name_en, name_ar) in enumerate(jordan_grades_data, 1):
+            Grade.objects.get_or_create(
+                country=jordan,
+                grade_number=grade_num,
+                defaults={
+                    'name_en': name_en,
+                    'name_ar': name_ar,
+                    'order': order
+                }
+            )
         
         self.stdout.write(self.style.SUCCESS('Grades created'))
         

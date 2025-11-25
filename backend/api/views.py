@@ -98,11 +98,22 @@ class GradeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def by_country(self, request):
         country_id = request.query_params.get('country_id')
+        country_code = request.query_params.get('country_code')
+        
         if country_id:
             grades = Grade.objects.filter(country_id=country_id)
             serializer = self.get_serializer(grades, many=True)
             return Response(serializer.data)
-        return Response([])
+        elif country_code:
+            try:
+                country = Country.objects.get(code=country_code)
+                grades = Grade.objects.filter(country=country)
+                serializer = self.get_serializer(grades, many=True)
+                return Response(serializer.data)
+            except Country.DoesNotExist:
+                return Response({'error': f'Country with code "{country_code}" not found.'}, status=404)
+        
+        return Response({'error': 'Either country_id or country_code parameter is required.'}, status=400)
 
 
 class TrackViewSet(viewsets.ReadOnlyModelViewSet):
@@ -353,32 +364,70 @@ class CourseViewSet(viewsets.ModelViewSet):
             queryset = Course.objects.filter(status='published')
 
             if user.user_type == 'school_student':
+                # Level 1: Filter by school course type
                 queryset = queryset.filter(course_type='school')
+                
+                # Level 2: Filter by country
                 if user.country_id:
                     queryset = queryset.filter(country_id=user.country_id)
+                
+                # Level 3: Filter by grade
                 if user.grade_id:
                     queryset = queryset.filter(grade_id=user.grade_id)
                     
-                    # Check if grade is 11 or 12, and filter by track if needed
+                    # Level 4: Filter by track (for grades 11 and 12)
                     from .models import Grade
+                    from django.db.models import Q
+                    
                     try:
                         grade = Grade.objects.get(id=user.grade_id)
                         if grade.grade_number in (11, 12):
                             if user.track_id:
-                                queryset = queryset.filter(track_id=user.track_id)
+                                # Show courses that match the student's track OR courses without a track (general courses)
+                                queryset = queryset.filter(
+                                    Q(track_id=user.track_id) | Q(track__isnull=True)
+                                )
                             else:
+                                # If student has no track, only show courses without a track
                                 queryset = queryset.filter(track__isnull=True)
                     except Grade.DoesNotExist:
                         pass
             else:  # university_student
+                # Level 1: Filter by university course type
                 queryset = queryset.filter(course_type='university')
+                
+                # Level 2: Filter by country
                 if user.country_id:
                     queryset = queryset.filter(country_id=user.country_id)
+
+            # Debug logging (can be removed after testing)
+            import logging
+            logger = logging.getLogger(__name__)
+            if user.user_type == 'school_student':
+                logger.info(f"Filtering courses for school student: user_id={user.id}, country_id={user.country_id}, grade_id={user.grade_id}, track_id={user.track_id}")
+                logger.info(f"Query result count: {queryset.count()}")
+                if queryset.exists():
+                    course_ids = list(queryset.values_list('id', flat=True)[:5])
+                    logger.info(f"Sample course IDs: {course_ids}")
 
             return queryset
 
         # Default for other authenticated users (e.g., admins viewing dashboard)
         return Course.objects.filter(status='published')
+    
+    def create(self, request, *args, **kwargs):
+        """Override create to add better error logging"""
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            # Log validation errors for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Course creation validation errors: {serializer.errors}")
+            logger.error(f"Request data: {request.data}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def perform_create(self, serializer):
         # Only teachers can create courses
