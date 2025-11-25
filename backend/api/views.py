@@ -12,14 +12,14 @@ from django.db import models
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice
+    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
     MajorSerializer, SubjectSerializer, UserSerializer, PlatformSettingsSerializer,
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
     WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
-    PrivateLessonPriceSerializer
+    PrivateLessonPriceSerializer, ContactMessageSerializer
 )
 
 
@@ -1338,3 +1338,17 @@ class PrivateLessonPriceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set the teacher to the current user"""
         serializer.save(teacher=self.request.user)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def submit_contact_message(request):
+    """Allow anyone to submit a contact message"""
+    serializer = ContactMessageSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            'message': 'Your message has been sent successfully. We will get back to you soon!',
+            'data': serializer.data
+        }, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

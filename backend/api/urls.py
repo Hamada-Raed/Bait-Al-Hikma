@@ -7,7 +7,8 @@ from .views import (
     WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet,
     PrivateLessonPriceViewSet,
     manage_chapter, manage_section, manage_video, manage_section_quiz,
-    reorder_chapters, reorder_sections, reorder_videos, reorder_quizzes
+    reorder_chapters, reorder_sections, reorder_videos, reorder_quizzes,
+    submit_contact_message
 )
 
 router = DefaultRouter()
@@ -40,5 +41,7 @@ urlpatterns = [
     path('reorder-sections/', reorder_sections, name='reorder-sections'),
     path('reorder-videos/', reorder_videos, name='reorder-videos'),
     path('reorder-quizzes/', reorder_quizzes, name='reorder-quizzes'),
+    # Contact endpoint
+    path('contact/', submit_contact_message, name='submit-contact-message'),
 ]
 

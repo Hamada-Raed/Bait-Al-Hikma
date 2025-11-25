@@ -3,7 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice
+    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage
 )
 
 
@@ -515,3 +515,10 @@ class PrivateLessonPriceSerializer(serializers.ModelSerializer):
                 'grade': 'Grade should not be set for university students.'
             })
         return attrs
+
+
+class ContactMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactMessage
+        fields = ['id', 'name', 'email', 'subject', 'message', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['status', 'created_at', 'updated_at']

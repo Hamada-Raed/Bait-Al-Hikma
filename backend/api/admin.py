@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
+    ContactMessage
 )
 
 
@@ -143,3 +144,17 @@ class AvailabilityAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('teacher', 'booked_by')
+
+
+@admin.register(ContactMessage)
+class ContactMessageAdmin(admin.ModelAdmin):
+    list_display = ['name', 'email', 'subject', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['name', 'email', 'subject', 'message']
+    readonly_fields = ['created_at', 'updated_at']
+    list_editable = ['status']
+    fields = ['name', 'email', 'subject', 'message', 'status', 'created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs

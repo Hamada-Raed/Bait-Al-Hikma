@@ -103,6 +103,12 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
             >
               {t('nav.about')}
             </a>
+            <button
+              onClick={() => navigate('/contact')}
+              className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
+            >
+              {t('nav.contact')}
+            </button>
           </nav>
 
           {/* Right Side Actions */}
@@ -309,6 +315,15 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               >
                 {t('nav.about')}
               </a>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  navigate('/contact');
+                }}
+                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200 text-left rtl:text-right w-full"
+              >
+                {t('nav.contact')}
+              </button>
               <div className="pt-4 border-t border-dark-300 flex flex-col space-y-3">
                 {user ? (
                   // Mobile menu for all authenticated users

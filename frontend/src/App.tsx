@@ -9,6 +9,7 @@ import WhyChooseUs from './components/WhyChooseUs';
 import Footer from './components/Footer';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
+import Contact from './components/Contact';
 import Dashboard from './components/Dashboard';
 import Profile from './components/Profile';
 import CreateCourse from './components/CreateCourse';
@@ -80,6 +81,7 @@ const App: React.FC = () => {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/contact" element={<Contact />} />
             <Route
               path="/dashboard"
               element={
