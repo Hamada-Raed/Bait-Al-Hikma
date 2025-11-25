@@ -18,14 +18,15 @@ from django.conf import settings
 from .models import (
     Country, Grade, Track, Major, Subject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage
+    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
+    StudentTask, StudentNote
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
     MajorSerializer, SubjectSerializer, UserSerializer, PlatformSettingsSerializer,
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
     WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
-    PrivateLessonPriceSerializer, ContactMessageSerializer
+    PrivateLessonPriceSerializer, ContactMessageSerializer, StudentTaskSerializer, StudentNoteSerializer
 )
 
 
@@ -1692,3 +1693,33 @@ def submit_contact_message(request):
             'data': serializer.data
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StudentTaskViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentTaskSerializer
+    
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            user_id = self.request.query_params.get('user_id')
+            if user_id and str(self.request.user.id) == str(user_id):
+                return StudentTask.objects.filter(user_id=user_id)
+            return StudentTask.objects.filter(user=self.request.user)
+        return StudentTask.objects.none()
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class StudentNoteViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentNoteSerializer
+    
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            user_id = self.request.query_params.get('user_id')
+            if user_id and str(self.request.user.id) == str(user_id):
+                return StudentNote.objects.filter(user_id=user_id)
+            return StudentNote.objects.filter(user=self.request.user)
+        return StudentNote.objects.none()
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

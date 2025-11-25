@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useNavigate } from 'react-router-dom';
+import StudentNotes from './StudentNotes';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -57,17 +59,38 @@ interface TeacherRecommendation {
   subjectNames: string[];
   gradeNames: string[];
   languages: string[];
+  profilePicture?: string | null;
+  bio?: string | null;
+  pricing?: Array<{
+    subject_id: number;
+    subject_name_en: string;
+    subject_name_ar: string;
+    grade_id?: number | null;
+    grade_name_en?: string | null;
+    grade_name_ar?: string | null;
+    price: string;
+  }>;
+  subjectDetails?: Array<{
+    id: number;
+    name_en: string;
+    name_ar: string;
+  }>;
 }
 
 type TabType = 'matching' | 'all' | 'in_progress' | 'completed' | 'teachers';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { language } = useLanguage();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('matching');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<number>>(new Set());
   const [gradeDetails, setGradeDetails] = useState<GradeDetails | null>(null);
+  const [teacherDetails, setTeacherDetails] = useState<Map<number, any>>(new Map());
+  const [loadingTeacherDetails, setLoadingTeacherDetails] = useState(false);
+  const [expandedBios, setExpandedBios] = useState<Set<number>>(new Set());
+  const [showNotes, setShowNotes] = useState(false);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -202,7 +225,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     languages: Set<string>;
   }>());
 
-  const teacherRecommendations: TeacherRecommendation[] = Array.from(recommendationMap.values())
+  const teacherRecommendationsBase: TeacherRecommendation[] = Array.from(recommendationMap.values())
     .map((entry) => ({
       teacherId: entry.teacherId,
       teacherName: entry.teacherName,
@@ -212,7 +235,70 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
       languages: Array.from(entry.languages),
     }))
     .sort((a, b) => b.courseCount - a.courseCount);
+
+  // Fetch teacher details
+  useEffect(() => {
+    const fetchTeacherDetails = async () => {
+      if (teacherRecommendationsBase.length === 0) return;
+      
+      setLoadingTeacherDetails(true);
+      try {
+        const teacherIds = teacherRecommendationsBase.map(t => t.teacherId);
+        const detailsMap = new Map();
+        
+        await Promise.all(
+          teacherIds.map(async (teacherId) => {
+            try {
+              const response = await fetch(`${API_BASE_URL}/users/${teacherId}/`, {
+                credentials: 'include',
+              });
+              if (response.ok) {
+                const data = await response.json();
+                detailsMap.set(teacherId, data);
+              }
+            } catch (error) {
+              console.error(`Error fetching teacher ${teacherId}:`, error);
+            }
+          })
+        );
+        
+        setTeacherDetails(detailsMap);
+      } catch (error) {
+        console.error('Error fetching teacher details:', error);
+      } finally {
+        setLoadingTeacherDetails(false);
+      }
+    };
+
+    if (activeTab === 'teachers' && teacherRecommendationsBase.length > 0) {
+      fetchTeacherDetails();
+    }
+  }, [activeTab, teacherRecommendationsBase.length]);
+
+  const teacherRecommendations: TeacherRecommendation[] = teacherRecommendationsBase
+    .map((entry) => {
+      const details = teacherDetails.get(entry.teacherId);
+      return {
+        ...entry,
+        profilePicture: details?.profile_picture || null,
+        bio: details?.bio || null,
+        pricing: details?.pricing || [],
+        subjectDetails: details?.subject_details || [],
+      };
+    });
   const recommendedTeachersCount = teacherRecommendations.length;
+
+  const toggleBio = (teacherId: number) => {
+    setExpandedBios(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(teacherId)) {
+        newSet.delete(teacherId);
+      } else {
+        newSet.add(teacherId);
+      }
+      return newSet;
+    });
+  };
 
   const toggleDescription = (courseId: number) => {
     setExpandedDescriptions(prev => {
@@ -251,6 +337,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   return (
     <div className="space-y-6">
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
@@ -292,9 +379,31 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
       {/* Courses Section with Tabs */}
       <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
-        <h3 className="text-xl font-bold text-white mb-4">
-          {getText('My Courses', 'دوراتي')}
-        </h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-white">
+            {getText('My Courses', 'دوراتي')}
+          </h3>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/availability-calendar')}
+              className="px-4 py-2 bg-dark-200 border border-dark-400 text-white font-semibold rounded-lg hover:bg-dark-300 transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {getText('Calendar', 'التقويم')}
+            </button>
+            <button
+              onClick={() => setShowNotes(true)}
+              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              {getText('Add Notes', 'إضافة ملاحظات')}
+            </button>
+          </div>
+        </div>
         
         {/* Tabs */}
         <div className="flex border-b border-dark-300 mb-6">
@@ -411,61 +520,143 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                   {getText('No teachers match your criteria yet.', 'لا يوجد معلمون يطابقون معاييرك بعد.')}
                 </p>
               </div>
+            ) : loadingTeacherDetails ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
+                <p className="mt-4 text-gray-400">{getText('Loading teachers...', 'جاري تحميل المعلمين...')}</p>
+              </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-dark-300">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        {getText('Teacher', 'المعلم')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        {getText('Subjects & Grades', 'المواد والصفوف')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        {getText('Matching Courses', 'الدورات المطابقة')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        {getText('Languages', 'اللغات')}
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        {getText('Action', 'الإجراء')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-dark-300">
-                    {teacherRecommendations.map((teacher) => (
-                    <tr key={teacher.teacherId} className="hover:bg-dark-200/50 transition-colors">
-                      <td className="px-4 py-4">
-                        <div className="font-semibold text-white">{teacher.teacherName}</div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          {teacher.subjectNames.length > 0 ? (
-                            teacher.subjectNames.map((subject, idx) => (
-                              <span key={idx} className="px-2 py-1 bg-dark-200 text-xs rounded-full text-gray-200">
-                                {subject}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {teacherRecommendations.map((teacher) => {
+                  const bioLines = teacher.bio ? teacher.bio.split('\n').length : 0;
+                  const isBioExpanded = expandedBios.has(teacher.teacherId);
+                  const shouldShowReadMore = bioLines > 2;
+                  
+                  return (
+                    <div
+                      key={teacher.teacherId}
+                      className="bg-dark-200 rounded-xl overflow-hidden border border-dark-300 hover:border-primary-500/50 transition-all"
+                    >
+                      {/* Teacher Image */}
+                      <div className="w-full h-48 overflow-hidden bg-dark-300">
+                        {teacher.profilePicture ? (
+                          <img
+                            src={teacher.profilePicture}
+                            alt={teacher.teacherName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-500/20 to-accent-purple/20">
+                            <svg className="w-16 h-16 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-5">
+                        {/* Teacher Name */}
+                        <h4 className="text-lg font-bold text-white mb-2">
+                          {teacher.teacherName}
+                        </h4>
+
+                        {/* Bio */}
+                        {teacher.bio && (
+                          <div className="mb-4">
+                            <p
+                              className={`text-gray-400 text-sm ${
+                                shouldShowReadMore && !isBioExpanded ? 'line-clamp-2' : ''
+                              }`}
+                            >
+                              {teacher.bio}
+                            </p>
+                            {shouldShowReadMore && (
+                              <button
+                                onClick={() => toggleBio(teacher.teacherId)}
+                                className="text-primary-400 hover:text-primary-300 text-sm font-medium mt-1 transition-colors"
+                              >
+                                {isBioExpanded
+                                  ? getText('Read Less', 'قراءة أقل')
+                                  : getText('Read More', 'قراءة المزيد')}
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Subjects */}
+                        <div className="mb-4">
+                          <h5 className="text-xs font-medium text-gray-400 mb-2">
+                            {getText('Subjects', 'المواد')}
+                          </h5>
+                          <div className="flex flex-wrap gap-2">
+                            {teacher.subjectDetails && teacher.subjectDetails.length > 0 ? (
+                              teacher.subjectDetails.map((subject) => (
+                                <span
+                                  key={subject.id}
+                                  className="px-2 py-1 bg-dark-300 text-xs rounded-full text-gray-200"
+                                >
+                                  {language === 'ar' ? subject.name_ar : subject.name_en}
+                                </span>
+                              ))
+                            ) : teacher.subjectNames.length > 0 ? (
+                              teacher.subjectNames.map((subject, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-1 bg-dark-300 text-xs rounded-full text-gray-200"
+                                >
+                                  {subject}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-500">
+                                {getText('No subjects listed', 'لا توجد مواد مدرجة')}
                               </span>
-                            ))
-                          ) : (
-                            <span className="text-xs text-gray-500">{getText('No subjects listed', 'لا توجد مواد مدرجة')}</span>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-4 text-right">
+
+                        {/* Pricing */}
+                        {teacher.pricing && teacher.pricing.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="text-xs font-medium text-gray-400 mb-2">
+                              {getText('Pricing', 'الأسعار')}
+                            </h5>
+                            <div className="space-y-1">
+                              {teacher.pricing.map((price, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex justify-between items-center text-sm"
+                                >
+                                  <span className="text-gray-300">
+                                    {language === 'ar' ? price.subject_name_ar : price.subject_name_en}
+                                    {price.grade_name_en && (
+                                      <span className="text-gray-500">
+                                        {' '}({language === 'ar' ? price.grade_name_ar : price.grade_name_en})
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-primary-400 font-semibold">
+                                    ${price.price}/{getText('hr', 'ساعة')}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Book Session Button */}
                         <button
                           onClick={() => handleBookPrivateLesson(teacher.teacherId)}
-                          className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white text-sm font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
+                          className="w-full px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white text-sm font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all"
                         >
-                          {getText('Book Private Lesson', 'حجز درس خاص')}
+                          {getText('Book Session', 'حجز جلسة')}
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
         ) : shouldShowMatchingProfileNotice ? (
           <div className="text-center py-12">
             <svg
@@ -640,6 +831,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
         )}
       </div>
 
+      {/* Notes Modal */}
+      {showNotes && (
+        <StudentNotes
+          isOpen={showNotes}
+          onClose={() => setShowNotes(false)}
+          userId={user.id}
+        />
+      )}
     </div>
   );
 };

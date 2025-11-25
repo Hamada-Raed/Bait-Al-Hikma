@@ -596,3 +596,40 @@ class ContactMessage(models.Model):
     
     def __str__(self):
         return f"{self.name} - {self.subject} ({self.get_status_display()})"
+
+
+class StudentTask(models.Model):
+    """Tasks for students to manage their time"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='student_tasks')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    date = models.DateField()
+    time = models.TimeField(blank=True, null=True, help_text='Optional time for the task')
+    completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['date', 'time']
+        verbose_name = 'Student Task'
+        verbose_name_plural = 'Student Tasks'
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.title} ({self.date})"
+
+
+class StudentNote(models.Model):
+    """Notes for students"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='student_notes')
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Student Note'
+        verbose_name_plural = 'Student Notes'
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.title}"

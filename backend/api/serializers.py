@@ -3,7 +3,8 @@ from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage
+    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
+    StudentTask, StudentNote
 )
 
 
@@ -100,6 +101,8 @@ class UserSerializer(serializers.ModelSerializer):
     is_approved = serializers.BooleanField(read_only=True)
     profile_picture = serializers.SerializerMethodField()
     profile_picture_file = serializers.ImageField(write_only=True, required=False, allow_null=True)
+    pricing = serializers.SerializerMethodField()
+    subject_details = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -107,7 +110,8 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'password', 'password_confirm',
             'user_type', 'first_name', 'last_name', 'birth_date', 'country',
             'grade', 'track', 'major', 'years_of_experience', 'subjects', 'subjects_ids', 'is_approved',
-            'phone_number', 'bio', 'profile_picture', 'profile_picture_file', 'is_staff', 'is_superuser'
+            'phone_number', 'bio', 'profile_picture', 'profile_picture_file', 'is_staff', 'is_superuser',
+            'pricing', 'subject_details'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
@@ -127,6 +131,41 @@ class UserSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+    
+    def get_subject_details(self, obj):
+        """Return detailed subject information for teachers"""
+        if obj.user_type == 'teacher':
+            return [
+                {
+                    'id': ts.subject.id,
+                    'name_en': ts.subject.name_en,
+                    'name_ar': ts.subject.name_ar,
+                }
+                for ts in obj.subjects.all()
+            ]
+        return []
+    
+    def get_pricing(self, obj):
+        """Return pricing information for teachers"""
+        if obj.user_type == 'teacher':
+            request = self.context.get('request')
+            if request and request.user.is_authenticated:
+                student_type = request.user.user_type
+                pricing_list = []
+                
+                for price in obj.private_lesson_prices.all():
+                    if price.student_type == student_type:
+                        pricing_list.append({
+                            'subject_id': price.subject.id,
+                            'subject_name_en': price.subject.name_en,
+                            'subject_name_ar': price.subject.name_ar,
+                            'grade_id': price.grade.id if price.grade else None,
+                            'grade_name_en': price.grade.name_en if price.grade else None,
+                            'grade_name_ar': price.grade.name_ar if price.grade else None,
+                            'price': str(price.price),
+                        })
+                return pricing_list
+        return []
     
     def validate(self, attrs):
         # Only validate password match if both are provided (for signup)
@@ -650,3 +689,17 @@ class ContactMessageSerializer(serializers.ModelSerializer):
         model = ContactMessage
         fields = ['id', 'name', 'email', 'subject', 'message', 'status', 'created_at', 'updated_at']
         read_only_fields = ['status', 'created_at', 'updated_at']
+
+
+class StudentTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentTask
+        fields = ['id', 'user', 'title', 'description', 'date', 'time', 'completed', 'created_at', 'updated_at']
+        read_only_fields = ['user', 'created_at', 'updated_at']
+
+
+class StudentNoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentNote
+        fields = ['id', 'user', 'title', 'content', 'created_at', 'updated_at']
+        read_only_fields = ['user', 'created_at', 'updated_at']

@@ -493,6 +493,11 @@ const AvailabilityCalendar: React.FC = () => {
       return;
     }
 
+    if (!selectedCountry) {
+      alert(getText('Please select a country', 'يرجى اختيار بلد'));
+      return;
+    }
+
     if (formData.for_school_students && formData.grade_ids.length === 0) {
       alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
       return;
@@ -1212,6 +1217,36 @@ const AvailabilityCalendar: React.FC = () => {
                 />
               </div>
 
+              {/* Country Selection */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                  <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002 2h2.945M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {getText('Country', 'البلد')} <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={selectedCountry || ''}
+                  onChange={(e) => {
+                    const countryId = e.target.value ? parseInt(e.target.value) : null;
+                    setSelectedCountry(countryId);
+                    // Clear grades when country changes
+                    if (formData.for_school_students) {
+                      setFormData(prev => ({ ...prev, grade_ids: [] }));
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  required
+                >
+                  <option value="">{getText('Select a country', 'اختر بلداً')}</option>
+                  {countries.map(country => (
+                    <option key={country.id} value={country.id}>
+                      {language === 'ar' ? country.name_ar : country.name_en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Student Type Checkboxes */}
               <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
@@ -1360,39 +1395,20 @@ const AvailabilityCalendar: React.FC = () => {
                 </div>
               )}
 
-              {/* Country and Grades Selection (only if school students is selected) */}
+              {/* Grades Selection (only if school students is selected) */}
               {formData.for_school_students && (
                 <div className="space-y-4 p-4 bg-dark-200/50 rounded-xl border border-dark-300">
                   <div className="flex items-center gap-2 mb-3">
                     <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002 2h2.945M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
                     <h3 className="text-sm font-semibold text-gray-300">
                       {getText('School Student Requirements', 'متطلبات طلاب المدرسة')}
                     </h3>
                   </div>
-                  
-                  {/* Country Selection */}
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                      {getText('Country', 'البلد')} <span className="text-red-400">*</span>
-                    </label>
-                    <select
-                      value={selectedCountry || ''}
-                      onChange={(e) => setSelectedCountry(e.target.value ? parseInt(e.target.value) : null)}
-                      className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                    >
-                      <option value="">{getText('Select a country', 'اختر بلداً')}</option>
-                      {countries.map(country => (
-                        <option key={country.id} value={country.id}>
-                          {language === 'ar' ? country.name_ar : country.name_en}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
 
                   {/* Grades Selection */}
-                  {selectedCountry && grades.length > 0 && (
+                  {selectedCountry && grades.length > 0 ? (
                     <div className="space-y-2">
                       <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
                         {getText('Select Grades', 'اختر الصفوف')} <span className="text-red-400">*</span>
@@ -1457,6 +1473,18 @@ const AvailabilityCalendar: React.FC = () => {
                         </p>
                       )}
                     </div>
+                  ) : selectedCountry ? (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-400">
+                        {getText('Loading grades...', 'جاري تحميل الصفوف...')}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-400">
+                        {getText('Please select a country first', 'يرجى اختيار البلد أولاً')}
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
@@ -1476,7 +1504,7 @@ const AvailabilityCalendar: React.FC = () => {
                 </button>
                 <button
                   onClick={handleCreateAvailability}
-                  disabled={creating || !formData.title || formData.title.trim() === '' || (!formData.for_university_students && !formData.for_school_students) || (formData.for_school_students && (!selectedCountry || formData.grade_ids.length === 0)) || (formData.for_university_students && formData.subject_ids.length === 0)}
+                  disabled={creating || !formData.title || formData.title.trim() === '' || !selectedCountry || (!formData.for_university_students && !formData.for_school_students) || (formData.for_school_students && formData.grade_ids.length === 0) || (formData.for_university_students && formData.subject_ids.length === 0)}
                   className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-lg hover:shadow-primary-500/50"
                 >
                   {creating ? (
