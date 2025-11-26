@@ -104,6 +104,12 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               {language === 'ar' ? 'الجلسات' : 'Sessions'}
             </a>
             <a
+              href="#previous-exams"
+              className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
+            >
+              {language === 'ar' ? 'الامتحانات السابقة' : 'Previous Exams'}
+            </a>
+            <a
               href="#about"
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
             >
@@ -320,6 +326,13 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                 onClick={() => setIsMenuOpen(false)}
               >
                 {language === 'ar' ? 'الجلسات' : 'Sessions'}
+              </a>
+              <a
+                href="#previous-exams"
+                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {language === 'ar' ? 'الامتحانات السابقة' : 'Previous Exams'}
               </a>
               <a
                 href="#about"

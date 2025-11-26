@@ -83,7 +83,7 @@ interface TeacherRecommendation {
   }>;
 }
 
-type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers' | 'todo' | 'timer';
+type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers' | 'exams' | 'todo' | 'timer';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { language } = useLanguage();
@@ -391,6 +391,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   const isMatchingTab = activeTab === 'matching';
   const isTeacherTab = activeTab === 'teachers';
+  const isExamsTab = activeTab === 'exams';
   const isTodoTab = activeTab === 'todo';
   const isTimerTab = activeTab === 'timer';
   const shouldShowMatchingProfileNotice = isMatchingTab && !hasMatchingProfileData;
@@ -1032,6 +1033,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             </div>
           </button>
           <button
+            onClick={() => setActiveTab('exams')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'exams'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            {getText('Previous Exams', 'الامتحانات السابقة')}
+          </button>
+          <button
             onClick={() => setActiveTab('enrolled')}
             className={`px-6 py-3 font-medium text-sm transition-colors ${
               activeTab === 'enrolled'
@@ -1609,6 +1620,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 </div>
               </div>
             )}
+          </div>
+        ) : isExamsTab ? (
+          <div className="py-6">
+            <div className="bg-dark-100 rounded-xl p-8 border border-dark-300 text-center">
+              <p className="text-gray-400">
+                {getText('Exams functionality coming soon.', 'ميزة الامتحانات قادمة قريباً.')}
+              </p>
+            </div>
           </div>
         ) : isTimerTab ? (
           <div className="py-6">
