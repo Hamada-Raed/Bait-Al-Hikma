@@ -757,35 +757,73 @@ const StudentPreviewCourse: React.FC = () => {
             {/* Video/Quiz Display Area */}
             {selectedMaterial ? (
               <div className="material-display-area">
-                {!isMaterialAccessible(selectedMaterial) ? (
+                {selectedMaterial.data.is_locked && !isEnrolled ? (
                   <div style={{
-                    padding: '40px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '500px',
+                    padding: '60px 40px',
                     textAlign: 'center',
                     backgroundColor: '#1a1a2e',
-                    borderRadius: '12px',
-                    border: '1px solid #2d2d44'
+                    borderRadius: '16px',
+                    border: '2px solid #2d2d44',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                    maxWidth: '600px',
+                    margin: '0 auto'
                   }}>
-                    <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔒</div>
-                    <h3 style={{ color: '#e0e0e0', marginBottom: '16px', fontSize: '20px' }}>
+                    <div style={{ 
+                      fontSize: '80px', 
+                      marginBottom: '30px',
+                      filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3))',
+                      animation: 'pulse 2s ease-in-out infinite'
+                    }}>🔒</div>
+                    <h2 style={{ 
+                      color: '#e0e0e0', 
+                      marginBottom: '20px', 
+                      fontSize: '28px',
+                      fontWeight: '700',
+                      lineHeight: '1.3'
+                    }}>
                       {getText('This material is locked', 'هذه المادة مقفلة')}
-                    </h3>
-                    <p style={{ color: '#9ca3af', marginBottom: '24px' }}>
-                      {getText('Please enroll in this course to access locked materials.', 'يرجى التسجيل في هذه الدورة للوصول إلى المواد المقفلة.')}
+                    </h2>
+                    <p style={{ 
+                      color: '#9ca3af', 
+                      marginBottom: '32px',
+                      fontSize: '16px',
+                      lineHeight: '1.6',
+                      maxWidth: '500px'
+                    }}>
+                      {getText('You cannot access this material until you enroll in the course. Please enroll to unlock all course content.', 'لا يمكنك الوصول إلى هذه المادة حتى تقوم بالتسجيل في الدورة. يرجى التسجيل لفتح جميع محتويات الدورة.')}
                     </p>
                     {!isEnrolled && (
                       <button
                         onClick={handleEnroll}
                         disabled={isEnrolling}
                         style={{
-                          padding: '12px 24px',
+                          padding: '14px 32px',
                           backgroundColor: '#0ea5e9',
                           color: 'white',
                           border: 'none',
-                          borderRadius: '8px',
-                          fontSize: '16px',
+                          borderRadius: '10px',
+                          fontSize: '18px',
                           fontWeight: '600',
                           cursor: isEnrolling ? 'not-allowed' : 'pointer',
-                          opacity: isEnrolling ? 0.6 : 1
+                          opacity: isEnrolling ? 0.6 : 1,
+                          transition: 'all 0.3s ease',
+                          boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)',
+                          transform: isEnrolling ? 'scale(1)' : 'scale(1)',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isEnrolling) {
+                            e.currentTarget.style.transform = 'scale(1.05)';
+                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(14, 165, 233, 0.4)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(14, 165, 233, 0.3)';
                         }}
                       >
                         {isEnrolling 
