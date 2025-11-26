@@ -852,13 +852,14 @@ class CourseViewSet(viewsets.ModelViewSet):
             if not request.user.is_authenticated:
                 return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
             
-            # Check permissions: teacher who owns course, enrolled students, or admins
+            # Check permissions: teacher who owns course, students (enrolled or not), or admins
             is_teacher_owner = request.user.user_type == 'teacher' and course.teacher == request.user
             is_admin = request.user.is_staff or request.user.is_superuser
+            is_student = request.user.user_type in ['school_student', 'university_student']
             is_enrolled_student = False
             
             # Check if student is enrolled
-            if request.user.user_type in ['school_student', 'university_student']:
+            if is_student:
                 from .models import Enrollment
                 try:
                     enrollment = Enrollment.objects.get(student=request.user, course=course)
@@ -866,8 +867,10 @@ class CourseViewSet(viewsets.ModelViewSet):
                 except Enrollment.DoesNotExist:
                     pass
             
-            if not (is_teacher_owner or is_admin or is_enrolled_student):
-                return Response({'error': 'Permission denied. You must be enrolled in this course or be the teacher.'}, status=status.HTTP_403_FORBIDDEN)
+            # Allow students to see course structure even if not enrolled
+            # But restrict access to locked materials for non-enrolled students
+            if not (is_teacher_owner or is_admin or is_student):
+                return Response({'error': 'Permission denied. You must be a student, enrolled in this course, or be the teacher.'}, status=status.HTTP_403_FORBIDDEN)
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -889,19 +892,21 @@ class CourseViewSet(viewsets.ModelViewSet):
                 videos_data = []
                 for video in section.videos.all().order_by('order', 'id'):
                     # Generate secure tokenized URL for uploaded videos
+                    # For locked videos and non-enrolled students, don't provide video URL
                     video_url_value = None
-                    if video.video_file:
-                        # Get client IP for token generation
-                        client_ip = get_client_ip(request)
-                        # Generate token for video access (tied to IP and user)
-                        token = generate_video_token(video.id, request.user.id, client_ip)
-                        # Build secure streaming URL with token
-                        video_url_value = request.build_absolute_uri(
-                            f'/api/stream-video/{video.id}/?token={token}'
-                        )
-                    elif video.video_url:
-                        # External URLs (YouTube, Vimeo, etc.) remain as-is
-                        video_url_value = video.video_url
+                    if not (video.is_locked and is_student and not is_enrolled_student):
+                        if video.video_file:
+                            # Get client IP for token generation
+                            client_ip = get_client_ip(request)
+                            # Generate token for video access (tied to IP and user)
+                            token = generate_video_token(video.id, request.user.id, client_ip)
+                            # Build secure streaming URL with token
+                            video_url_value = request.build_absolute_uri(
+                                f'/api/stream-video/{video.id}/?token={token}'
+                            )
+                        elif video.video_url:
+                            # External URLs (YouTube, Vimeo, etc.) remain as-is
+                            video_url_value = video.video_url
                     
                     videos_data.append({
                         'id': video.id,
@@ -917,31 +922,34 @@ class CourseViewSet(viewsets.ModelViewSet):
                 quizzes_data = []
                 for quiz in section.quizzes.all().order_by('order', 'id'):
                     questions_data = []
-                    for question in quiz.questions.all().order_by('order', 'id'):
-                        options_data = []
-                        # For students, don't show correct answers; for teachers/admins, show them
-                        show_correct_answers = is_teacher_owner or is_admin
-                        for option in question.options.all().order_by('order', 'id'):
-                            option_data = {
-                                'option_text': option.option_text,
-                            }
-                            if show_correct_answers:
-                                option_data['is_correct'] = option.is_correct
-                            options_data.append(option_data)
-                        # Get question image URL - build absolute URL if image exists
-                        question_image_url = None
-                        question_image = ''
-                        if question.question_image:
-                            question_image_url = request.build_absolute_uri(question.question_image.url)
-                            question_image = question.question_image.url  # Relative path
-                        
-                        questions_data.append({
-                            'question_text': question.question_text,
-                            'question_type': question.question_type,
-                            'question_image': question_image,
-                            'question_image_url': question_image_url,
-                            'options': options_data
-                        })
+                    # For locked quizzes and non-enrolled students, don't provide questions
+                    if not (quiz.is_locked and is_student and not is_enrolled_student):
+                        for question in quiz.questions.all().order_by('order', 'id'):
+                            options_data = []
+                            # For students, don't show correct answers; for teachers/admins, show them
+                            show_correct_answers = is_teacher_owner or is_admin
+                            for option in question.options.all().order_by('order', 'id'):
+                                option_data = {
+                                    'option_text': option.option_text,
+                                }
+                                if show_correct_answers:
+                                    option_data['is_correct'] = option.is_correct
+                                options_data.append(option_data)
+                            # Get question image URL - build absolute URL if image exists
+                            question_image_url = None
+                            question_image = ''
+                            if question.question_image:
+                                question_image_url = request.build_absolute_uri(question.question_image.url)
+                                question_image = question.question_image.url  # Relative path
+                            
+                            questions_data.append({
+                                'id': question.id,
+                                'question_text': question.question_text,
+                                'question_type': question.question_type,
+                                'question_image': question_image,
+                                'question_image_url': question_image_url,
+                                'options': options_data
+                            })
                     quizzes_data.append({
                         'id': quiz.id,
                         'title': quiz.title,

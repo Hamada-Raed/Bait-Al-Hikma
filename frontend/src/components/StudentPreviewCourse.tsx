@@ -481,9 +481,7 @@ const StudentPreviewCourse: React.FC = () => {
   };
 
   const handleMaterialClick = (material: MaterialItem): void => {
-    if (!isMaterialAccessible(material)) {
-      return;
-    }
+    // Allow clicking on locked materials to show the lock message
     const index = orderedMaterials.findIndex(m => 
       m.data.id === material.data.id && m.type === material.type
     );
