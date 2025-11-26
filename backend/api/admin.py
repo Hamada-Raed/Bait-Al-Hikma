@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    ContactMessage
+    ContactMessage, Enrollment
 )
 
 
@@ -165,3 +165,17 @@ class ContactMessageAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs
+
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ['student', 'course', 'status', 'progress_percentage', 'enrolled_at', 'created_at']
+    list_filter = ['status', 'created_at', 'enrolled_at']
+    search_fields = ['student__email', 'student__first_name', 'student__last_name', 'course__name']
+    readonly_fields = ['created_at', 'updated_at']
+    list_editable = ['status']
+    fields = ['student', 'course', 'status', 'progress_percentage', 'enrolled_at', 'completed_at', 'created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('student', 'course')

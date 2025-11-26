@@ -648,3 +648,31 @@ class StudentNote(models.Model):
     
     def __str__(self):
         return f"{self.user.email} - {self.title}"
+
+
+class Enrollment(models.Model):
+    """Track student course enrollments"""
+    STATUS_CHOICES = [
+        ('not_enrolled', 'Not Enrolled'),
+        ('enrolled', 'Enrolled'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+    ]
+    
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='enrollments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='not_enrolled')
+    enrolled_at = models.DateTimeField(null=True, blank=True, help_text='When student enrolled')
+    completed_at = models.DateTimeField(null=True, blank=True, help_text='When student completed the course')
+    progress_percentage = models.IntegerField(default=0, help_text='Course completion percentage (0-100)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['student', 'course']
+        ordering = ['-enrolled_at', '-created_at']
+        verbose_name = 'Enrollment'
+        verbose_name_plural = 'Enrollments'
+    
+    def __str__(self):
+        return f"{self.student.email} - {self.course.name} ({self.get_status_display()})"

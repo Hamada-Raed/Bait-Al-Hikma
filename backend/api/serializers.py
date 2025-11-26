@@ -354,6 +354,8 @@ class CourseSerializer(serializers.ModelSerializer):
     video_count = serializers.SerializerMethodField()
     quiz_count = serializers.SerializerMethodField()
     enrollment_count = serializers.SerializerMethodField()
+    enrollment_status = serializers.SerializerMethodField()
+    progress_percentage = serializers.SerializerMethodField()
     
     class Meta:
         model = Course
@@ -362,7 +364,8 @@ class CourseSerializer(serializers.ModelSerializer):
             'course_type', 'country', 'country_name', 'subjects', 'subject_ids', 'subject_name', 
             'grade', 'grade_name', 'track', 'track_name',
             'status', 'created_at', 'updated_at', 'teacher', 'teacher_name',
-            'video_count', 'quiz_count', 'enrollment_count'
+            'video_count', 'quiz_count', 'enrollment_count',
+            'enrollment_status', 'progress_percentage'
         ]
         read_only_fields = ['teacher', 'created_at', 'updated_at']
     
@@ -435,8 +438,68 @@ class CourseSerializer(serializers.ModelSerializer):
     
     def get_enrollment_count(self, obj):
         """Count enrolled students for this course"""
-        # TODO: Implement when enrollment model is created
-        # For now, return 0 as there's no enrollment model yet
+        from .models import Enrollment
+        return Enrollment.objects.filter(course=obj, status__in=['enrolled', 'in_progress', 'completed']).count()
+    
+    def get_enrollment_status(self, obj):
+        """Get enrollment status for the current user"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.user_type in ['school_student', 'university_student']:
+            from .models import Enrollment
+            
+            # Check if enrollment exists
+            try:
+                enrollment = Enrollment.objects.get(student=request.user, course=obj)
+                return enrollment.status
+            except Enrollment.DoesNotExist:
+                # For published courses that match student profile, create enrollment with 'not_enrolled' status
+                if obj.status == 'published':
+                    # Check if course matches student profile
+                    student = request.user
+                    matches = False
+                    
+                    if obj.course_type == 'school' and student.user_type == 'school_student':
+                        if obj.country and student.country == obj.country:
+                            if obj.grade and student.grade == obj.grade:
+                                # Check track for grades 11-12
+                                if obj.grade.grade_number in (11, 12):
+                                    if obj.track:
+                                        matches = student.track == obj.track or student.track is None
+                                    else:
+                                        matches = student.track is None
+                                else:
+                                    matches = True
+                            elif not obj.grade:
+                                matches = True
+                    
+                    elif obj.course_type == 'university' and student.user_type == 'university_student':
+                        if obj.country and student.country == obj.country:
+                            matches = True
+                        elif not obj.country:
+                            matches = True
+                    
+                    # Create enrollment if course matches
+                    if matches:
+                        enrollment = Enrollment.objects.create(
+                            student=student,
+                            course=obj,
+                            status='not_enrolled'
+                        )
+                        return enrollment.status
+                
+                return 'not_enrolled'
+        return None
+    
+    def get_progress_percentage(self, obj):
+        """Get progress percentage for the current user"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and request.user.user_type in ['school_student', 'university_student']:
+            from .models import Enrollment
+            try:
+                enrollment = Enrollment.objects.get(student=request.user, course=obj)
+                return enrollment.progress_percentage
+            except Enrollment.DoesNotExist:
+                return 0
         return 0
     
     def validate_grade(self, value):

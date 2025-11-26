@@ -601,6 +601,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         """Override update to add better error logging"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+        old_status = instance.status
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         if not serializer.is_valid():
             # Log validation errors for debugging
@@ -612,6 +613,12 @@ class CourseViewSet(viewsets.ModelViewSet):
                 logger.error(f"subject_ids from getlist: {request.data.getlist('subject_ids')}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         self.perform_update(serializer)
+        
+        # Check if status changed to 'published'
+        instance.refresh_from_db()
+        if old_status != 'published' and instance.status == 'published':
+            self._create_enrollments_for_matching_students(instance)
+        
         return Response(serializer.data)
     
     def perform_create(self, serializer):
@@ -619,7 +626,80 @@ class CourseViewSet(viewsets.ModelViewSet):
         if not self.request.user.is_authenticated or self.request.user.user_type != 'teacher':
             raise serializers.ValidationError({'error': 'Only teachers can create courses.'})
         # Automatically set the teacher to the current user
-        serializer.save(teacher=self.request.user)
+        course = serializer.save(teacher=self.request.user)
+        # If course is published, create enrollments for matching students
+        if course.status == 'published':
+            self._create_enrollments_for_matching_students(course)
+    
+    def _create_enrollments_for_matching_students(self, course):
+        """Create 'not_enrolled' Enrollment records for students matching the course criteria"""
+        from .models import Enrollment, User, Grade
+        from django.db.models import Q
+        
+        # Only create enrollments for published courses
+        if course.status != 'published':
+            return
+        
+        # Find matching students
+        matching_students = User.objects.none()
+        
+        if course.course_type == 'school':
+            # Match school students
+            matching_students = User.objects.filter(
+                user_type='school_student'
+            )
+            
+            # Filter by country
+            if course.country:
+                matching_students = matching_students.filter(country=course.country)
+            
+            # Filter by grade
+            if course.grade:
+                matching_students = matching_students.filter(grade=course.grade)
+                
+                # Handle track filtering for grades 11-12
+                try:
+                    if course.grade.grade_number in (11, 12):
+                        if course.track:
+                            # Match students with same track OR no track
+                            matching_students = matching_students.filter(
+                                Q(track=course.track) | Q(track__isnull=True)
+                            )
+                        else:
+                            # Course has no track, match students with no track
+                            matching_students = matching_students.filter(track__isnull=True)
+                    else:
+                        # For other grades, don't filter by track
+                        matching_students = matching_students.filter(track__isnull=True)
+                except Grade.DoesNotExist:
+                    pass
+        
+        elif course.course_type == 'university':
+            # Match university students
+            matching_students = User.objects.filter(
+                user_type='university_student'
+            )
+            
+            # Filter by country
+            if course.country:
+                matching_students = matching_students.filter(country=course.country)
+        
+        # Create Enrollment records with 'not_enrolled' status
+        enrollments_to_create = []
+        for student in matching_students:
+            # Check if enrollment already exists
+            if not Enrollment.objects.filter(student=student, course=course).exists():
+                enrollments_to_create.append(
+                    Enrollment(
+                        student=student,
+                        course=course,
+                        status='not_enrolled'
+                    )
+                )
+        
+        # Bulk create enrollments
+        if enrollments_to_create:
+            Enrollment.objects.bulk_create(enrollments_to_create)
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -713,6 +793,56 @@ class CourseViewSet(viewsets.ModelViewSet):
             'message': 'Deletion request submitted successfully. Waiting for admin approval.',
             'request_id': approval_request.id
         }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'])
+    def enroll(self, request, pk=None):
+        """Enroll a student in a course"""
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Only students can enroll
+        if not request.user.is_authenticated or request.user.user_type not in ['school_student', 'university_student']:
+            return Response({'error': 'Only students can enroll in courses.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Course must be published
+        if course.status != 'published':
+            return Response({'error': 'Course is not available for enrollment.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from .models import Enrollment
+        from django.utils import timezone
+        
+        # Get or create enrollment
+        enrollment, created = Enrollment.objects.get_or_create(
+            student=request.user,
+            course=course,
+            defaults={'status': 'not_enrolled'}
+        )
+        
+        # Update enrollment status if it was 'not_enrolled'
+        if enrollment.status == 'not_enrolled':
+            enrollment.status = 'enrolled'
+            enrollment.enrolled_at = timezone.now()
+            enrollment.save()
+            return Response({
+                'message': 'Successfully enrolled in course.',
+                'enrollment_status': enrollment.status
+            }, status=status.HTTP_200_OK)
+        elif enrollment.status in ['enrolled', 'in_progress', 'completed']:
+            return Response({
+                'message': 'Already enrolled in this course.',
+                'enrollment_status': enrollment.status
+            }, status=status.HTTP_200_OK)
+        else:
+            # Update to enrolled if it's in some other state
+            enrollment.status = 'enrolled'
+            enrollment.enrolled_at = timezone.now()
+            enrollment.save()
+            return Response({
+                'message': 'Successfully enrolled in course.',
+                'enrollment_status': enrollment.status
+            }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['get'], url_path='course-structure')
     def course_structure(self, request, pk=None):
@@ -841,6 +971,76 @@ class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CourseSerializer
     pagination_class = PageNumberPagination
     
+    def _create_enrollments_for_matching_students(self, course):
+        """Create 'not_enrolled' Enrollment records for students matching the course criteria"""
+        from .models import Enrollment, User, Grade
+        from django.db.models import Q
+        
+        # Only create enrollments for published courses
+        if course.status != 'published':
+            return
+        
+        # Find matching students
+        matching_students = User.objects.none()
+        
+        if course.course_type == 'school':
+            # Match school students
+            matching_students = User.objects.filter(
+                user_type='school_student'
+            )
+            
+            # Filter by country
+            if course.country:
+                matching_students = matching_students.filter(country=course.country)
+            
+            # Filter by grade
+            if course.grade:
+                matching_students = matching_students.filter(grade=course.grade)
+                
+                # Handle track filtering for grades 11-12
+                try:
+                    if course.grade.grade_number in (11, 12):
+                        if course.track:
+                            # Match students with same track OR no track
+                            matching_students = matching_students.filter(
+                                Q(track=course.track) | Q(track__isnull=True)
+                            )
+                        else:
+                            # Course has no track, match students with no track
+                            matching_students = matching_students.filter(track__isnull=True)
+                    else:
+                        # For other grades, don't filter by track
+                        matching_students = matching_students.filter(track__isnull=True)
+                except Grade.DoesNotExist:
+                    pass
+        
+        elif course.course_type == 'university':
+            # Match university students
+            matching_students = User.objects.filter(
+                user_type='university_student'
+            )
+            
+            # Filter by country
+            if course.country:
+                matching_students = matching_students.filter(country=course.country)
+        
+        # Create Enrollment records with 'not_enrolled' status
+        enrollments_to_create = []
+        for student in matching_students:
+            # Check if enrollment already exists
+            if not Enrollment.objects.filter(student=student, course=course).exists():
+                enrollments_to_create.append(
+                    Enrollment(
+                        student=student,
+                        course=course,
+                        status='not_enrolled'
+                    )
+                )
+        
+        # Bulk create enrollments
+        if enrollments_to_create:
+            Enrollment.objects.bulk_create(enrollments_to_create)
+    
     def get_queryset(self):
         # Only allow staff/superusers
         if not self.request.user.is_authenticated or not (self.request.user.is_staff or self.request.user.is_superuser):
@@ -898,8 +1098,12 @@ class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
             # Process approval based on request type
             from django.utils import timezone
             if request_type == 'publish':
+                old_status = course.status
                 course.status = 'published'
                 course.save()
+                # Create enrollments for matching students when course is published
+                if old_status != 'published':
+                    self._create_enrollments_for_matching_students(course)
             elif request_type == 'unpublish':
                 course.status = 'draft'
                 course.save()
@@ -907,20 +1111,18 @@ class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
                 course.delete()
                 return Response({'message': 'Course deleted successfully.'}, status=status.HTTP_200_OK)
             
-            # Return updated course data
-            serializer = CourseSerializer(course, context={'request': request})
-            return Response({
-                'message': 'Request approved successfully.',
-                'course': serializer.data
-            }, status=status.HTTP_200_OK)
-            
             # Update approval request
             approval_request.status = 'approved'
             approval_request.reviewed_by = request.user
             approval_request.reviewed_at = timezone.now()
             approval_request.save()
             
-            return Response({'message': 'Request approved successfully.'}, status=status.HTTP_200_OK)
+            # Return updated course data
+            serializer = CourseSerializer(course, context={'request': request})
+            return Response({
+                'message': 'Request approved successfully.',
+                'course': serializer.data
+            }, status=status.HTTP_200_OK)
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
     
