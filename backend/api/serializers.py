@@ -125,7 +125,7 @@ class SubjectIdsListField(serializers.ListField):
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
-        fields = ['id', 'name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol']
+        fields = ['id', 'name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol', 'currency_name_en']
 
 
 class GradeSerializer(serializers.ModelSerializer):
@@ -356,6 +356,9 @@ class CourseSerializer(serializers.ModelSerializer):
     enrollment_count = serializers.SerializerMethodField()
     enrollment_status = serializers.SerializerMethodField()
     progress_percentage = serializers.SerializerMethodField()
+    currency_symbol = serializers.SerializerMethodField()
+    currency_code = serializers.SerializerMethodField()
+    currency_name_en = serializers.SerializerMethodField()
     
     class Meta:
         model = Course
@@ -365,7 +368,8 @@ class CourseSerializer(serializers.ModelSerializer):
             'grade', 'grade_name', 'track', 'track_name',
             'status', 'created_at', 'updated_at', 'teacher', 'teacher_name',
             'video_count', 'quiz_count', 'enrollment_count',
-            'enrollment_status', 'progress_percentage'
+            'enrollment_status', 'progress_percentage',
+            'currency_symbol', 'currency_code', 'currency_name_en'
         ]
         read_only_fields = ['teacher', 'created_at', 'updated_at']
     
@@ -501,6 +505,71 @@ class CourseSerializer(serializers.ModelSerializer):
             except Enrollment.DoesNotExist:
                 return 0
         return 0
+    
+    def get_currency_symbol(self, obj):
+        """Get currency symbol/name from the course's country (Arabic name)"""
+        if obj.country_id:
+            # Try to access the country if it's already loaded (via select_related)
+            if hasattr(obj, 'country') and obj.country:
+                return obj.country.currency_symbol or 'شيكل'
+            
+            # If country not loaded, fetch it
+            try:
+                from .models import Country
+                country = Country.objects.get(pk=obj.country_id)
+                return country.currency_symbol or 'شيكل'
+            except Country.DoesNotExist:
+                pass
+        
+        return 'شيكل'  # Default
+    
+    def get_currency_name_en(self, obj):
+        """Get currency name in English from the course's country"""
+        if obj.country_id:
+            # Try to access the country if it's already loaded (via select_related)
+            country = None
+            if hasattr(obj, 'country') and obj.country:
+                country = obj.country
+            else:
+                # If country not loaded, fetch it
+                try:
+                    from .models import Country
+                    country = Country.objects.get(pk=obj.country_id)
+                except Country.DoesNotExist:
+                    pass
+            
+            if country:
+                # If currency_name_en exists and is not empty, return it
+                if country.currency_name_en:
+                    return country.currency_name_en
+                # Map common Arabic currency symbols to English names
+                if country.currency_symbol == 'شيكل':
+                    return 'Shakel'
+                elif country.currency_symbol == 'د.أ':
+                    return 'Dinar'
+                elif country.currency_symbol == 'د.ك':
+                    return 'Dinar'
+                # Fallback to currency_symbol if it's in English
+                return country.currency_symbol or 'Shakel'
+        
+        return 'Shakel'  # Default
+    
+    def get_currency_code(self, obj):
+        """Get currency code from the course's country (e.g., 'ILS', 'KWD', 'USD')"""
+        if obj.country_id:
+            # Try to access the country if it's already loaded (via select_related)
+            if hasattr(obj, 'country') and obj.country:
+                return obj.country.currency_code or 'USD'
+            
+            # If country not loaded, fetch it
+            try:
+                from .models import Country
+                country = Country.objects.get(pk=obj.country_id)
+                return country.currency_code or 'USD'
+            except Country.DoesNotExist:
+                pass
+        
+        return 'USD'  # Default to USD
     
     def validate_grade(self, value):
         """Handle grade field - convert array to single value if needed"""

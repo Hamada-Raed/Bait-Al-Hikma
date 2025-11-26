@@ -525,11 +525,11 @@ class CourseViewSet(viewsets.ModelViewSet):
 
         # Teachers can only see their own courses
         if user.user_type == 'teacher':
-            return Course.objects.filter(teacher=user)
+            return Course.objects.filter(teacher=user).select_related('country', 'grade', 'track')
 
         # Students see published courses filtered by their profile
         if user.user_type in ['school_student', 'university_student']:
-            queryset = Course.objects.filter(status='published')
+            queryset = Course.objects.filter(status='published').select_related('country', 'teacher', 'grade', 'track')
 
             if user.user_type == 'school_student':
                 # Level 1: Filter by school course type
@@ -581,7 +581,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             return queryset
 
         # Default for other authenticated users (e.g., admins viewing dashboard)
-        return Course.objects.filter(status='published')
+        return Course.objects.filter(status='published').select_related('country', 'teacher', 'grade', 'track')
     
     def create(self, request, *args, **kwargs):
         """Override create to add better error logging"""

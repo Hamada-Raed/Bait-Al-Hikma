@@ -8,9 +8,9 @@ from .models import (
 
 @admin.register(Country)
 class CountryAdmin(admin.ModelAdmin):
-    list_display = ['name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol']
+    list_display = ['name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol', 'currency_name_en']
     search_fields = ['name_en', 'name_ar']
-    fields = ['name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol']
+    fields = ['name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol', 'currency_name_en']
 
 
 @admin.register(Grade)

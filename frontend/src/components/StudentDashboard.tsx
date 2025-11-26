@@ -42,6 +42,9 @@ interface Course {
   country?: number | null;
   grade?: number | null;
   track?: number | null;
+  currency_symbol?: string;
+  currency_code?: string;
+  currency_name_en?: string;
 }
 
 interface StudentDashboardProps {
@@ -838,6 +841,48 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                       </button>
                     )}
                   </div>
+
+                  {/* Course Price */}
+                  {course.price && parseFloat(String(course.price)) > 0 && (
+                    <div className="mb-4">
+                      {language === 'ar' ? (
+                        // Arabic: number first, then currency (RTL)
+                        <p className="text-lg font-bold text-primary-400" dir="rtl">
+                          <span dir="ltr">{parseFloat(String(course.price)).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          {' '}
+                          {course.currency_symbol || 'شيكل'}
+                        </p>
+                      ) : (
+                        // English: currency first, then number (LTR)
+                        <p className="text-lg font-bold text-primary-400" dir="ltr">
+                          {(() => {
+                            // Use currency_name_en if available, otherwise convert Arabic to English
+                            if (course.currency_name_en) {
+                              return course.currency_name_en;
+                            }
+                            // Map common Arabic currency names to English
+                            if (course.currency_symbol === 'شيكل') {
+                              return 'Shakel';
+                            }
+                            if (course.currency_symbol === 'د.أ' || course.currency_symbol === 'د.ك') {
+                              return 'Dinar';
+                            }
+                            // If currency_symbol looks like English, use it; otherwise default
+                            return course.currency_symbol && /^[a-zA-Z0-9$€£]+/.test(course.currency_symbol) 
+                              ? course.currency_symbol 
+                              : 'Shakel';
+                          })()} {parseFloat(String(course.price)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {(!course.price || parseFloat(String(course.price)) === 0) && (
+                    <div className="mb-4">
+                      <p className="text-sm font-medium text-green-400">
+                        {getText('Free', 'مجاني')}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Course Stats - Centered */}
                   <div className="flex items-center justify-center gap-4 text-sm text-gray-400 mb-4">

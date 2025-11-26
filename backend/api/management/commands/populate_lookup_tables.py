@@ -15,13 +15,15 @@ class Command(BaseCommand):
                 'name_en': 'Palestine',
                 'name_ar': 'فلسطين',
                 'currency_code': 'ILS',
-                'currency_symbol': '₪'
+                'currency_symbol': 'شيكل',  # Shekel in Arabic/Hebrew
+                'currency_name_en': 'Shakel'  # Shekel in English
             }
         )
         # Update currency if country already exists
         if not _:
             palestine.currency_code = 'ILS'
-            palestine.currency_symbol = '₪'
+            palestine.currency_symbol = 'شيكل'  # Shekel in Arabic/Hebrew
+            palestine.currency_name_en = 'Shakel'  # Shekel in English
             palestine.save()
         
         jordan, _ = Country.objects.get_or_create(
@@ -30,13 +32,15 @@ class Command(BaseCommand):
                 'name_en': 'Jordan',
                 'name_ar': 'الأردن',
                 'currency_code': 'JOD',
-                'currency_symbol': 'د.أ'
+                'currency_symbol': 'د.أ',
+                'currency_name_en': 'Dinar'
             }
         )
         # Update currency if country already exists
         if not _:
             jordan.currency_code = 'JOD'
             jordan.currency_symbol = 'د.أ'
+            jordan.currency_name_en = 'Dinar'
             jordan.save()
         
         self.stdout.write(self.style.SUCCESS('Countries created'))
