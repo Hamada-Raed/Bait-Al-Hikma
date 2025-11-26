@@ -343,7 +343,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CourseSerializer(serializers.ModelSerializer):
-    subjects = serializers.PrimaryKeyRelatedField(many=True, queryset=Subject.objects.all(), required=False)
+    subjects = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     subject_ids = SubjectIdsListField(write_only=True, required=False)
     subject_name = serializers.SerializerMethodField()
     grade_name = serializers.SerializerMethodField()
@@ -730,6 +730,8 @@ class CourseSerializer(serializers.ModelSerializer):
         return course
     
     def update(self, instance, validated_data):
+        # Remove subjects if it somehow got into validated_data (shouldn't happen if read_only, but just in case)
+        validated_data.pop('subjects', None)
         subject_ids = validated_data.pop('subject_ids', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
