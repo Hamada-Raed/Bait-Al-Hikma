@@ -105,8 +105,16 @@ const AvailabilityCalendar: React.FC = () => {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [missingPricing, setMissingPricing] = useState<any[]>([]);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [showValidationModal, setShowValidationModal] = useState(false);
 
   const getText = (en: string, ar: string) => (language === 'ar' ? ar : en);
+
+  // Helper function to show validation message
+  const showValidation = (message: string) => {
+    setValidationMessage(message);
+    setShowValidationModal(true);
+  };
 
   // Fetch availabilities
   useEffect(() => {
@@ -517,24 +525,24 @@ const AvailabilityCalendar: React.FC = () => {
   // Handle form submission
   const handleCreateAvailability = async () => {
     if (!formData.title || formData.title.trim() === '') {
-      alert(getText('Please enter a title', 'يرجى إدخال عنوان'));
+      showValidation(getText('Please enter a title', 'يرجى إدخال عنوان'));
       return;
     }
 
     // For teachers, validate required fields
     if (!isStudent) {
       if (!formData.for_university_students && !formData.for_school_students) {
-        alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
+        showValidation(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
         return;
       }
 
       if (!selectedCountry) {
-        alert(getText('Please select a country', 'يرجى اختيار بلد'));
+        showValidation(getText('Please select a country', 'يرجى اختيار بلد'));
         return;
       }
 
       if (formData.for_school_students && formData.grade_ids.length === 0) {
-        alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
+        showValidation(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
         return;
       }
 
@@ -543,7 +551,7 @@ const AvailabilityCalendar: React.FC = () => {
         const selectedGrades = grades.filter(g => formData.grade_ids.includes(g.id));
         const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
         if (hasGrade11Or12 && formData.track_ids.length === 0) {
-          alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+          showValidation(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
           return;
         }
       }
@@ -804,12 +812,12 @@ const AvailabilityCalendar: React.FC = () => {
     // For teachers, validate required fields
     if (!isStudent) {
       if (!editFormData.for_university_students && !editFormData.for_school_students) {
-        alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
+        showValidation(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
         return;
       }
 
       if (editFormData.for_school_students && editFormData.grade_ids.length === 0) {
-        alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
+        showValidation(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
         return;
       }
 
@@ -818,13 +826,13 @@ const AvailabilityCalendar: React.FC = () => {
         const selectedGrades = grades.filter(g => editFormData.grade_ids.includes(g.id));
         const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
         if (hasGrade11Or12 && editFormData.track_ids.length === 0) {
-          alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+          showValidation(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
           return;
         }
       }
 
       if (editFormData.for_university_students && editFormData.subject_ids.length === 0) {
-        alert(getText('Please select at least one subject', 'يرجى اختيار مادة واحدة على الأقل'));
+        showValidation(getText('Please select at least one subject', 'يرجى اختيار مادة واحدة على الأقل'));
         return;
       }
     }
@@ -877,11 +885,11 @@ const AvailabilityCalendar: React.FC = () => {
       } else {
         const error = await response.json();
         console.error('Error updating availability:', error);
-        alert(getText('Error updating availability', 'خطأ في تحديث التوفر'));
+        showValidation(getText('Error updating availability', 'خطأ في تحديث التوفر'));
       }
     } catch (error) {
       console.error('Error updating availability:', error);
-      alert(getText('Error updating availability', 'خطأ في تحديث التوفر'));
+      showValidation(getText('Error updating availability', 'خطأ في تحديث التوفر'));
     } finally {
       setUpdating(false);
     }
@@ -2356,6 +2364,36 @@ const AvailabilityCalendar: React.FC = () => {
                   {getText('Add Pricing', 'إضافة التسعير')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Modal */}
+      {showValidationModal && validationMessage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-dark-100 rounded-lg shadow-xl w-full max-w-md m-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <svg className="w-6 h-6 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 className="text-xl font-bold text-white">
+                  {getText('Validation', 'التحقق')}
+                </h3>
+              </div>
+              <p className="text-gray-300 mb-6">
+                {validationMessage}
+              </p>
+              <button
+                onClick={() => {
+                  setShowValidationModal(false);
+                  setValidationMessage(null);
+                }}
+                className="w-full px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-semibold"
+              >
+                {getText('OK', 'موافق')}
+              </button>
             </div>
           </div>
         </div>
