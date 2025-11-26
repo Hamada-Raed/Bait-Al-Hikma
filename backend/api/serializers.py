@@ -4,7 +4,8 @@ from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule
+    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule,
+    TodoList, TodoItem
 )
 
 
@@ -1082,3 +1083,34 @@ class StudentScheduleSerializer(serializers.ModelSerializer):
         # Automatically set the student to the current user
         validated_data['student'] = self.context['request'].user
         return StudentSchedule.objects.create(**validated_data)
+
+
+class TodoItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TodoItem
+        fields = ['id', 'todo_list', 'text', 'is_completed', 'order', 'created_at', 'updated_at']
+        read_only_fields = ['todo_list', 'created_at', 'updated_at']
+    
+    def validate_text(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Item text is required.')
+        return value.strip()
+
+
+class TodoListSerializer(serializers.ModelSerializer):
+    items = TodoItemSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = TodoList
+        fields = ['id', 'student', 'title', 'date', 'items', 'created_at', 'updated_at']
+        read_only_fields = ['student', 'created_at', 'updated_at']
+    
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Title is required.')
+        return value.strip()
+    
+    def create(self, validated_data):
+        # Automatically set the student to the current user
+        validated_data['student'] = self.context['request'].user
+        return TodoList.objects.create(**validated_data)

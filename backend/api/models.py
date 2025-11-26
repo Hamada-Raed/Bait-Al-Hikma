@@ -822,3 +822,38 @@ class QuizAttempt(models.Model):
     
     def __str__(self):
         return f"{self.student.email} - {self.quiz.title} ({self.score}/{self.total_questions} - {self.percentage}%)"
+
+
+class TodoList(models.Model):
+    """To-Do lists for students"""
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='todo_lists')
+    title = models.CharField(max_length=200)
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['date', 'created_at']
+        verbose_name = 'Todo List'
+        verbose_name_plural = 'Todo Lists'
+    
+    def __str__(self):
+        return f"{self.student.email} - {self.title} ({self.date})"
+
+
+class TodoItem(models.Model):
+    """Items within a to-do list"""
+    todo_list = models.ForeignKey(TodoList, on_delete=models.CASCADE, related_name='items')
+    text = models.CharField(max_length=500)
+    is_completed = models.BooleanField(default=False)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order', 'created_at']
+        verbose_name = 'Todo Item'
+        verbose_name_plural = 'Todo Items'
+    
+    def __str__(self):
+        return f"{self.todo_list.title} - {self.text[:50]}"

@@ -19,7 +19,8 @@ from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule
+    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule,
+    TodoList, TodoItem
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
@@ -27,7 +28,7 @@ from .serializers import (
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
     WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
     PrivateLessonPriceSerializer, ContactMessageSerializer, StudentTaskSerializer, StudentNoteSerializer,
-    StudentScheduleSerializer
+    StudentScheduleSerializer, TodoListSerializer, TodoItemSerializer
 )
 
 
@@ -1720,6 +1721,41 @@ class StudentScheduleViewSet(viewsets.ModelViewSet):
             'created_count': len(created),
             'error_count': len(errors)
         }, status=status.HTTP_201_CREATED)
+
+
+class TodoListViewSet(viewsets.ModelViewSet):
+    serializer_class = TodoListSerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        # Students can only see their own todo lists
+        if self.request.user.is_authenticated and self.request.user.user_type in ['school_student', 'university_student']:
+            return TodoList.objects.filter(student=self.request.user)
+        return TodoList.objects.none()
+    
+    def perform_create(self, serializer):
+        # Automatically set the student to the current user
+        serializer.save(student=self.request.user)
+
+
+class TodoItemViewSet(viewsets.ModelViewSet):
+    serializer_class = TodoItemSerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        # Students can only see items from their own todo lists
+        if self.request.user.is_authenticated and self.request.user.user_type in ['school_student', 'university_student']:
+            todo_list_id = self.request.query_params.get('todo_list', None)
+            if todo_list_id:
+                return TodoItem.objects.filter(todo_list__student=self.request.user, todo_list_id=todo_list_id)
+            return TodoItem.objects.filter(todo_list__student=self.request.user)
+        return TodoItem.objects.none()
+    
+    def perform_create(self, serializer):
+        # Verify that the todo_list belongs to the current user
+        todo_list = serializer.validated_data.get('todo_list')
+        if todo_list and todo_list.student != self.request.user:
+            raise serializers.ValidationError({'todo_list': 'You can only add items to your own todo lists.'})
 
 
 # Course Structure Management Views

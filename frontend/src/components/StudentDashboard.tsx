@@ -83,7 +83,7 @@ interface TeacherRecommendation {
   }>;
 }
 
-type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers';
+type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers' | 'todo';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { language } = useLanguage();
@@ -97,6 +97,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [showNotes, setShowNotes] = useState(false);
   const [filteredTeachers, setFilteredTeachers] = useState<any[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
+  
+  // Todo List state
+  const [todoLists, setTodoLists] = useState<any[]>([]);
+  const [loadingTodos, setLoadingTodos] = useState(false);
+  const [showCreateTodoForm, setShowCreateTodoForm] = useState(false);
+  const [selectedTodoList, setSelectedTodoList] = useState<any | null>(null);
+  const [newTodoTitle, setNewTodoTitle] = useState('');
+  const [newTodoDate, setNewTodoDate] = useState('');
+  const [newTodoItemText, setNewTodoItemText] = useState('');
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -376,8 +385,156 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   const isMatchingTab = activeTab === 'matching';
   const isTeacherTab = activeTab === 'teachers';
+  const isTodoTab = activeTab === 'todo';
   const shouldShowMatchingProfileNotice = isMatchingTab && !hasMatchingProfileData;
   const filteredCourses = shouldShowMatchingProfileNotice ? [] : getFilteredCourses();
+
+  // Fetch todo lists
+  const fetchTodoLists = async () => {
+    try {
+      setLoadingTodos(true);
+      const response = await fetch(`${API_BASE_URL}/todo-lists/`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const lists = data.results || data;
+        setTodoLists(lists);
+      }
+    } catch (error) {
+      console.error('Error fetching todo lists:', error);
+    } finally {
+      setLoadingTodos(false);
+    }
+  };
+
+  // Create todo list
+  const handleCreateTodoList = async () => {
+    if (!newTodoTitle.trim() || !newTodoDate) {
+      return;
+    }
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-lists/`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          title: newTodoTitle,
+          date: newTodoDate,
+        }),
+      });
+      if (response.ok) {
+        setNewTodoTitle('');
+        setNewTodoDate('');
+        setShowCreateTodoForm(false);
+        await fetchTodoLists();
+        setActiveTab('todo');
+      }
+    } catch (error) {
+      console.error('Error creating todo list:', error);
+    }
+  };
+
+  // Add todo item
+  const handleAddTodoItem = async (todoListId: number) => {
+    if (!newTodoItemText.trim()) {
+      return;
+    }
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-items/`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          todo_list: todoListId,
+          text: newTodoItemText,
+          order: selectedTodoList?.items?.length || 0,
+        }),
+      });
+      if (response.ok) {
+        setNewTodoItemText('');
+        // Refresh the selected todo list to show the new item
+        const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${todoListId}/`, {
+          credentials: 'include',
+        }).then(r => r.json());
+        setSelectedTodoList(updatedList);
+        // Also refresh all todo lists to update the item count
+        await fetchTodoLists();
+      }
+    } catch (error) {
+      console.error('Error adding todo item:', error);
+    }
+  };
+
+  // Toggle todo item completion
+  const handleToggleTodoItem = async (itemId: number, isCompleted: boolean) => {
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-items/${itemId}/`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          is_completed: !isCompleted,
+        }),
+      });
+      if (response.ok) {
+        // Refresh the selected todo list
+        if (selectedTodoList) {
+          const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+            credentials: 'include',
+          }).then(r => r.json());
+          setSelectedTodoList(updatedList);
+        }
+        // Also refresh all todo lists
+        await fetchTodoLists();
+      }
+    } catch (error) {
+      console.error('Error toggling todo item:', error);
+    }
+  };
+
+  // Open todo list details
+  const handleOpenTodoList = async (todoList: any) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/todo-lists/${todoList.id}/`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedTodoList(data);
+      }
+    } catch (error) {
+      console.error('Error fetching todo list:', error);
+    }
+  };
+
+  // Fetch todo lists when todo tab is active
+  useEffect(() => {
+    if (isTodoTab) {
+      fetchTodoLists();
+    }
+  }, [isTodoTab]);
 
   return (
     <div className="space-y-6">
@@ -442,23 +599,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 // TODO: Navigate to white board
                 console.log('Open white board');
               }}
-              className="px-4 py-2 bg-dark-200 border border-dark-400 text-white font-semibold rounded-lg hover:bg-dark-300 transition-all flex items-center gap-2"
+              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               {getText('White Board', 'السبورة البيضاء')}
             </button>
-            <button
-              onClick={() => setShowNotes(true)}
-              className="px-4 py-2 bg-gradient-to-r from-primary-500 to-accent-purple text-white font-semibold rounded-lg hover:from-primary-600 hover:to-accent-purple/90 transition-all flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              {getText('To do', 'المهام')}
-            </button>
-            
+                     
           </div>
         </div>
         
@@ -524,10 +672,206 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           >
             {getText('Completed', 'المكتملة')}
           </button>
+          <button
+            onClick={() => setActiveTab('todo')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'todo'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            {getText('To Do', 'قائمة المهام')}
+          </button>
         </div>
 
-        {/* Courses / Sessions Content */}
-        {loading ? (
+        {/* Courses / Sessions / Todo Content */}
+        {isTodoTab ? (
+          <div className="py-6">
+            {loadingTodos ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
+                <p className="mt-4 text-gray-400">{getText('Loading...', 'جاري التحميل...')}</p>
+              </div>
+            ) : showCreateTodoForm ? (
+              <div className="max-w-md mx-auto bg-dark-100 rounded-xl p-6 border border-dark-300">
+                <h3 className="text-xl font-bold text-white mb-4">{getText('Create New To-Do List', 'إنشاء قائمة مهام جديدة')}</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {getText('Title', 'العنوان')} <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTodoTitle}
+                      onChange={(e) => setNewTodoTitle(e.target.value)}
+                      placeholder={getText('Enter list title', 'أدخل عنوان القائمة')}
+                      className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {getText('Date', 'التاريخ')} <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={newTodoDate}
+                      onChange={(e) => setNewTodoDate(e.target.value)}
+                      className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleCreateTodoList}
+                      className="flex-1 py-2 px-4 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                    >
+                      {getText('Create', 'إنشاء')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCreateTodoForm(false);
+                        setNewTodoTitle('');
+                        setNewTodoDate('');
+                      }}
+                      className="flex-1 py-2 px-4 bg-dark-300 hover:bg-dark-400 text-gray-300 font-medium rounded-lg transition-all"
+                    >
+                      {getText('Cancel', 'إلغاء')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : selectedTodoList ? (
+              <div className="max-w-2xl mx-auto bg-dark-100 rounded-xl p-6 border border-dark-300">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-2xl font-bold text-white mb-2">{selectedTodoList.title}</h3>
+                    <p className="text-gray-400">
+                      {new Date(selectedTodoList.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedTodoList(null);
+                      setNewTodoItemText('');
+                    }}
+                    className="p-2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="space-y-3 mb-6">
+                  {selectedTodoList.items && selectedTodoList.items.length > 0 ? (
+                    selectedTodoList.items.map((item: any) => (
+                      <div
+                        key={item.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          item.is_completed
+                            ? 'bg-dark-200/50 border-dark-300 opacity-60'
+                            : 'bg-dark-200 border-dark-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.is_completed}
+                          onChange={() => handleToggleTodoItem(item.id, item.is_completed)}
+                          className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2 cursor-pointer"
+                        />
+                        <span
+                          className={`flex-1 text-gray-300 ${
+                            item.is_completed ? 'line-through text-gray-500' : ''
+                          }`}
+                        >
+                          {item.text}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">{getText('No items yet', 'لا توجد عناصر بعد')}</p>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={newTodoItemText}
+                    onChange={(e) => setNewTodoItemText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddTodoItem(selectedTodoList.id);
+                      }
+                    }}
+                    placeholder={getText('Add new item...', 'أضف عنصر جديد...')}
+                    className="flex-1 px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    onClick={() => handleAddTodoItem(selectedTodoList.id)}
+                    className="px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                  >
+                    {getText('Add', 'إضافة')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-white">{getText('To-Do Lists', 'قوائم المهام')}</h2>
+                  <button
+                    onClick={() => setShowCreateTodoForm(true)}
+                    className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    {getText('New List', 'قائمة جديدة')}
+                  </button>
+                </div>
+                {todoLists.length === 0 ? (
+                  <div className="text-center py-12">
+                    <svg className="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p className="text-gray-400 mb-4">{getText('No to-do lists yet', 'لا توجد قوائم مهام بعد')}</p>
+                    <button
+                      onClick={() => setShowCreateTodoForm(true)}
+                      className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                    >
+                      {getText('Create Your First List', 'أنشئ قائمتك الأولى')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {todoLists.map((list) => (
+                      <div
+                        key={list.id}
+                        onClick={() => handleOpenTodoList(list)}
+                        className="bg-dark-100 rounded-xl p-6 border border-dark-300 hover:border-primary-500 cursor-pointer transition-all"
+                      >
+                        <h3 className="text-xl font-bold text-white mb-2">{list.title}</h3>
+                        <p className="text-gray-400 mb-4">
+                          {new Date(list.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          <span>{list.items?.length || 0} {getText('items', 'عنصر')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
             <p className="mt-4 text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</p>
