@@ -4,7 +4,7 @@ from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote
+    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt
 )
 
 
@@ -1006,3 +1006,17 @@ class StudentNoteSerializer(serializers.ModelSerializer):
         model = StudentNote
         fields = ['id', 'user', 'title', 'content', 'created_at', 'updated_at']
         read_only_fields = ['user', 'created_at', 'updated_at']
+
+
+class MaterialCompletionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaterialCompletion
+        fields = ['id', 'material_type', 'video', 'quiz', 'is_completed', 'completed_at', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class QuizAttemptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizAttempt
+        fields = ['id', 'quiz', 'score', 'total_questions', 'percentage', 'answers', 'results', 'submitted_at']
+        read_only_fields = ['submitted_at']

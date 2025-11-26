@@ -16,6 +16,7 @@ import CreateCourse from './components/CreateCourse';
 import AvailabilityCalendar from './components/AvailabilityCalendar';
 import ManageCourse from './components/ManageCourse';
 import PreviewCourse from './components/PreviewCourse';
+import StudentPreviewCourse from './components/StudentPreviewCourse';
 import './App.css';
 
 const HomePage: React.FC = () => {
@@ -127,6 +128,14 @@ const App: React.FC = () => {
               element={
                 <ProtectedRoute>
                   <PreviewCourse />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-course/:courseId"
+              element={
+                <ProtectedRoute>
+                  <StudentPreviewCourse />
                 </ProtectedRoute>
               }
             />

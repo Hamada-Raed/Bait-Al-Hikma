@@ -677,3 +677,90 @@ class Enrollment(models.Model):
     
     def __str__(self):
         return f"{self.student.email} - {self.course.name} ({self.get_status_display()})"
+    
+    def update_status_based_on_progress(self):
+        """Update enrollment status based on progress percentage"""
+        from django.utils import timezone
+        
+        if self.progress_percentage == 0:
+            # If progress is 0, keep as enrolled (not started yet)
+            if self.status == 'enrolled':
+                return  # Already correct
+            elif self.status in ['in_progress', 'completed']:
+                # Shouldn't happen, but reset to enrolled if progress is 0
+                self.status = 'enrolled'
+                self.save()
+        elif self.progress_percentage > 0 and self.progress_percentage < 100:
+            # Progress started but not complete
+            if self.status != 'in_progress':
+                self.status = 'in_progress'
+                self.save()
+        elif self.progress_percentage == 100:
+            # Course completed
+            if self.status != 'completed':
+                self.status = 'completed'
+                if not self.completed_at:
+                    self.completed_at = timezone.now()
+                self.save()
+
+
+class MaterialCompletion(models.Model):
+    """Track which materials (videos/quizzes) are completed by students"""
+    MATERIAL_TYPE_CHOICES = [
+        ('video', 'Video'),
+        ('quiz', 'Quiz'),
+    ]
+    
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='material_completions')
+    material_type = models.CharField(max_length=10, choices=MATERIAL_TYPE_CHOICES)
+    video = models.ForeignKey('Video', on_delete=models.CASCADE, null=True, blank=True, related_name='completions')
+    quiz = models.ForeignKey('Quiz', on_delete=models.CASCADE, null=True, blank=True, related_name='completions')
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [
+            ('student', 'video'),
+            ('student', 'quiz'),
+        ]
+        verbose_name = 'Material Completion'
+        verbose_name_plural = 'Material Completions'
+    
+    def __str__(self):
+        material_name = self.video.title if self.video else (self.quiz.title if self.quiz else 'Unknown')
+        return f"{self.student.email} - {material_name} ({'Completed' if self.is_completed else 'Not Completed'})"
+    
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # Ensure exactly one of video or quiz is set
+        if not self.video and not self.quiz:
+            raise ValidationError('Either video or quiz must be set.')
+        if self.video and self.quiz:
+            raise ValidationError('Cannot set both video and quiz.')
+        # Ensure material_type matches
+        if self.video and self.material_type != 'video':
+            raise ValidationError('Material type must be "video" when video is set.')
+        if self.quiz and self.material_type != 'quiz':
+            raise ValidationError('Material type must be "quiz" when quiz is set.')
+
+
+class QuizAttempt(models.Model):
+    """Track student quiz attempts and results"""
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts')
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='attempts')
+    score = models.IntegerField(help_text='Number of correct answers')
+    total_questions = models.IntegerField(help_text='Total number of questions')
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, help_text='Score percentage')
+    answers = models.JSONField(help_text='Student answers: {question_id: selected_option_index}')
+    results = models.JSONField(help_text='Question results: {question_id: {is_correct: bool, selected_option: int, correct_option: int}}')
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-submitted_at']
+        verbose_name = 'Quiz Attempt'
+        verbose_name_plural = 'Quiz Attempts'
+    
+    def __str__(self):
+        return f"{self.student.email} - {self.quiz.title} ({self.score}/{self.total_questions} - {self.percentage}%)"

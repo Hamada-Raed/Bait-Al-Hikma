@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    ContactMessage, Enrollment
+    ContactMessage, Enrollment, MaterialCompletion, QuizAttempt
 )
 
 
@@ -179,3 +179,29 @@ class EnrollmentAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('student', 'course')
+
+
+@admin.register(MaterialCompletion)
+class MaterialCompletionAdmin(admin.ModelAdmin):
+    list_display = ['student', 'material_type', 'video', 'quiz', 'is_completed', 'completed_at', 'created_at']
+    list_filter = ['material_type', 'is_completed', 'created_at']
+    search_fields = ['student__email', 'student__first_name', 'student__last_name', 'video__title', 'quiz__title']
+    readonly_fields = ['created_at', 'updated_at']
+    fields = ['student', 'material_type', 'video', 'quiz', 'is_completed', 'completed_at', 'created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('student', 'video', 'quiz')
+
+
+@admin.register(QuizAttempt)
+class QuizAttemptAdmin(admin.ModelAdmin):
+    list_display = ['student', 'quiz', 'score', 'total_questions', 'percentage', 'submitted_at']
+    list_filter = ['submitted_at', 'quiz']
+    search_fields = ['student__email', 'student__first_name', 'student__last_name', 'quiz__title']
+    readonly_fields = ['submitted_at']
+    fields = ['student', 'quiz', 'score', 'total_questions', 'percentage', 'answers', 'results', 'submitted_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('student', 'quiz')

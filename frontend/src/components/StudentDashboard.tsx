@@ -83,7 +83,7 @@ interface TeacherRecommendation {
   }>;
 }
 
-type TabType = 'matching' | 'all' | 'in_progress' | 'completed' | 'teachers';
+type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { language } = useLanguage();
@@ -204,7 +204,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const hasMatchingProfileData = missingProfileFields.length === 0;
 
   // Backend now filters courses based on student profile, so all returned courses are matching
-  const matchingCourses = hasMatchingProfileData ? courses : [];
+  // Filter out enrolled courses for the matching count
+  const matchingCourses = hasMatchingProfileData 
+    ? courses.filter(course => !course.progress_status || course.progress_status === 'not_enrolled')
+    : [];
 
   const matchingCount = matchingCourses.length;
   
@@ -347,18 +350,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const getFilteredCourses = () => {
     switch (activeTab) {
       case 'matching':
-        return matchingCourses;
+        // Only show courses that are not enrolled
+        return matchingCourses.filter(course => 
+          !course.progress_status || course.progress_status === 'not_enrolled'
+        );
+      case 'enrolled':
+        return courses.filter(course => course.progress_status === 'enrolled');
       case 'in_progress':
         return courses.filter(course => course.progress_status === 'in_progress');
       case 'completed':
         return courses.filter(course => course.progress_status === 'completed');
       case 'all':
+        // Show all courses except enrolled ones (they should be in enrolled tab)
+        return courses.filter(course => 
+          !course.progress_status || course.progress_status !== 'enrolled'
+        );
       default:
         return courses;
     }
   };
 
-  const enrolledCount = courses.length;
+  const enrolledCount = courses.filter(c => c.progress_status === 'enrolled').length;
   const inProgressCount = courses.filter(c => c.progress_status === 'in_progress').length;
   const completedCount = courses.filter(c => c.progress_status === 'completed').length;
 
@@ -375,13 +387,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-400 text-sm font-medium">
-              {getText('Enrolled Courses', 'الدورات المسجلة')}
+              {getText('Courses', 'الدورات')}
             </h3>
             <svg className="w-8 h-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-white">{enrolledCount}</p>
+          <p className="text-3xl font-bold text-white">{matchingCount}</p>
         </div>
 
         <div className="bg-dark-100 rounded-xl p-6 border border-dark-300">
@@ -483,14 +495,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('all')}
+            onClick={() => setActiveTab('enrolled')}
             className={`px-6 py-3 font-medium text-sm transition-colors ${
-              activeTab === 'all'
+              activeTab === 'enrolled'
                 ? 'text-primary-400 border-b-2 border-primary-400'
                 : 'text-gray-400 hover:text-gray-300'
             }`}
           >
-            {getText('Enrolled Courses', 'الدورات المسجلة')}
+            {getText('Enrolled', 'مسجل')}
           </button>
           <button
             onClick={() => setActiveTab('in_progress')}
@@ -769,8 +781,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                     />
                     {/* Preview Icon Overlay - Top Right */}
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/student-course/${course.id}`);
+                      }}
                       className="absolute top-3 right-3 w-10 h-10 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all hover:scale-110 z-10"
-                      title={getText('Preview Course', 'معاينة الدورة')}
+                      title={getText('View Course', 'عرض الدورة')}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -785,8 +801,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                     </svg>
                     {/* Preview Icon Overlay - Top Right (even when no image) */}
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/student-course/${course.id}`);
+                      }}
                       className="absolute top-3 right-3 w-10 h-10 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all hover:scale-110 z-10"
-                      title={getText('Preview Course', 'معاينة الدورة')}
+                      title={getText('View Course', 'عرض الدورة')}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -938,6 +958,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                   <div className="flex gap-3 mt-4">
                     {/* Preview Button (Secondary) */}
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/student-course/${course.id}`);
+                      }}
                       className="flex-1 py-2.5 px-4 border border-dark-300 hover:border-primary-500 text-gray-300 hover:text-primary-400 font-medium rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

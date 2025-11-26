@@ -19,7 +19,7 @@ from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote
+    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
@@ -849,13 +849,25 @@ class CourseViewSet(viewsets.ModelViewSet):
         """Get course structure with chapters, sections, videos, and quizzes"""
         try:
             course = Course.objects.get(pk=pk)
-            # Only allow teacher who owns the course or admins
             if not request.user.is_authenticated:
                 return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
             
-            if request.user.user_type != 'teacher' or course.teacher != request.user:
-                if not (request.user.is_staff or request.user.is_superuser):
-                    return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+            # Check permissions: teacher who owns course, enrolled students, or admins
+            is_teacher_owner = request.user.user_type == 'teacher' and course.teacher == request.user
+            is_admin = request.user.is_staff or request.user.is_superuser
+            is_enrolled_student = False
+            
+            # Check if student is enrolled
+            if request.user.user_type in ['school_student', 'university_student']:
+                from .models import Enrollment
+                try:
+                    enrollment = Enrollment.objects.get(student=request.user, course=course)
+                    is_enrolled_student = enrollment.status in ['enrolled', 'in_progress', 'completed']
+                except Enrollment.DoesNotExist:
+                    pass
+            
+            if not (is_teacher_owner or is_admin or is_enrolled_student):
+                return Response({'error': 'Permission denied. You must be enrolled in this course or be the teacher.'}, status=status.HTTP_403_FORBIDDEN)
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
         
@@ -907,11 +919,15 @@ class CourseViewSet(viewsets.ModelViewSet):
                     questions_data = []
                     for question in quiz.questions.all().order_by('order', 'id'):
                         options_data = []
+                        # For students, don't show correct answers; for teachers/admins, show them
+                        show_correct_answers = is_teacher_owner or is_admin
                         for option in question.options.all().order_by('order', 'id'):
-                            options_data.append({
+                            option_data = {
                                 'option_text': option.option_text,
-                                'is_correct': option.is_correct
-                            })
+                            }
+                            if show_correct_answers:
+                                option_data['is_correct'] = option.is_correct
+                            options_data.append(option_data)
                         # Get question image URL - build absolute URL if image exists
                         question_image_url = None
                         question_image = ''
@@ -952,6 +968,16 @@ class CourseViewSet(viewsets.ModelViewSet):
                 'sections': sections_data
             })
         
+        # Get enrollment status for students
+        enrollment_status = None
+        if request.user.user_type in ['school_student', 'university_student']:
+            from .models import Enrollment
+            try:
+                enrollment = Enrollment.objects.get(student=request.user, course=course)
+                enrollment_status = enrollment.status
+            except Enrollment.DoesNotExist:
+                enrollment_status = 'not_enrolled'
+        
         return Response({
             'course': {
                 'id': course.id,
@@ -963,6 +989,288 @@ class CourseViewSet(viewsets.ModelViewSet):
             'total_videos': total_videos,
             'total_quizzes': total_quizzes,
             'total_sections': total_sections,
+            'enrollment_status': enrollment_status,
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], url_path='toggle-material-completion')
+    def toggle_material_completion(self, request, pk=None):
+        """Toggle material (video/quiz) completion status for enrolled students"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if request.user.user_type not in ['school_student', 'university_student']:
+            return Response({'error': 'Only students can mark materials as complete.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        from .models import Enrollment, MaterialCompletion, Video, Quiz
+        from django.utils import timezone
+        from decimal import Decimal
+        
+        # Check if student is enrolled
+        try:
+            enrollment = Enrollment.objects.get(student=request.user, course=course)
+            if enrollment.status == 'not_enrolled':
+                return Response({'error': 'You must be enrolled in this course.'}, status=status.HTTP_403_FORBIDDEN)
+        except Enrollment.DoesNotExist:
+            return Response({'error': 'You must be enrolled in this course.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        material_type = request.data.get('material_type')
+        material_id = request.data.get('material_id')
+        is_completed = request.data.get('is_completed', True)
+        
+        if not material_type or material_id is None:
+            return Response({'error': 'material_type and material_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if material_type not in ['video', 'quiz']:
+            return Response({'error': 'material_type must be "video" or "quiz".'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get the material and verify it belongs to this course
+        material = None
+        if material_type == 'video':
+            try:
+                material = Video.objects.get(pk=material_id, section__chapter__course=course)
+            except Video.DoesNotExist:
+                return Response({'error': 'Video not found in this course.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            try:
+                material = Quiz.objects.get(pk=material_id, section__chapter__course=course)
+            except Quiz.DoesNotExist:
+                return Response({'error': 'Quiz not found in this course.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get or create MaterialCompletion
+        completion, created = MaterialCompletion.objects.get_or_create(
+            student=request.user,
+            video=material if material_type == 'video' else None,
+            quiz=material if material_type == 'quiz' else None,
+            defaults={
+                'material_type': material_type,
+                'is_completed': is_completed,
+                'completed_at': timezone.now() if is_completed else None
+            }
+        )
+        
+        if not created:
+            completion.is_completed = is_completed
+            completion.completed_at = timezone.now() if is_completed else None
+            completion.save()
+        
+        # Calculate progress percentage
+        from django.db.models import Count, Q
+        total_materials = Video.objects.filter(section__chapter__course=course).count() + \
+                         Quiz.objects.filter(section__chapter__course=course).count()
+        
+        if total_materials > 0:
+            completed_materials = MaterialCompletion.objects.filter(
+                student=request.user,
+                is_completed=True
+            ).filter(
+                Q(video__section__chapter__course=course) | Q(quiz__section__chapter__course=course)
+            ).count()
+            
+            progress_percentage = int((completed_materials / total_materials) * 100)
+            enrollment.progress_percentage = progress_percentage
+            enrollment.update_status_based_on_progress()
+            enrollment.save()
+        else:
+            progress_percentage = 0
+        
+        return Response({
+            'message': 'Material completion status updated.',
+            'is_completed': completion.is_completed,
+            'progress_percentage': progress_percentage,
+            'enrollment_status': enrollment.status
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['get'], url_path='student-progress')
+    def student_progress(self, request, pk=None):
+        """Get student progress for a course"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if request.user.user_type not in ['school_student', 'university_student']:
+            return Response({'error': 'Only students can view their progress.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        from .models import Enrollment, MaterialCompletion
+        from django.db.models import Q
+        
+        # Get enrollment
+        try:
+            enrollment = Enrollment.objects.get(student=request.user, course=course)
+        except Enrollment.DoesNotExist:
+            return Response({
+                'enrollment_status': 'not_enrolled',
+                'progress_percentage': 0,
+                'completed_materials': [],
+            }, status=status.HTTP_200_OK)
+        
+        # Get completed materials
+        completed_materials = MaterialCompletion.objects.filter(
+            student=request.user,
+            is_completed=True
+        ).filter(
+            Q(video__section__chapter__course=course) | Q(quiz__section__chapter__course=course)
+        )
+        
+        completed_list = []
+        for completion in completed_materials:
+            if completion.video:
+                completed_list.append({
+                    'type': 'video',
+                    'id': completion.video.id
+                })
+            elif completion.quiz:
+                completed_list.append({
+                    'type': 'quiz',
+                    'id': completion.quiz.id
+                })
+        
+        return Response({
+            'enrollment_status': enrollment.status,
+            'progress_percentage': enrollment.progress_percentage,
+            'completed_materials': completed_list,
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['post'], url_path='submit-quiz')
+    def submit_quiz(self, request, pk=None):
+        """Submit quiz answers for a student"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if request.user.user_type not in ['school_student', 'university_student']:
+            return Response({'error': 'Only students can submit quizzes.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        from .models import Enrollment, QuizAttempt, Quiz, Question, QuestionOption
+        from django.utils import timezone
+        from decimal import Decimal
+        
+        # Check if student is enrolled
+        try:
+            enrollment = Enrollment.objects.get(student=request.user, course=course)
+            if enrollment.status == 'not_enrolled':
+                return Response({'error': 'You must be enrolled in this course.'}, status=status.HTTP_403_FORBIDDEN)
+        except Enrollment.DoesNotExist:
+            return Response({'error': 'You must be enrolled in this course.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        quiz_id = request.data.get('quiz_id')
+        answers = request.data.get('answers', {})  # {question_id: selected_option_index}
+        
+        if not quiz_id:
+            return Response({'error': 'quiz_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            quiz = Quiz.objects.get(pk=quiz_id, section__chapter__course=course)
+        except Quiz.DoesNotExist:
+            return Response({'error': 'Quiz not found in this course.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all questions for this quiz
+        questions = quiz.questions.all().order_by('order', 'id')
+        total_questions = questions.count()
+        
+        if total_questions == 0:
+            return Response({'error': 'Quiz has no questions.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Grade the quiz
+        score = 0
+        results = {}
+        
+        for question in questions:
+            question_id = str(question.id)
+            selected_option_index = answers.get(question_id)
+            
+            # Get correct option index
+            correct_option_index = None
+            options = question.options.all().order_by('order', 'id')
+            for idx, option in enumerate(options):
+                if option.is_correct:
+                    correct_option_index = idx
+                    break
+            
+            is_correct = selected_option_index is not None and int(selected_option_index) == correct_option_index
+            
+            if is_correct:
+                score += 1
+            
+            results[question_id] = {
+                'is_correct': is_correct,
+                'selected_option': int(selected_option_index) if selected_option_index is not None else None,
+                'correct_option': correct_option_index
+            }
+        
+        percentage = Decimal((score / total_questions) * 100).quantize(Decimal('0.01'))
+        
+        # Save quiz attempt
+        attempt = QuizAttempt.objects.create(
+            student=request.user,
+            quiz=quiz,
+            score=score,
+            total_questions=total_questions,
+            percentage=percentage,
+            answers=answers,
+            results=results
+        )
+        
+        return Response({
+            'message': 'Quiz submitted successfully.',
+            'attempt_id': attempt.id,
+            'score': score,
+            'total_questions': total_questions,
+            'percentage': float(percentage),
+            'results': results
+        }, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['get'], url_path='quiz-attempts')
+    def quiz_attempts(self, request, pk=None):
+        """Get quiz attempts for a student"""
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        if request.user.user_type not in ['school_student', 'university_student']:
+            return Response({'error': 'Only students can view their quiz attempts.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        quiz_id = request.query_params.get('quiz_id')
+        if not quiz_id:
+            return Response({'error': 'quiz_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from .models import QuizAttempt, Quiz
+        
+        try:
+            quiz = Quiz.objects.get(pk=quiz_id, section__chapter__course_id=pk)
+        except Quiz.DoesNotExist:
+            return Response({'error': 'Quiz not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        attempts = QuizAttempt.objects.filter(
+            student=request.user,
+            quiz=quiz
+        ).order_by('-submitted_at')
+        
+        attempts_data = []
+        for attempt in attempts:
+            attempts_data.append({
+                'id': attempt.id,
+                'score': attempt.score,
+                'total_questions': attempt.total_questions,
+                'percentage': float(attempt.percentage),
+                'submitted_at': attempt.submitted_at.isoformat(),
+                'results': attempt.results
+            })
+        
+        return Response({
+            'quiz_id': quiz_id,
+            'attempts': attempts_data
         }, status=status.HTTP_200_OK)
 
 
