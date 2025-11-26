@@ -83,7 +83,7 @@ interface TeacherRecommendation {
   }>;
 }
 
-type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers' | 'todo';
+type TabType = 'matching' | 'all' | 'enrolled' | 'in_progress' | 'completed' | 'teachers' | 'todo' | 'timer';
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const { language } = useLanguage();
@@ -392,6 +392,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const isMatchingTab = activeTab === 'matching';
   const isTeacherTab = activeTab === 'teachers';
   const isTodoTab = activeTab === 'todo';
+  const isTimerTab = activeTab === 'timer';
   const shouldShowMatchingProfileNotice = isMatchingTab && !hasMatchingProfileData;
   const filteredCourses = shouldShowMatchingProfileNotice ? [] : getFilteredCourses();
 
@@ -1070,6 +1071,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           >
             {getText('To Do', 'قائمة المهام')}
           </button>
+          <button
+            onClick={() => setActiveTab('timer')}
+            className={`px-6 py-3 font-medium text-sm transition-colors ${
+              activeTab === 'timer'
+                ? 'text-primary-400 border-b-2 border-primary-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            {getText('Timer', 'المؤقت')}
+          </button>
         </div>
 
         {/* Courses / Sessions / Todo Content */}
@@ -1598,6 +1609,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 </div>
               </div>
             )}
+          </div>
+        ) : isTimerTab ? (
+          <div className="py-6">
+            <div className="bg-dark-100 rounded-xl p-8 border border-dark-300 text-center">
+              <p className="text-gray-400">
+                {getText('Timer functionality coming soon.', 'ميزة المؤقت قادمة قريباً.')}
+              </p>
+            </div>
           </div>
         ) : loading ? (
           <div className="text-center py-12">
