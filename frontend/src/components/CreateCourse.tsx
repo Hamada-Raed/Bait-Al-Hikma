@@ -52,16 +52,8 @@ const CreateCourse: React.FC = () => {
   const courseId = searchParams.get('id');
   const isEditMode = !!courseId;
   
-interface Major {
-  id: number;
-  name_en: string;
-  name_ar: string;
-  code: string;
-}
-
   const [countries, setCountries] = useState<Country[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [majors, setMajors] = useState<Major[]>([]);
   const [allGrades, setAllGrades] = useState<Grade[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -94,7 +86,7 @@ interface Major {
   });
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
-  const getName = (item: Country | Subject | Grade | Track | Major) => {
+  const getName = (item: Country | Subject | Grade | Track) => {
     return language === 'ar' ? (item as any).name_ar : (item as any).name_en;
   };
 

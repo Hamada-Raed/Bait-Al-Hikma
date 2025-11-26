@@ -163,8 +163,7 @@ class Course(models.Model):
                              help_text='Required for school courses')
     track = models.ForeignKey(Track, on_delete=models.SET_NULL, null=True, blank=True,
                              help_text='Required if course is for grade 11 or 12')
-    major = models.ForeignKey(Major, on_delete=models.SET_NULL, null=True, blank=True,
-                             help_text='Required for university courses')
+    # Note: Major is NOT for courses - it's only for university students to represent what they study
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
