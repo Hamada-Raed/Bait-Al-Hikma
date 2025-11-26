@@ -842,17 +842,8 @@ const Profile: React.FC = () => {
           const allSubjectsData = await results[2].json();
           const allSubjects = allSubjectsData.results || allSubjectsData;
           
-          // Filter subjects to only show teacher's selected subjects from profile
-          if (userData && userData.subjects && Array.isArray(userData.subjects)) {
-            const teacherSubjectIds = userData.subjects; // Array of subject IDs
-            const teacherSubjects = allSubjects.filter((subject: Subject) => 
-              teacherSubjectIds.includes(subject.id)
-            );
-            setSubjects(teacherSubjects);
-          } else {
-            // If no subjects in profile, show empty array
-            setSubjects([]);
-          }
+          // Show ALL subjects (like in sign up) so teacher can select which ones they teach
+          setSubjects(allSubjects);
           
           if (results.length > 3) {
             const gradesData = await results[3].json();

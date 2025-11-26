@@ -486,6 +486,23 @@ class CourseViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
+    def update(self, request, *args, **kwargs):
+        """Override update to add better error logging"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if not serializer.is_valid():
+            # Log validation errors for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Course update validation errors: {serializer.errors}")
+            logger.error(f"Request data: {request.data}")
+            if hasattr(request.data, 'getlist'):
+                logger.error(f"subject_ids from getlist: {request.data.getlist('subject_ids')}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+    
     def perform_create(self, serializer):
         # Only teachers can create courses
         if not self.request.user.is_authenticated or self.request.user.user_type != 'teacher':

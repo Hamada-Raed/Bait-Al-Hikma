@@ -8,6 +8,109 @@ from .models import (
 )
 
 
+class SubjectIdsListField(serializers.ListField):
+    """Custom ListField that handles FormData dict format for subject_ids"""
+    child = serializers.IntegerField()
+    
+    def _normalize_data(self, data):
+        """Normalize data from various formats to a list of integers"""
+        # Handle QueryDict format (FormData before DRF parsing)
+        if hasattr(data, 'getlist'):
+            subject_ids = data.getlist('subject_ids') if 'subject_ids' in data else []
+            valid_ids = []
+            for sid in subject_ids:
+                if sid and sid != '':
+                    try:
+                        valid_ids.append(int(str(sid).strip()))
+                    except (ValueError, TypeError):
+                        pass
+            return valid_ids
+        
+        # Handle dict format (like {"0": "1", "1": "2"}) from FormData
+        # This happens when DRF parses FormData with multiple values for the same key
+        if isinstance(data, dict):
+            valid_ids = []
+            
+            # Try to extract from numeric keys pattern
+            try:
+                sorted_keys = sorted(data.keys(), key=lambda x: int(str(x)) if str(x).isdigit() else 999999)
+                for key in sorted_keys:
+                    value = data[key]
+                    # Handle list values (could be from FormData or error messages)
+                    if isinstance(value, list):
+                        for v in value:
+                            if v and v != '':
+                                try:
+                                    # Skip if it's an error message (contains common error keywords)
+                                    if isinstance(v, str) and any(err in v.lower() for err in ['error', 'required', 'valid', 'invalid']):
+                                        continue
+                                    # Try to convert to int
+                                    v_str = str(v).strip()
+                                    if v_str.isdigit():
+                                        valid_ids.append(int(v_str))
+                                    elif isinstance(v, int):
+                                        valid_ids.append(v)
+                                except (ValueError, TypeError):
+                                    pass
+                    # Handle string or int values
+                    elif value and value != '':
+                        try:
+                            # Skip if it's an error message
+                            if isinstance(value, str) and any(err in value.lower() for err in ['error', 'required', 'valid', 'invalid']):
+                                continue
+                            value_str = str(value).strip()
+                            if value_str.isdigit():
+                                valid_ids.append(int(value_str))
+                            elif isinstance(value, int):
+                                valid_ids.append(value)
+                        except (ValueError, TypeError):
+                            pass
+            except (ValueError, TypeError):
+                pass
+            
+            if valid_ids:
+                return valid_ids
+        
+        # For list format, handle normally
+        if isinstance(data, list):
+            valid_ids = []
+            for item in data:
+                if item and item != '':
+                    try:
+                        # Skip error messages
+                        if isinstance(item, str) and any(err in item.lower() for err in ['error', 'required', 'valid', 'invalid']):
+                            continue
+                        if isinstance(item, int):
+                            valid_ids.append(item)
+                        elif isinstance(item, str) and item.strip().isdigit():
+                            valid_ids.append(int(item.strip()))
+                    except (ValueError, TypeError):
+                        pass
+            return valid_ids
+        
+        # For string format (single value)
+        if isinstance(data, str) and data.strip().isdigit():
+            return [int(data.strip())]
+        
+        # For integer format (single value)
+        if isinstance(data, int):
+            return [data]
+        
+        return []
+    
+    def to_internal_value(self, data):
+        """Convert data to a list of integers"""
+        # Normalize the data first
+        normalized = self._normalize_data(data)
+        
+        # If we got valid IDs, validate them with parent
+        if normalized:
+            return super().to_internal_value(normalized)
+        
+        # Return empty list if no valid IDs found
+        return super().to_internal_value([])
+
+
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
@@ -218,6 +321,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CourseSerializer(serializers.ModelSerializer):
+    subjects = serializers.PrimaryKeyRelatedField(many=True, queryset=Subject.objects.all(), required=False)
+    subject_ids = SubjectIdsListField(write_only=True, required=False)
     subject_name = serializers.SerializerMethodField()
     grade_name = serializers.SerializerMethodField()
     track_name = serializers.SerializerMethodField()
@@ -233,7 +338,7 @@ class CourseSerializer(serializers.ModelSerializer):
         model = Course
         fields = [
             'id', 'name', 'description', 'image', 'image_url', 'language', 'price',
-            'course_type', 'country', 'country_name', 'subject', 'subject_name', 
+            'course_type', 'country', 'country_name', 'subjects', 'subject_ids', 'subject_name', 
             'grade', 'grade_name', 'track', 'track_name', 'major', 'major_name',
             'status', 'created_at', 'updated_at', 'teacher', 'teacher_name',
             'video_count', 'quiz_count', 'enrollment_count'
@@ -241,13 +346,16 @@ class CourseSerializer(serializers.ModelSerializer):
         read_only_fields = ['teacher', 'created_at', 'updated_at']
     
     def get_subject_name(self, obj):
-        if obj.subject:
+        # Return first subject name for backward compatibility, or comma-separated list
+        subjects = obj.subjects.all()
+        if subjects.exists():
             request = self.context.get('request')
             if request and hasattr(request, 'LANGUAGE_CODE'):
                 lang = request.LANGUAGE_CODE
             else:
                 lang = 'en'
-            return obj.subject.name_ar if lang == 'ar' else obj.subject.name_en
+            names = [s.name_ar if lang == 'ar' else s.name_en for s in subjects]
+            return ', '.join(names)
         return None
     
     def get_grade_name(self, obj):
@@ -368,6 +476,178 @@ class CourseSerializer(serializers.ModelSerializer):
                     # Handle empty string or None
                     data['grade'] = None
         
+        # Handle subject_ids from FormData
+        if hasattr(data, 'getlist'):  # It's a QueryDict
+            data = data.copy()
+            # Check if subject_ids is actually in the request (not just empty)
+            if 'subject_ids' in data:
+                subject_ids = data.getlist('subject_ids')
+                # Filter out empty strings and convert to integers
+                try:
+                    valid_subject_ids = [int(sid) for sid in subject_ids if sid and sid != '']
+                    if len(valid_subject_ids) > 0:
+                        data['subject_ids'] = valid_subject_ids
+                    else:
+                        # Empty list - for create this is an error, for update we preserve existing
+                        if not self.instance:
+                            data['subject_ids'] = []  # For create, will fail validation
+                        else:
+                            # For update, remove from data so it's None and we keep existing subjects
+                            # Use pop instead of del to avoid KeyError
+                            data.pop('subject_ids', None)
+                except (ValueError, TypeError) as e:
+                    # Invalid subject IDs - log and set to empty for create, remove for update
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Error parsing subject_ids: {e}, raw data: {subject_ids}")
+                    if not self.instance:
+                        data['subject_ids'] = []  # For create, will fail validation
+                    else:
+                        # For update, remove from data so it's None and we keep existing subjects
+                        data.pop('subject_ids', None)
+            # Also handle 'subjects' field for backward compatibility
+            if 'subjects' in data:
+                subjects = data.getlist('subjects')
+                valid_subjects = [int(sid) for sid in subjects if sid and sid != '']
+                if len(valid_subjects) > 0:
+                    data['subject_ids'] = valid_subjects
+        elif isinstance(data, dict):
+            # Handle case where DRF has already parsed FormData into a dict
+            # Check if subject_ids is a dict (which happens when FormData has multiple values)
+            if 'subject_ids' in data:
+                subject_ids_value = data.get('subject_ids')
+                
+                # If it's already a list, validate it
+                if isinstance(subject_ids_value, list):
+                    try:
+                        valid_subject_ids = [int(sid) for sid in subject_ids_value if sid and sid != '']
+                        if len(valid_subject_ids) > 0:
+                            data['subject_ids'] = valid_subject_ids
+                        else:
+                            if not self.instance:
+                                data['subject_ids'] = []
+                            else:
+                                data.pop('subject_ids', None)
+                    except (ValueError, TypeError):
+                        if not self.instance:
+                            data['subject_ids'] = []
+                        else:
+                            data.pop('subject_ids', None)
+                
+                # If it's a dict (like {"0": "1", "1": "2"}), convert to list
+                elif isinstance(subject_ids_value, dict):
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"Converting subject_ids from dict format: {subject_ids_value}")
+                    try:
+                        # Extract values from dict and convert to integers
+                        # Sort by keys to maintain order
+                        sorted_keys = sorted(subject_ids_value.keys(), key=lambda x: int(x) if str(x).isdigit() else 0)
+                        valid_subject_ids = []
+                        for key in sorted_keys:
+                            value = subject_ids_value[key]
+                            # Handle both string and list values
+                            if isinstance(value, list):
+                                for v in value:
+                                    if v and v != '':
+                                        try:
+                                            valid_subject_ids.append(int(v))
+                                        except (ValueError, TypeError):
+                                            pass
+                            elif value and value != '':
+                                try:
+                                    # The value might be a list wrapped in a string, or just a string
+                                    if isinstance(value, str) and value.startswith('['):
+                                        # Try to parse as JSON if it looks like a list
+                                        import json
+                                        parsed = json.loads(value)
+                                        if isinstance(parsed, list):
+                                            for v in parsed:
+                                                if v and v != '':
+                                                    valid_subject_ids.append(int(v))
+                                        else:
+                                            valid_subject_ids.append(int(value))
+                                    else:
+                                        valid_subject_ids.append(int(value))
+                                except (ValueError, TypeError) as e:
+                                    logger.error(f"Error converting value {value} to int: {e}")
+                                    pass
+                        
+                        logger.info(f"Converted subject_ids to list: {valid_subject_ids}")
+                        if len(valid_subject_ids) > 0:
+                            data['subject_ids'] = valid_subject_ids
+                        else:
+                            if not self.instance:
+                                data['subject_ids'] = []
+                            else:
+                                data.pop('subject_ids', None)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error parsing subject_ids from dict: {e}, raw data: {subject_ids_value}")
+                        if not self.instance:
+                            data['subject_ids'] = []
+                        else:
+                            data.pop('subject_ids', None)
+            
+            # Also handle 'subjects' field for backward compatibility
+            if 'subjects' in data:
+                subjects_value = data.get('subjects')
+                if isinstance(subjects_value, list):
+                    try:
+                        valid_subjects = [int(sid) for sid in subjects_value if sid and sid != '']
+                        if len(valid_subjects) > 0:
+                            data['subject_ids'] = valid_subjects
+                    except (ValueError, TypeError):
+                        pass
+                elif isinstance(subjects_value, dict):
+                    # Convert dict to list
+                    try:
+                        sorted_keys = sorted(subjects_value.keys(), key=lambda x: int(x) if str(x).isdigit() else 0)
+                        valid_subjects = []
+                        for key in sorted_keys:
+                            value = subjects_value[key]
+                            if isinstance(value, list):
+                                for v in value:
+                                    if v and v != '':
+                                        try:
+                                            valid_subjects.append(int(v))
+                                        except (ValueError, TypeError):
+                                            pass
+                            elif value and value != '':
+                                try:
+                                    valid_subjects.append(int(value))
+                                except (ValueError, TypeError):
+                                    pass
+                        if len(valid_subjects) > 0:
+                            data['subject_ids'] = valid_subjects
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Final check: ensure subject_ids is always a list (not dict) before calling super()
+        if isinstance(data, dict) and 'subject_ids' in data:
+            subject_ids_value = data.get('subject_ids')
+            # If it's still a dict at this point, convert it one more time
+            if isinstance(subject_ids_value, dict):
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"FINAL CHECK: subject_ids is still a dict, converting: {subject_ids_value}")
+                try:
+                    sorted_keys = sorted(subject_ids_value.keys(), key=lambda x: int(str(x)) if str(x).isdigit() else 0)
+                    valid_ids = []
+                    for key in sorted_keys:
+                        val = subject_ids_value[key]
+                        if isinstance(val, list):
+                            valid_ids.extend([int(v) for v in val if v and v != ''])
+                        elif isinstance(val, int):
+                            valid_ids.append(val)
+                        elif val and val != '':
+                            valid_ids.append(int(val))
+                    data['subject_ids'] = valid_ids
+                    logger.info(f"FINAL conversion result: {valid_ids}")
+                except Exception as e:
+                    logger.error(f"FINAL conversion failed: {e}, data: {subject_ids_value}")
+                    # Set to empty list to avoid validation error
+                    data['subject_ids'] = []
+        
         return super().to_internal_value(data)
     
     def validate(self, attrs):
@@ -454,7 +734,32 @@ class CourseSerializer(serializers.ModelSerializer):
                         raise serializers.ValidationError({
                             'grade': 'Invalid grade selected.'
                         })
+        
+        # Validate subjects - only if provided (for updates, if not provided, keep existing)
+        subject_ids = attrs.get('subject_ids')
+        if subject_ids is not None:  # Only validate if explicitly provided
+            if not subject_ids or len(subject_ids) == 0:
+                raise serializers.ValidationError({
+                    'subjects': 'At least one subject must be selected.'
+                })
+        
         return attrs
+    
+    def create(self, validated_data):
+        subject_ids = validated_data.pop('subject_ids', None)
+        course = Course.objects.create(**validated_data)
+        if subject_ids:
+            course.subjects.set(subject_ids)
+        return course
+    
+    def update(self, instance, validated_data):
+        subject_ids = validated_data.pop('subject_ids', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if subject_ids is not None:
+            instance.subjects.set(subject_ids)
+        return instance
 
 
 class AvailabilitySerializer(serializers.ModelSerializer):

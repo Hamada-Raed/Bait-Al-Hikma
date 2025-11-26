@@ -449,7 +449,9 @@ interface Major {
               price: course.price?.toString() || '0',
               course_type: course.course_type || 'school',
               country: course.country?.toString() || '',
-              subjects: course.subject ? [course.subject] : [],
+              subjects: course.subjects && Array.isArray(course.subjects) 
+                ? course.subjects.map((s: any) => typeof s === 'object' ? s.id : s)
+                : (course.subject ? [typeof course.subject === 'object' ? course.subject.id : course.subject] : []),
               grade: course.grade?.toString() || '',
               track: course.track?.toString() || '',
             });
@@ -463,25 +465,28 @@ interface Major {
               setPreviewImage(course.image_url);
             }
 
-            // Ensure the current course's subject is available in the subjects list
-            // even if teacher removed it from their profile
-            if (course.subject) {
-              const currentSubjectId = parseInt(course.subject.toString());
-              // Fetch all subjects to find the current one
+            // Ensure the current course's subjects are available in the subjects list
+            // even if teacher removed them from their profile
+            const courseSubjectIds = course.subjects && Array.isArray(course.subjects) 
+              ? course.subjects.map((s: any) => typeof s === 'object' ? s.id : s)
+              : (course.subject ? [typeof course.subject === 'object' ? course.subject.id : course.subject] : []);
+            
+            if (courseSubjectIds.length > 0) {
+              // Fetch all subjects to find the current ones
               try {
                 const allSubjectsRes = await fetch(`${API_BASE_URL}/subjects/`);
                 const allSubjectsData = await allSubjectsRes.json();
                 const allSubjects = allSubjectsData.results || allSubjectsData;
-                const currentSubject = allSubjects.find((s: Subject) => s.id === currentSubjectId);
+                const currentSubjects = allSubjects.filter((s: Subject) => 
+                  courseSubjectIds.includes(s.id)
+                );
                 
-                if (currentSubject) {
-                  // Check if it's already in the subjects list
+                if (currentSubjects.length > 0) {
+                  // Add subjects that aren't already in the list
                   setSubjects(prev => {
-                    const exists = prev.some(s => s.id === currentSubjectId);
-                    if (!exists) {
-                      return [...prev, currentSubject];
-                    }
-                    return prev;
+                    const existingIds = new Set(prev.map((s: Subject) => s.id));
+                    const newSubjects = currentSubjects.filter((s: Subject) => !existingIds.has(s.id));
+                    return [...prev, ...newSubjects];
                   });
                 }
               } catch (err) {
@@ -712,10 +717,10 @@ interface Major {
       formDataToSend.append('language', formData.language);
       formDataToSend.append('price', formData.price || '0');
       formDataToSend.append('course_type', formData.course_type);
-      // Send the first selected subject (Course model has single subject field)
-      if (formData.subjects.length > 0) {
-        formDataToSend.append('subject', formData.subjects[0].toString());
-      }
+      // Send all selected subjects
+      formData.subjects.forEach(subjectId => {
+        formDataToSend.append('subject_ids', subjectId.toString());
+      });
       formDataToSend.append('country', formData.country);
       
       if (formData.course_type === 'school') {

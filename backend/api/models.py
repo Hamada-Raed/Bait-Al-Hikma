@@ -158,7 +158,7 @@ class Course(models.Model):
     course_type = models.CharField(max_length=20, choices=COURSE_TYPE_CHOICES)
     country = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True,
                                help_text='Required for school courses')
-    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
+    subjects = models.ManyToManyField(Subject, related_name='courses', help_text='Subjects for this course')
     grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True,
                              help_text='Required for school courses')
     track = models.ForeignKey(Track, on_delete=models.SET_NULL, null=True, blank=True,
