@@ -106,6 +106,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [newTodoDate, setNewTodoDate] = useState('');
   const [newTodoItemText, setNewTodoItemText] = useState('');
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editingItemText, setEditingItemText] = useState<string>('');
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -447,6 +449,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     if (!newTodoItemText.trim()) {
       return;
     }
+    const itemText = newTodoItemText.trim();
+    setNewTodoItemText(''); // Clear input immediately for better UX
+    
     try {
       const csrfToken = await ensureCsrfToken();
       const headers: HeadersInit = {
@@ -461,27 +466,44 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
         credentials: 'include',
         body: JSON.stringify({
           todo_list: todoListId,
-          text: newTodoItemText,
+          text: itemText,
           order: selectedTodoList?.items?.length || 0,
         }),
       });
       if (response.ok) {
-        setNewTodoItemText('');
-        // Refresh the selected todo list to show the new item
-        const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${todoListId}/`, {
-          credentials: 'include',
-        }).then(r => r.json());
-        setSelectedTodoList(updatedList);
+        const newItem = await response.json();
+        // Optimistically update the selected todo list
+        if (selectedTodoList) {
+          setSelectedTodoList({
+            ...selectedTodoList,
+            items: [...(selectedTodoList.items || []), newItem]
+          });
+        }
         // Also refresh all todo lists to update the item count
         await fetchTodoLists();
+      } else {
+        // If failed, restore the text
+        setNewTodoItemText(itemText);
       }
     } catch (error) {
       console.error('Error adding todo item:', error);
+      // If failed, restore the text
+      setNewTodoItemText(itemText);
     }
   };
 
   // Toggle todo item completion
   const handleToggleTodoItem = async (itemId: number, isCompleted: boolean) => {
+    // Optimistically update UI
+    if (selectedTodoList) {
+      setSelectedTodoList({
+        ...selectedTodoList,
+        items: selectedTodoList.items.map((item: any) =>
+          item.id === itemId ? { ...item, is_completed: !isCompleted } : item
+        )
+      });
+    }
+    
     try {
       const csrfToken = await ensureCsrfToken();
       const headers: HeadersInit = {
@@ -499,18 +521,142 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
         }),
       });
       if (response.ok) {
-        // Refresh the selected todo list
+        // Refresh all todo lists
+        await fetchTodoLists();
+      } else {
+        // Revert on error
         if (selectedTodoList) {
           const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
             credentials: 'include',
           }).then(r => r.json());
           setSelectedTodoList(updatedList);
         }
-        // Also refresh all todo lists
-        await fetchTodoLists();
       }
     } catch (error) {
       console.error('Error toggling todo item:', error);
+      // Revert on error
+      if (selectedTodoList) {
+        const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+          credentials: 'include',
+        }).then(r => r.json());
+        setSelectedTodoList(updatedList);
+      }
+    }
+  };
+
+  // Delete todo item
+  const handleDeleteTodoItem = async (itemId: number) => {
+    if (!confirm(getText('Are you sure you want to delete this item?', 'هل أنت متأكد من حذف هذا العنصر؟'))) {
+      return;
+    }
+    
+    // Optimistically remove from UI
+    if (selectedTodoList) {
+      setSelectedTodoList({
+        ...selectedTodoList,
+        items: selectedTodoList.items.filter((item: any) => item.id !== itemId)
+      });
+    }
+    
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {};
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-items/${itemId}/`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include',
+      });
+      if (response.ok) {
+        // Refresh all todo lists
+        await fetchTodoLists();
+      } else {
+        // Revert on error
+        if (selectedTodoList) {
+          const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+            credentials: 'include',
+          }).then(r => r.json());
+          setSelectedTodoList(updatedList);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting todo item:', error);
+      // Revert on error
+      if (selectedTodoList) {
+        const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+          credentials: 'include',
+        }).then(r => r.json());
+        setSelectedTodoList(updatedList);
+      }
+    }
+  };
+
+  // Edit todo item handlers
+  const handleStartEdit = (item: any) => {
+    setEditingItemId(item.id);
+    setEditingItemText(item.text);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setEditingItemText('');
+  };
+
+  const handleSaveEdit = async (itemId: number) => {
+    if (!editingItemText.trim()) {
+      return;
+    }
+    
+    const itemText = editingItemText.trim();
+    
+    // Optimistically update UI
+    if (selectedTodoList) {
+      setSelectedTodoList({
+        ...selectedTodoList,
+        items: selectedTodoList.items.map((item: any) =>
+          item.id === itemId ? { ...item, text: itemText } : item
+        )
+      });
+    }
+    setEditingItemId(null);
+    setEditingItemText('');
+    
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-items/${itemId}/`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          text: itemText,
+        }),
+      });
+      if (!response.ok) {
+        // Revert on error
+        if (selectedTodoList) {
+          const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+            credentials: 'include',
+          }).then(r => r.json());
+          setSelectedTodoList(updatedList);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating todo item:', error);
+      // Revert on error
+      if (selectedTodoList) {
+        const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+          credentials: 'include',
+        }).then(r => r.json());
+        setSelectedTodoList(updatedList);
+      }
     }
   };
 
@@ -523,9 +669,91 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
       if (response.ok) {
         const data = await response.json();
         setSelectedTodoList(data);
+        setEditingItemId(null);
+        setEditingItemText('');
       }
     } catch (error) {
       console.error('Error fetching todo list:', error);
+    }
+  };
+
+  // Edit todo list
+  const [editingListTitle, setEditingListTitle] = useState<string>('');
+  const [editingListDate, setEditingListDate] = useState<string>('');
+  const [isEditingList, setIsEditingList] = useState(false);
+
+  const handleStartEditList = () => {
+    if (selectedTodoList) {
+      setEditingListTitle(selectedTodoList.title);
+      setEditingListDate(selectedTodoList.date);
+      setIsEditingList(true);
+    }
+  };
+
+  const handleCancelEditList = () => {
+    setIsEditingList(false);
+    setEditingListTitle('');
+    setEditingListDate('');
+  };
+
+  const handleSaveList = async () => {
+    if (!selectedTodoList || !editingListTitle.trim() || !editingListDate) {
+      return;
+    }
+    
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          title: editingListTitle.trim(),
+          date: editingListDate,
+        }),
+      });
+      if (response.ok) {
+        const updatedList = await response.json();
+        setSelectedTodoList(updatedList);
+        setIsEditingList(false);
+        await fetchTodoLists();
+      }
+    } catch (error) {
+      console.error('Error updating todo list:', error);
+    }
+  };
+
+  // Delete todo list
+  const handleDeleteTodoList = async () => {
+    if (!selectedTodoList) return;
+    
+    if (!confirm(getText('Are you sure you want to delete this list?', 'هل أنت متأكد من حذف هذه القائمة؟'))) {
+      return;
+    }
+    
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {};
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      const response = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include',
+      });
+      if (response.ok) {
+        setSelectedTodoList(null);
+        await fetchTodoLists();
+      }
+    } catch (error) {
+      console.error('Error deleting todo list:', error);
     }
   };
 
@@ -742,57 +970,219 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             ) : selectedTodoList ? (
               <div className="max-w-2xl mx-auto bg-dark-100 rounded-xl p-6 border border-dark-300">
                 <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-2xl font-bold text-white mb-2">{selectedTodoList.title}</h3>
-                    <p className="text-gray-400">
-                      {new Date(selectedTodoList.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
+                  {isEditingList ? (
+                    <div className="flex-1 space-y-3">
+                      <input
+                        type="text"
+                        value={editingListTitle}
+                        onChange={(e) => setEditingListTitle(e.target.value)}
+                        className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        placeholder={getText('List title', 'عنوان القائمة')}
+                      />
+                      <input
+                        type="date"
+                        value={editingListDate}
+                        onChange={(e) => setEditingListDate(e.target.value)}
+                        className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <h3 className="text-2xl font-bold text-white mb-2">{selectedTodoList.title}</h3>
+                      <p className="text-gray-400">
+                        {new Date(selectedTodoList.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {isEditingList ? (
+                      <>
+                        <button
+                          onClick={handleSaveList}
+                          className="p-2 text-green-400 hover:text-green-300 transition-colors"
+                          title={getText('Save', 'حفظ')}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={handleCancelEditList}
+                          className="p-2 text-gray-400 hover:text-gray-300 transition-colors"
+                          title={getText('Cancel', 'إلغاء')}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={handleStartEditList}
+                          className="p-2 text-gray-400 hover:text-primary-400 transition-colors"
+                          title={getText('Edit List', 'تعديل القائمة')}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={handleDeleteTodoList}
+                          className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                          title={getText('Delete List', 'حذف القائمة')}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedTodoList(null);
+                            setNewTodoItemText('');
+                            setIsEditingList(false);
+                          }}
+                          className="p-2 text-gray-400 hover:text-white transition-colors"
+                          title={getText('Close', 'إغلاق')}
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </div>
-                  <button
-                    onClick={() => {
-                      setSelectedTodoList(null);
-                      setNewTodoItemText('');
-                    }}
-                    className="p-2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
                 </div>
                 <div className="space-y-3 mb-6">
                   {selectedTodoList.items && selectedTodoList.items.length > 0 ? (
                     selectedTodoList.items.map((item: any) => (
                       <div
                         key={item.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border ${
-                          item.is_completed
-                            ? 'bg-dark-200/50 border-dark-300 opacity-60'
-                            : 'bg-dark-200 border-dark-300'
-                        }`}
+                        className="flex items-center gap-3"
                       >
                         <input
                           type="checkbox"
                           checked={item.is_completed}
                           onChange={() => handleToggleTodoItem(item.id, item.is_completed)}
-                          className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2 cursor-pointer"
+                          className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2 cursor-pointer flex-shrink-0"
                         />
-                        <span
-                          className={`flex-1 text-gray-300 ${
-                            item.is_completed ? 'line-through text-gray-500' : ''
+                        <div
+                          className={`flex-1 flex items-center gap-3 p-3 rounded-lg border ${
+                            item.is_completed
+                              ? 'bg-dark-200/50 border-dark-300'
+                              : 'bg-dark-200 border-dark-300'
                           }`}
                         >
-                          {item.text}
-                        </span>
+                        {editingItemId === item.id ? (
+                          <div className="flex-1 flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editingItemText}
+                              onChange={(e) => setEditingItemText(e.target.value)}
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveEdit(item.id);
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEdit();
+                                }
+                              }}
+                              className="flex-1 px-3 py-1 bg-dark-300 border border-dark-400 rounded text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleSaveEdit(item.id)}
+                              className="p-1.5 text-green-400 hover:text-green-300 transition-colors"
+                              title={getText('Save', 'حفظ')}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="p-1.5 text-gray-400 hover:text-gray-300 transition-colors"
+                              title={getText('Cancel', 'إلغاء')}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span
+                              className={`flex-1 text-gray-300 ${
+                                item.is_completed ? 'line-through text-gray-500' : ''
+                              }`}
+                            >
+                              {item.text}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleStartEdit(item)}
+                                className="p-1.5 text-gray-400 hover:text-primary-400 transition-colors"
+                                title={getText('Edit', 'تعديل')}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTodoItem(item.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
+                                title={getText('Delete', 'حذف')}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                        </div>
                       </div>
                     ))
                   ) : (
                     <p className="text-gray-500 text-center py-4">{getText('No items yet', 'لا توجد عناصر بعد')}</p>
                   )}
+                </div>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={newTodoItemText}
+                    onChange={(e) => setNewTodoItemText(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddTodoItem(selectedTodoList.id);
+                      }
+                    }}
+                    placeholder={getText('Add new item...', 'أضف عنصر جديد...')}
+                    className="flex-1 px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    onClick={() => handleAddTodoItem(selectedTodoList.id)}
+                    className="px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                  >
+                    {getText('Add', 'إضافة')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedTodoList(null);
+                      setNewTodoItemText('');
+                      setIsEditingList(false);
+                      fetchTodoLists();
+                    }}
+                    className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {getText('Save & Display', 'حفظ وعرض')}
+                  </button>
                 </div>
                 <div className="flex gap-3">
                   <input
