@@ -19,14 +19,15 @@ from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt
+    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
     MajorSerializer, SubjectSerializer, UserSerializer, PlatformSettingsSerializer,
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
     WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
-    PrivateLessonPriceSerializer, ContactMessageSerializer, StudentTaskSerializer, StudentNoteSerializer
+    PrivateLessonPriceSerializer, ContactMessageSerializer, StudentTaskSerializer, StudentNoteSerializer,
+    StudentScheduleSerializer
 )
 
 
@@ -1629,6 +1630,98 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
+class StudentScheduleViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentScheduleSerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        # Students can only see their own schedules
+        if self.request.user.is_authenticated and self.request.user.user_type in ['school_student', 'university_student']:
+            return StudentSchedule.objects.filter(student=self.request.user)
+        return StudentSchedule.objects.none()
+    
+    def perform_create(self, serializer):
+        # Automatically set the student to the current user
+        serializer.save(student=self.request.user)
+    
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """Create schedule blocks from selected time slots for students"""
+        if not request.user.is_authenticated or request.user.user_type not in ['school_student', 'university_student']:
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        slots = request.data.get('slots', [])
+        if not slots or len(slots) == 0:
+            return Response({'error': 'No slots provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get common data
+        title = request.data.get('title', '')
+        color = request.data.get('color', 'blue')
+        
+        if not title or not title.strip():
+            return Response({'error': 'Title is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Group slots by date and calculate start/end hours for each date
+        from collections import defaultdict
+        date_blocks = defaultdict(lambda: {'hours': [], 'date': None})
+        
+        for slot in slots:
+            date_str = slot.get('date')
+            hour = slot.get('hour')
+            if date_str and hour is not None:
+                if date_blocks[date_str]['date'] is None:
+                    date_blocks[date_str]['date'] = date_str
+                date_blocks[date_str]['hours'].append(hour)
+        
+        created = []
+        errors = []
+        
+        # Create one block per date
+        for date_str, block_data in date_blocks.items():
+            hours = sorted(set(block_data['hours']))  # Remove duplicates and sort
+            
+            if len(hours) == 0:
+                continue
+            
+            # Find consecutive hours to form blocks
+            # For simplicity, we'll create one block from min to max+1
+            start_hour = min(hours)
+            end_hour = max(hours) + 1
+            
+            # Handle wrap-around (if 0 is in the list, it should be treated as 24)
+            if 0 in hours:
+                # If we have hours like [22, 23, 0], we need to handle it
+                normalized_hours = [h if h != 0 else 24 for h in hours]
+                start_hour = min(normalized_hours)
+                end_hour = max(normalized_hours) + 1
+                if end_hour > 24:
+                    end_hour = end_hour % 24
+            
+            serializer = StudentScheduleSerializer(data={
+                'date': date_str,
+                'start_hour': start_hour,
+                'end_hour': end_hour,
+                'title': title,
+                'color': color,
+            }, context={'request': request})
+            
+            if serializer.is_valid():
+                try:
+                    schedule = serializer.save(student=request.user)
+                    created.append(serializer.data)
+                except Exception as e:
+                    errors.append({'date': date_str, 'error': str(e)})
+            else:
+                errors.append({'date': date_str, 'error': serializer.errors})
+        
+        return Response({
+            'created': created,
+            'errors': errors,
+            'created_count': len(created),
+            'error_count': len(errors)
+        }, status=status.HTTP_201_CREATED)
+
+
 # Course Structure Management Views
 @api_view(['POST', 'PUT', 'DELETE'])
 @permission_classes([AllowAny])  # We'll check authentication manually
@@ -1802,16 +1895,29 @@ def stream_video(request, video_id):
         video = Video.objects.select_related('section__chapter__course__teacher').get(pk=video_id)
         course = video.section.chapter.course
         
-        # Check permissions - teacher who owns the course has access
-        # TODO: Add enrollment check for students when enrollment is implemented
+        # Check permissions
         has_access = False
+        
+        # Teachers who own the course have access
         if request.user.user_type == 'teacher' and course.teacher == request.user:
             has_access = True
+        # Admins have access
         elif request.user.is_staff or request.user.is_superuser:
             has_access = True
-        # Add enrollment check here:
-        # elif Enrollment.objects.filter(course=course, student=request.user).exists():
-        #     has_access = True
+        # Students: check enrollment and lock status
+        elif request.user.user_type in ['school_student', 'university_student']:
+            from .models import Enrollment
+            # If video is not locked, students can view it (preview)
+            if not video.is_locked:
+                has_access = True
+            else:
+                # If video is locked, student must be enrolled
+                try:
+                    enrollment = Enrollment.objects.get(student=request.user, course=course)
+                    if enrollment.status in ['enrolled', 'in_progress', 'completed']:
+                        has_access = True
+                except Enrollment.DoesNotExist:
+                    pass
         
         if not has_access:
             return Response({'error': 'Access denied. You do not have permission to view this video.'}, 

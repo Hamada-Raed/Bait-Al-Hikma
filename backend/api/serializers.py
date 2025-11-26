@@ -4,7 +4,7 @@ from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt
+    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule
 )
 
 
@@ -754,7 +754,7 @@ class AvailabilitySerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Availability
-        fields = ['id', 'teacher', 'title', 'date', 'start_hour', 'end_hour', 'for_university_students', 'for_school_students', 
+        fields = ['id', 'teacher', 'title', 'color', 'date', 'start_hour', 'end_hour', 'for_university_students', 'for_school_students', 
                   'grades', 'grade_ids', 'tracks', 'track_ids', 'subjects', 'subject_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
         read_only_fields = ['teacher', 'created_at', 'updated_at', 'is_booked', 'booked_by', 'booked_at']
     
@@ -1022,3 +1022,63 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
         model = QuizAttempt
         fields = ['id', 'quiz', 'score', 'total_questions', 'percentage', 'answers', 'results', 'submitted_at']
         read_only_fields = ['submitted_at']
+
+
+class StudentScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentSchedule
+        fields = ['id', 'student', 'title', 'color', 'date', 'start_hour', 'end_hour', 'created_at', 'updated_at']
+        read_only_fields = ['student', 'created_at', 'updated_at']
+    
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Title is required.')
+        return value.strip()
+    
+    def validate(self, attrs):
+        from django.utils import timezone
+        from datetime import datetime, time
+        
+        # Get date and hours
+        date = attrs.get('date')
+        start_hour = attrs.get('start_hour')
+        end_hour = attrs.get('end_hour')
+        student = self.context['request'].user if self.context.get('request') else None
+        
+        if date and start_hour is not None and end_hour is not None and student:
+            # Validate start_hour < end_hour (handle wrap-around at midnight)
+            if start_hour == end_hour:
+                raise serializers.ValidationError({
+                    'end_hour': 'End hour must be different from start hour.'
+                })
+            
+            # Check for overlapping schedules (same student, same date)
+            existing = StudentSchedule.objects.filter(
+                student=student,
+                date=date
+            )
+            
+            # Exclude current instance if updating
+            if self.instance:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            # Create a temporary schedule object to check overlaps
+            temp_schedule = StudentSchedule(
+                date=date,
+                start_hour=start_hour,
+                end_hour=end_hour,
+                student=student
+            )
+            
+            for existing_schedule in existing:
+                if temp_schedule.overlaps_with(existing_schedule):
+                    raise serializers.ValidationError({
+                        'start_hour': f'This schedule overlaps with an existing schedule ({existing_schedule.start_hour}:00-{existing_schedule.end_hour}:00) on {date.strftime("%B %d, %Y")}. Please choose a different time.'
+                    })
+        
+        return attrs
+    
+    def create(self, validated_data):
+        # Automatically set the student to the current user
+        validated_data['student'] = self.context['request'].user
+        return StudentSchedule.objects.create(**validated_data)

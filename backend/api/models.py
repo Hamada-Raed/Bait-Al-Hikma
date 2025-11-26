@@ -374,8 +374,14 @@ class WhyChooseUsSection(models.Model):
 
 class Availability(models.Model):
     """Teacher availability time blocks"""
+    COLOR_CHOICES = [
+        ('red', 'Red'),
+        ('yellow', 'Yellow'),
+        ('blue', 'Blue'),
+    ]
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='availabilities')
     title = models.CharField(max_length=200, blank=True, null=True)
+    color = models.CharField(max_length=10, choices=COLOR_CHOICES, default='blue', help_text='Color for schedule organization (students only)')
     date = models.DateField()
     start_hour = models.IntegerField(help_text='Start hour in 24-hour format (0-23)')
     end_hour = models.IntegerField(help_text='End hour in 24-hour format (0-23), exclusive (not included)')
@@ -444,6 +450,58 @@ class Availability(models.Model):
             return False, f"Cannot delete availability. It is booked and starts in less than 8 hours ({hours_remaining:.1f} hours remaining)."
         
         return True, None
+
+
+class StudentSchedule(models.Model):
+    """Student schedule organization - for students to organize their days"""
+    COLOR_CHOICES = [
+        ('red', 'Red'),
+        ('yellow', 'Yellow'),
+        ('blue', 'Blue'),
+    ]
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='student_schedules')
+    title = models.CharField(max_length=200)
+    color = models.CharField(max_length=10, choices=COLOR_CHOICES, default='blue')
+    date = models.DateField()
+    start_hour = models.IntegerField(help_text='Start hour in 24-hour format (0-23)')
+    end_hour = models.IntegerField(help_text='End hour in 24-hour format (0-23), exclusive (not included)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['date', 'start_hour']
+        verbose_name = 'Student Schedule'
+        verbose_name_plural = 'Student Schedules'
+    
+    def __str__(self):
+        return f"{self.student.email} - {self.date} {self.start_hour}:00-{self.end_hour}:00 - {self.title}"
+    
+    def get_hours(self):
+        """Get list of hours in this block"""
+        hours = []
+        current = self.start_hour
+        while current != self.end_hour:
+            hours.append(current)
+            current = (current + 1) % 24
+        return hours
+    
+    def overlaps_with(self, other):
+        """Check if this schedule overlaps with another"""
+        if self.date != other.date or self.student != other.student:
+            return False
+        
+        # Check if blocks overlap
+        # Normalize hours (handle wrap-around at midnight)
+        def normalize_hour(hour):
+            return hour if hour != 0 else 24
+        
+        self_start = normalize_hour(self.start_hour)
+        self_end = normalize_hour(self.end_hour) if self.end_hour != 0 else 24
+        other_start = normalize_hour(other.start_hour)
+        other_end = normalize_hour(other.end_hour) if other.end_hour != 0 else 24
+        
+        # Check overlap
+        return not (self_end <= other_start or other_end <= self_start)
 
 
 # Course Structure Models

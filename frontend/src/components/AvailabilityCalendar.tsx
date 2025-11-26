@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { ensureCsrfToken } from '../utils/csrf';
 import Header from './Header';
 
@@ -12,6 +13,7 @@ interface Availability {
   start_hour: number;
   end_hour: number;
   title?: string;
+  color?: 'red' | 'yellow' | 'blue';
   for_university_students?: boolean;
   for_school_students?: boolean;
   grades?: number[];
@@ -46,7 +48,9 @@ interface Subject {
 
 const AvailabilityCalendar: React.FC = () => {
   const { language } = useLanguage();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const isStudent = user?.user_type === 'school_student' || user?.user_type === 'university_student';
   const today = new Date();
   const [currentDate] = useState(today);
   const [selectedMonth, setSelectedMonth] = useState(today);
@@ -69,6 +73,7 @@ const AvailabilityCalendar: React.FC = () => {
   const [pendingSlots, setPendingSlots] = useState<{ date: string; hour: number }[]>([]);
   const [formData, setFormData] = useState({
     title: '',
+    color: 'blue' as 'red' | 'yellow' | 'blue',
     for_university_students: false,
     for_school_students: false,
     grade_ids: [] as number[],
@@ -77,6 +82,7 @@ const AvailabilityCalendar: React.FC = () => {
   });
   const [editFormData, setEditFormData] = useState({
     title: '',
+    color: 'blue' as 'red' | 'yellow' | 'blue',
     for_university_students: false,
     for_school_students: false,
     grade_ids: [] as number[],
@@ -172,10 +178,16 @@ const AvailabilityCalendar: React.FC = () => {
     }
   }, [editSelectedCountry, editFormData.for_school_students]);
 
+  // Helper function to get the correct API endpoint based on user type
+  const getApiEndpoint = (path: string = '') => {
+    const basePath = isStudent ? 'student-schedules' : 'availabilities';
+    return `${API_BASE_URL}/${basePath}${path}`;
+  };
+
   const fetchAvailabilities = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/availabilities/`, {
+      const response = await fetch(getApiEndpoint('/'), {
         credentials: 'include',
       });
       if (response.ok) {
@@ -507,32 +519,33 @@ const AvailabilityCalendar: React.FC = () => {
       return;
     }
 
-    if (!formData.for_university_students && !formData.for_school_students) {
-      alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
-      return;
-    }
-
-    if (!selectedCountry) {
-      alert(getText('Please select a country', 'يرجى اختيار بلد'));
-      return;
-    }
-
-    if (formData.for_school_students && formData.grade_ids.length === 0) {
-      alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
-      return;
-    }
-
-    // Check if grades 11-12 are selected, then tracks are required
-    if (formData.for_school_students && formData.grade_ids.length > 0) {
-      const selectedGrades = grades.filter(g => formData.grade_ids.includes(g.id));
-      const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
-      if (hasGrade11Or12 && formData.track_ids.length === 0) {
-        alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+    // For teachers, validate required fields
+    if (!isStudent) {
+      if (!formData.for_university_students && !formData.for_school_students) {
+        alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
         return;
       }
-    }
 
-    // Subjects are optional for both school and university students
+      if (!selectedCountry) {
+        alert(getText('Please select a country', 'يرجى اختيار بلد'));
+        return;
+      }
+
+      if (formData.for_school_students && formData.grade_ids.length === 0) {
+        alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
+        return;
+      }
+
+      // Check if grades 11-12 are selected, then tracks are required
+      if (formData.for_school_students && formData.grade_ids.length > 0) {
+        const selectedGrades = grades.filter(g => formData.grade_ids.includes(g.id));
+        const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
+        if (hasGrade11Or12 && formData.track_ids.length === 0) {
+          alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+          return;
+        }
+      }
+    }
 
     setCreating(true);
     try {
@@ -544,19 +557,26 @@ const AvailabilityCalendar: React.FC = () => {
         headers['X-CSRFToken'] = csrfToken;
       }
 
-      const response = await fetch(`${API_BASE_URL}/availabilities/bulk_create/`, {
+      const requestBody: any = {
+        slots: pendingSlots,
+        title: formData.title,
+        color: formData.color,
+      };
+
+      // Only include teacher-specific fields if not a student
+      if (!isStudent) {
+        requestBody.for_university_students = formData.for_university_students;
+        requestBody.for_school_students = formData.for_school_students;
+        requestBody.grade_ids = formData.grade_ids;
+        requestBody.track_ids = formData.track_ids;
+        requestBody.subject_ids = formData.subject_ids;
+      }
+
+      const response = await fetch(getApiEndpoint('/bulk_create/'), {
         method: 'POST',
         headers,
         credentials: 'include',
-        body: JSON.stringify({
-          slots: pendingSlots,
-          title: formData.title,
-          for_university_students: formData.for_university_students,
-          for_school_students: formData.for_school_students,
-          grade_ids: formData.grade_ids,
-          track_ids: formData.track_ids,
-          subject_ids: formData.subject_ids,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
         if (response.ok) {
@@ -584,6 +604,7 @@ const AvailabilityCalendar: React.FC = () => {
             setShowModal(false);
             setFormData({
               title: '',
+              color: 'blue',
               for_university_students: false,
               for_school_students: false,
               grade_ids: [],
@@ -625,12 +646,14 @@ const AvailabilityCalendar: React.FC = () => {
     setShowModal(false);
     setFormData({
       title: '',
+      color: 'blue',
       for_university_students: false,
       for_school_students: false,
       grade_ids: [],
       track_ids: [],
       subject_ids: [],
     });
+    setSelectedCountry(null);
     setSelectedCountry(null);
     setPendingSlots([]);
   };
@@ -675,7 +698,7 @@ const AvailabilityCalendar: React.FC = () => {
       if (block) {
         // Fetch full availability details to get grades
         try {
-          const response = await fetch(`${API_BASE_URL}/availabilities/${block.id}/`, {
+          const response = await fetch(getApiEndpoint(`/${block.id}/`), {
             credentials: 'include',
           });
           if (response.ok) {
@@ -683,6 +706,7 @@ const AvailabilityCalendar: React.FC = () => {
             setSelectedAvailability(fullAvailability);
             setEditFormData({
               title: fullAvailability.title || '',
+              color: fullAvailability.color || 'blue',
               for_university_students: fullAvailability.for_university_students || false,
               for_school_students: fullAvailability.for_school_students || false,
               grade_ids: fullAvailability.grades || [],
@@ -720,6 +744,7 @@ const AvailabilityCalendar: React.FC = () => {
           setSelectedAvailability(block);
           setEditFormData({
             title: block.title || '',
+            color: block.color || 'blue',
             for_university_students: block.for_university_students || false,
             for_school_students: block.for_school_students || false,
             grade_ids: block.grades || [],
@@ -736,29 +761,32 @@ const AvailabilityCalendar: React.FC = () => {
   const handleUpdateAvailability = async () => {
     if (!selectedAvailability) return;
     
-    if (!editFormData.for_university_students && !editFormData.for_school_students) {
-      alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
-      return;
-    }
-
-    if (editFormData.for_school_students && editFormData.grade_ids.length === 0) {
-      alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
-      return;
-    }
-
-    // Check if grades 11-12 are selected, then tracks are required
-    if (editFormData.for_school_students && editFormData.grade_ids.length > 0) {
-      const selectedGrades = grades.filter(g => editFormData.grade_ids.includes(g.id));
-      const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
-      if (hasGrade11Or12 && editFormData.track_ids.length === 0) {
-        alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+    // For teachers, validate required fields
+    if (!isStudent) {
+      if (!editFormData.for_university_students && !editFormData.for_school_students) {
+        alert(getText('Please select at least one student type', 'يرجى اختيار نوع طالب واحد على الأقل'));
         return;
       }
-    }
 
-    if (editFormData.for_university_students && editFormData.subject_ids.length === 0) {
-      alert(getText('Please select at least one subject', 'يرجى اختيار مادة واحدة على الأقل'));
-      return;
+      if (editFormData.for_school_students && editFormData.grade_ids.length === 0) {
+        alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
+        return;
+      }
+
+      // Check if grades 11-12 are selected, then tracks are required
+      if (editFormData.for_school_students && editFormData.grade_ids.length > 0) {
+        const selectedGrades = grades.filter(g => editFormData.grade_ids.includes(g.id));
+        const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
+        if (hasGrade11Or12 && editFormData.track_ids.length === 0) {
+          alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+          return;
+        }
+      }
+
+      if (editFormData.for_university_students && editFormData.subject_ids.length === 0) {
+        alert(getText('Please select at least one subject', 'يرجى اختيار مادة واحدة على الأقل'));
+        return;
+      }
     }
 
     setUpdating(true);
@@ -771,18 +799,25 @@ const AvailabilityCalendar: React.FC = () => {
         headers['X-CSRFToken'] = csrfToken;
       }
 
-      const response = await fetch(`${API_BASE_URL}/availabilities/${selectedAvailability.id}/`, {
+      const requestBody: any = {
+        title: editFormData.title,
+        color: editFormData.color,
+      };
+
+      // Only include teacher-specific fields if not a student
+      if (!isStudent) {
+        requestBody.for_university_students = editFormData.for_university_students;
+        requestBody.for_school_students = editFormData.for_school_students;
+        requestBody.grade_ids = editFormData.grade_ids;
+        requestBody.track_ids = editFormData.track_ids;
+        requestBody.subject_ids = editFormData.subject_ids;
+      }
+
+      const response = await fetch(getApiEndpoint(`/${selectedAvailability.id}/`), {
         method: 'PATCH',
         headers,
         credentials: 'include',
-        body: JSON.stringify({
-          title: editFormData.title,
-          for_university_students: editFormData.for_university_students,
-          for_school_students: editFormData.for_school_students,
-          grade_ids: editFormData.grade_ids,
-          track_ids: editFormData.track_ids,
-          subject_ids: editFormData.subject_ids,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
@@ -791,6 +826,7 @@ const AvailabilityCalendar: React.FC = () => {
         setSelectedAvailability(null);
         setEditFormData({
           title: '',
+          color: 'blue',
           for_university_students: false,
           for_school_students: false,
           grade_ids: [],
@@ -837,7 +873,7 @@ const AvailabilityCalendar: React.FC = () => {
         headers['X-CSRFToken'] = csrfToken;
       }
 
-      const response = await fetch(`${API_BASE_URL}/availabilities/${selectedAvailability.id}/`, {
+      const response = await fetch(getApiEndpoint(`/${selectedAvailability.id}/`), {
         method: 'DELETE',
         headers,
         credentials: 'include',
@@ -850,6 +886,7 @@ const AvailabilityCalendar: React.FC = () => {
         setSelectedAvailability(null);
         setEditFormData({
           title: '',
+          color: 'blue',
           for_university_students: false,
           for_school_students: false,
           grade_ids: [],
@@ -880,12 +917,14 @@ const AvailabilityCalendar: React.FC = () => {
     setSelectedAvailability(null);
     setEditFormData({
       title: '',
+      color: 'blue',
       for_university_students: false,
       for_school_students: false,
       grade_ids: [],
       track_ids: [],
       subject_ids: [],
     });
+    setEditSelectedCountry(null);
     setEditSelectedCountry(null);
   };
 
@@ -1119,9 +1158,13 @@ const AvailabilityCalendar: React.FC = () => {
                             ${isPast 
                               ? 'bg-gray-700/40 cursor-not-allowed opacity-60 border-b border-dark-300' 
                               : isSelected
-                              ? 'bg-blue-500/50 cursor-crosshair border-b border-dark-300'
+                              ? (block?.color === 'red' ? 'bg-red-500/50' : block?.color === 'yellow' ? 'bg-yellow-500/50' : 'bg-blue-500/50') + ' cursor-crosshair border-b border-dark-300'
                               : isAvailable
-                              ? 'bg-blue-500/50 hover:bg-blue-500/60 cursor-pointer group'
+                              ? (block?.color === 'red' 
+                                  ? 'bg-red-500/50 hover:bg-red-500/60' 
+                                  : block?.color === 'yellow' 
+                                  ? 'bg-yellow-500/50 hover:bg-yellow-500/60' 
+                                  : 'bg-blue-500/50 hover:bg-blue-500/60') + ' cursor-pointer group'
                               : 'hover:bg-dark-200/50 cursor-crosshair border-b border-dark-300'
                             }
                             ${isAvailable && !consecutive.hasNext ? 'border-b border-dark-300' : ''}
@@ -1129,7 +1172,7 @@ const AvailabilityCalendar: React.FC = () => {
                           `}
                         >
                           {isAvailable && consecutive.isStart && block?.title && (
-                            <div className="absolute top-1 left-1 right-1 px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded text-white text-xs font-medium truncate z-10">
+                            <div className="absolute top-0 left-0 right-0 px-2 py-1 text-white text-base font-semibold truncate z-20">
                               {block.title}
                             </div>
                           )}
@@ -1161,7 +1204,9 @@ const AvailabilityCalendar: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-white">
-                    {getText('Create Availability', 'إنشاء التوفر')}
+                    {isStudent 
+                      ? getText('Organize Schedule', 'تنظيم الجدول')
+                      : getText('Create Availability', 'إنشاء التوفر')}
                   </h2>
                 </div>
               </div>
@@ -1254,6 +1299,53 @@ const AvailabilityCalendar: React.FC = () => {
                 </div>
               </div>
 
+              {/* Color Selection - For Students Only */}
+              {isStudent && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                    {getText('Select Color', 'اختر اللون')}
+                  </label>
+                  <div className="flex items-center gap-4">
+                    {/* Red Color */}
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, color: 'red' }))}
+                      className={`w-16 h-16 rounded-lg border-4 transition-all ${
+                        formData.color === 'red'
+                          ? 'border-white scale-110 shadow-lg shadow-red-500/50'
+                          : 'border-dark-300 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: '#ef4444' }}
+                      title={getText('Red', 'أحمر')}
+                    />
+                    {/* Yellow Color */}
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, color: 'yellow' }))}
+                      className={`w-16 h-16 rounded-lg border-4 transition-all ${
+                        formData.color === 'yellow'
+                          ? 'border-white scale-110 shadow-lg shadow-yellow-500/50'
+                          : 'border-dark-300 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: '#eab308' }}
+                      title={getText('Yellow', 'أصفر')}
+                    />
+                    {/* Blue Color */}
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, color: 'blue' }))}
+                      className={`w-16 h-16 rounded-lg border-4 transition-all ${
+                        formData.color === 'blue'
+                          ? 'border-white scale-110 shadow-lg shadow-blue-500/50'
+                          : 'border-dark-300 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: '#3b82f6' }}
+                      title={getText('Blue', 'أزرق')}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Title Input */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
@@ -1272,7 +1364,8 @@ const AvailabilityCalendar: React.FC = () => {
                 />
               </div>
 
-              {/* Country Selection */}
+              {/* Country Selection - For Teachers Only */}
+              {!isStudent && (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
                   <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1301,9 +1394,10 @@ const AvailabilityCalendar: React.FC = () => {
                   ))}
                 </select>
               </div>
+              )}
 
-              {/* Subjects Selection (from teacher's profile) - for both school and university students */}
-              {teacherSubjects.length > 0 && (
+              {/* Subjects Selection (from teacher's profile) - For Teachers Only */}
+              {!isStudent && teacherSubjects.length > 0 && (
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
                     <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1373,7 +1467,8 @@ const AvailabilityCalendar: React.FC = () => {
                 </div>
               )}
 
-              {/* Student Type Checkboxes */}
+              {/* Student Type Checkboxes - For Teachers Only */}
+              {!isStudent && (
               <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
                   <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1438,9 +1533,10 @@ const AvailabilityCalendar: React.FC = () => {
                   </label>
                 </div>
               </div>
+              )}
 
-              {/* Grades Selection (only if school students is selected) */}
-              {formData.for_school_students && (
+              {/* Grades Selection (only if school students is selected) - For Teachers Only */}
+              {!isStudent && formData.for_school_students && (
                 <div className="space-y-4 p-4 bg-dark-200/50 rounded-xl border border-dark-300">
                   <div className="flex items-center gap-2 mb-3">
                     <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1595,7 +1691,7 @@ const AvailabilityCalendar: React.FC = () => {
                 </button>
                 <button
                   onClick={handleCreateAvailability}
-                  disabled={creating || !formData.title || formData.title.trim() === '' || !selectedCountry || (!formData.for_university_students && !formData.for_school_students) || (formData.for_school_students && formData.grade_ids.length === 0) || (formData.for_university_students && formData.subject_ids.length === 0)}
+                  disabled={creating || !formData.title || formData.title.trim() === '' || (!isStudent && (!selectedCountry || (!formData.for_university_students && !formData.for_school_students) || (formData.for_school_students && formData.grade_ids.length === 0)))}
                   className="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:from-primary-600 hover:to-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium shadow-lg hover:shadow-primary-500/50"
                 >
                   {creating ? (
@@ -1611,7 +1707,9 @@ const AvailabilityCalendar: React.FC = () => {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      {getText('Create Availability', 'إنشاء التوفر')}
+                      {isStudent 
+                        ? getText('Organize Schedule', 'تنظيم الجدول')
+                        : getText('Create Availability', 'إنشاء التوفر')}
                     </>
                   )}
                 </button>
@@ -1628,7 +1726,9 @@ const AvailabilityCalendar: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-dark-300">
               <h2 className="text-2xl font-bold text-white">
-                {getText('Edit Availability', 'تعديل التوفر')}
+                {isStudent 
+                  ? getText('Edit Schedule', 'تعديل الجدول')
+                  : getText('Edit Availability', 'تعديل التوفر')}
               </h2>
               <button
                 onClick={handleCancelEdit}
@@ -1685,6 +1785,53 @@ const AvailabilityCalendar: React.FC = () => {
                 })()}
               </div>
 
+              {/* Color Selection - For Students Only */}
+              {isStudent && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                    {getText('Select Color', 'اختر اللون')}
+                  </label>
+                  <div className="flex items-center gap-4">
+                    {/* Red Color */}
+                    <button
+                      type="button"
+                      onClick={() => setEditFormData(prev => ({ ...prev, color: 'red' }))}
+                      className={`w-16 h-16 rounded-lg border-4 transition-all ${
+                        editFormData.color === 'red'
+                          ? 'border-white scale-110 shadow-lg shadow-red-500/50'
+                          : 'border-dark-300 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: '#ef4444' }}
+                      title={getText('Red', 'أحمر')}
+                    />
+                    {/* Yellow Color */}
+                    <button
+                      type="button"
+                      onClick={() => setEditFormData(prev => ({ ...prev, color: 'yellow' }))}
+                      className={`w-16 h-16 rounded-lg border-4 transition-all ${
+                        editFormData.color === 'yellow'
+                          ? 'border-white scale-110 shadow-lg shadow-yellow-500/50'
+                          : 'border-dark-300 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: '#eab308' }}
+                      title={getText('Yellow', 'أصفر')}
+                    />
+                    {/* Blue Color */}
+                    <button
+                      type="button"
+                      onClick={() => setEditFormData(prev => ({ ...prev, color: 'blue' }))}
+                      className={`w-16 h-16 rounded-lg border-4 transition-all ${
+                        editFormData.color === 'blue'
+                          ? 'border-white scale-110 shadow-lg shadow-blue-500/50'
+                          : 'border-dark-300 hover:border-gray-400'
+                      }`}
+                      style={{ backgroundColor: '#3b82f6' }}
+                      title={getText('Blue', 'أزرق')}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Title Input */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1699,7 +1846,8 @@ const AvailabilityCalendar: React.FC = () => {
                 />
               </div>
 
-              {/* Student Type Checkboxes */}
+              {/* Student Type Checkboxes - For Teachers Only */}
+              {!isStudent && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-3">
                   {getText('Student Type', 'نوع الطالب')}
@@ -1740,9 +1888,10 @@ const AvailabilityCalendar: React.FC = () => {
                   </label>
                 </div>
               </div>
+              )}
 
-              {/* Subjects Selection (only if university students is selected) */}
-              {editFormData.for_university_students && teacherSubjects.length > 0 && (
+              {/* Subjects Selection (only if university students is selected) - For Teachers Only */}
+              {!isStudent && editFormData.for_university_students && teacherSubjects.length > 0 && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 mb-3">
                     <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1784,8 +1933,8 @@ const AvailabilityCalendar: React.FC = () => {
                 </div>
               )}
 
-              {/* Country and Grades Selection (only if school students is selected) */}
-              {editFormData.for_school_students && (
+              {/* Country and Grades Selection (only if school students is selected) - For Teachers Only */}
+              {!isStudent && editFormData.for_school_students && (
                 <div className="space-y-4">
                   {/* Country Selection */}
                   <div>
