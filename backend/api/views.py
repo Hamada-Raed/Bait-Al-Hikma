@@ -16,7 +16,7 @@ from django.db import models
 from django.http import StreamingHttpResponse, Http404
 from django.conf import settings
 from .models import (
-    Country, Grade, Track, Major, Subject, User, PlatformSettings,
+    Country, Grade, Track, Major, Subject, MajorSubject, User, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
     StudentTask, StudentNote
@@ -215,55 +215,166 @@ class UserViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def filter_teachers(self, request):
-        """Filter teachers based on student type, country, grades (for school), or subjects (for university)"""
+        """Filter teachers based on student type, country, and availability records.
+        For school students: must have availability for the specific grade, and track (for grades 11-12).
+        For university students: must have availability for university students matching the student's major subjects."""
         user_type_filter = request.query_params.get('student_type')  # 'school' or 'university'
         country_id = request.query_params.get('country')
-        grade_ids = request.query_params.getlist('grades')  # For school students
-        subject_ids = request.query_params.getlist('subjects')  # For university students
+        grade_id = request.query_params.get('grade')  # Single grade ID for school students
+        track_id = request.query_params.get('track')  # Track ID for school students (grades 11-12)
+        major_id = request.query_params.get('major')  # Major ID for university students
         
         # Start with approved teachers only
-        queryset = User.objects.filter(user_type='teacher', is_approved=True)
+        from .models import Availability, MajorSubject, Grade
+        from django.utils import timezone
+        from datetime import date
+        import logging
         
-        # Filter by country if provided
-        if country_id:
-            queryset = queryset.filter(country_id=country_id)
+        logger = logging.getLogger(__name__)
+        today = date.today()
         
-        # Filter by availability type (school or university)
         if user_type_filter == 'school':
-            # Filter teachers who have availabilities for school students
-            # and optionally filter by grades if provided
-            from .models import Availability
-            availability_query = Availability.objects.filter(
+            # For school students: filter teachers who have availability for school students
+            # in the same country AND for the specific grade, and track (for grades 11-12)
+            if not country_id:
+                return Response({'error': 'Country is required for school students.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not grade_id:
+                return Response({'error': 'Grade is required for school students.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                grade_id_int = int(grade_id)
+                # Get the grade object to check grade_number
+                grade_obj = Grade.objects.filter(id=grade_id_int).first()
+                grade_number = grade_obj.grade_number if grade_obj else None
+                
+                # Check if this is grade 11 or 12 - if so, track filtering is required
+                requires_track = grade_number and grade_number in [11, 12]
+                
+                if requires_track and not track_id:
+                    return Response({'error': 'Track is required for grades 11 and 12.'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            except (ValueError, TypeError):
+                return Response({'error': 'Invalid grade ID.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Build the base query for school students
+            all_matching = Availability.objects.filter(
                 for_school_students=True,
-                teacher__is_approved=True
-            )
-            if country_id:
-                availability_query = availability_query.filter(teacher__country_id=country_id)
-            if grade_ids:
-                grade_ids_int = [int(gid) for gid in grade_ids if gid.isdigit()]
-                if grade_ids_int:
-                    availability_query = availability_query.filter(grades__id__in=grade_ids_int).distinct()
+                teacher__is_approved=True,
+                teacher__country_id=country_id,
+                grades__id=grade_id_int
+            ).select_related('teacher').prefetch_related('grades', 'tracks')
+            
+            # For grades 11-12, filter by track if track_id is provided
+            # If availability has tracks specified, match them; if not, show all (tracks are optional)
+            if requires_track and track_id:
+                try:
+                    track_id_int = int(track_id)
+                    from django.db.models import Q, Count
+                    # Show availability if:
+                    # 1. It has the matching track, OR
+                    # 2. It has no tracks assigned (empty ManyToMany)
+                    all_matching = all_matching.annotate(
+                        track_count=Count('tracks')
+                    ).filter(
+                        Q(tracks__id=track_id_int) | Q(track_count=0)
+                    ).distinct()
+                except (ValueError, TypeError):
+                    return Response({'error': 'Invalid track ID.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Filter for future unbooked availability
+            availability_query = all_matching.filter(
+                date__gte=today,
+                is_booked=False
+            ).distinct()
             
             teacher_ids = availability_query.values_list('teacher_id', flat=True).distinct()
-            queryset = queryset.filter(id__in=teacher_ids)
+            
+            # Debug: Log the query details
+            all_count = all_matching.count()
+            future_unbooked_count = availability_query.count()
+            logger.info(f"Filtering teachers for school students:")
+            logger.info(f"  - country_id: {country_id}, grade_id: {grade_id_int}, grade_number: {grade_number}")
+            if requires_track:
+                logger.info(f"  - track_id: {track_id}")
+            logger.info(f"  - Total matching availabilities (all dates): {all_count}")
+            logger.info(f"  - Future unbooked availabilities: {future_unbooked_count}")
+            logger.info(f"  - Teacher IDs found: {list(teacher_ids)}")
+            
+            # If no future unbooked, but we have matching availabilities, log details for debugging
+            if all_count > 0 and future_unbooked_count == 0:
+                sample_avail = all_matching.first()
+                if sample_avail:
+                    logger.warning(f"  - Sample availability found but filtered out: date={sample_avail.date}, is_booked={sample_avail.is_booked}, teacher_id={sample_avail.teacher_id}")
+            
+            if not teacher_ids:
+                queryset = User.objects.none()
+            else:
+                queryset = User.objects.filter(
+                    id__in=teacher_ids,
+                    user_type='teacher',
+                    is_approved=True
+                )
             
         elif user_type_filter == 'university':
-            # Filter teachers who have availabilities for university students
-            # and optionally filter by subjects if provided
-            from .models import Availability
-            availability_query = Availability.objects.filter(
-                for_university_students=True,
-                teacher__is_approved=True
-            )
-            if country_id:
-                availability_query = availability_query.filter(teacher__country_id=country_id)
-            if subject_ids:
-                subject_ids_int = [int(sid) for sid in subject_ids if sid.isdigit()]
-                if subject_ids_int:
-                    availability_query = availability_query.filter(subjects__id__in=subject_ids_int).distinct()
+            # For university students: filter teachers who have availability for university students
+            # in the same country, AND whose availability subjects match the student's major subjects
+            if not country_id:
+                return Response({'error': 'Country is required for university students.'}, status=status.HTTP_400_BAD_REQUEST)
             
-            teacher_ids = availability_query.values_list('teacher_id', flat=True).distinct()
-            queryset = queryset.filter(id__in=teacher_ids)
+            if not major_id:
+                # Try to get major from authenticated user if not provided
+                if request.user.is_authenticated and request.user.user_type == 'university_student':
+                    major_id = request.user.major_id if request.user.major_id else None
+                
+                if not major_id:
+                    return Response({'error': 'Major is required for university students.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                major_id_int = int(major_id)
+            except (ValueError, TypeError):
+                return Response({'error': 'Invalid major ID.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get all subjects related to this major
+            major_subject_ids = MajorSubject.objects.filter(
+                major_id=major_id_int
+            ).values_list('subject_id', flat=True).distinct()
+            
+            if not major_subject_ids:
+                # If major has no subjects assigned, return no results
+                logger.warning(f"Major {major_id_int} has no associated subjects. Returning no teachers.")
+                queryset = User.objects.none()
+            else:
+                # Build the base query for university students
+                availability_query = Availability.objects.filter(
+                    for_university_students=True,
+                    teacher__is_approved=True,
+                    teacher__country_id=country_id,
+                    subjects__id__in=major_subject_ids,  # Only teachers whose availability subjects match the major's subjects
+                    date__gte=today,
+                    is_booked=False
+                ).distinct()
+                
+                teacher_ids = availability_query.values_list('teacher_id', flat=True).distinct()
+                
+                # Debug: Log the query details
+                logger.info(f"Filtering teachers for university students:")
+                logger.info(f"  - country_id: {country_id}, major_id: {major_id_int}")
+                logger.info(f"  - Major subject IDs: {list(major_subject_ids)}")
+                logger.info(f"  - Matching availabilities: {availability_query.count()}")
+                logger.info(f"  - Teacher IDs found: {list(teacher_ids)}")
+                
+                if not teacher_ids:
+                    queryset = User.objects.none()
+                else:
+                    queryset = User.objects.filter(
+                        id__in=teacher_ids,
+                        user_type='teacher',
+                        is_approved=True
+                    )
+        else:
+            # No valid filter - return empty
+            queryset = User.objects.none()
         
         # Serialize teachers with their subjects
         serializer = UserSerializer(queryset, many=True, context={'request': request})
@@ -895,6 +1006,7 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
         for_university_students = request.data.get('for_university_students', False)
         for_school_students = request.data.get('for_school_students', False)
         grade_ids = request.data.get('grade_ids', [])
+        track_ids = request.data.get('track_ids', [])
         subject_ids = request.data.get('subject_ids', [])
         
         # Group slots by date and calculate start/end hours for each date
@@ -941,7 +1053,8 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
                 'for_university_students': for_university_students,
                 'for_school_students': for_school_students,
                 'grade_ids': grade_ids if for_school_students else [],
-                'subject_ids': subject_ids if for_university_students else []
+                'track_ids': track_ids if for_school_students else [],
+                'subject_ids': subject_ids  # Subjects can be for both school and university students
             }, context={'request': request})
             
             if serializer.is_valid():

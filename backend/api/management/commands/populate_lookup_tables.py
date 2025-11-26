@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from api.models import Country, Grade, Track, Major, Subject
+from api.models import Country, Grade, Track, Major, Subject, MajorSubject
 
 
 class Command(BaseCommand):
@@ -175,6 +175,93 @@ class Command(BaseCommand):
             )
         
         self.stdout.write(self.style.SUCCESS('Subjects created'))
+        
+        # Auto-populate MajorSubject relationships
+        # Match majors to subjects by name, and add common subject mappings
+        # Using major codes as they are defined in the populate script
+        major_subject_mappings = {
+            # Using major codes from the populate script
+            'cs': ['Computer Science'],
+            'engineering': ['Mathematics', 'Physics', 'Chemistry'],
+            'medicine': ['Biology', 'Chemistry'],
+            'law': ['History', 'Social Studies'],
+            'business': ['Mathematics', 'Social Studies'],  # Economics might not exist as subject
+            'education': ['Arabic', 'English', 'Mathematics', 'General Science'],
+            'arts': ['Art', 'Music', 'History'],
+            'science': ['Mathematics', 'Physics', 'Chemistry', 'Biology'],
+            'pharmacy': ['Chemistry', 'Biology', 'Mathematics'],
+            'dentistry': ['Biology', 'Chemistry'],
+            'nursing': ['Biology', 'Chemistry'],
+            'accounting': ['Mathematics'],
+            'economics': ['Mathematics', 'Social Studies'],
+            'psychology': ['Biology', 'Social Studies'],
+            'architecture': ['Mathematics', 'Physics', 'Art'],
+        }
+        
+        for major_code, subject_codes in major_subject_mappings.items():
+            try:
+                major = Major.objects.get(code=major_code)
+            except Major.DoesNotExist:
+                # Try to find by name if code doesn't match
+                major = Major.objects.filter(name_en__icontains=major_code.title()).first()
+            
+            if not major:
+                continue
+            
+            for subject_code_or_name in subject_codes:
+                # Try to find subject by code first
+                subject = None
+                if subject_code_or_name.lower() in ['mathematics', 'math']:
+                    subject = Subject.objects.filter(code='math').first()
+                elif subject_code_or_name.lower() in ['physics']:
+                    subject = Subject.objects.filter(code='physics').first()
+                elif subject_code_or_name.lower() in ['chemistry']:
+                    subject = Subject.objects.filter(code='chemistry').first()
+                elif subject_code_or_name.lower() in ['biology']:
+                    subject = Subject.objects.filter(code='biology').first()
+                elif subject_code_or_name.lower() in ['computer science']:
+                    subject = Subject.objects.filter(code='computer').first()
+                elif subject_code_or_name.lower() in ['arabic']:
+                    subject = Subject.objects.filter(code='arabic').first()
+                elif subject_code_or_name.lower() in ['english']:
+                    subject = Subject.objects.filter(code='english').first()
+                elif subject_code_or_name.lower() in ['history']:
+                    subject = Subject.objects.filter(code='history').first()
+                elif subject_code_or_name.lower() in ['geography']:
+                    subject = Subject.objects.filter(code='geography').first()
+                elif subject_code_or_name.lower() in ['art']:
+                    subject = Subject.objects.filter(code='art').first()
+                elif subject_code_or_name.lower() in ['music']:
+                    subject = Subject.objects.filter(code='music').first()
+                elif subject_code_or_name.lower() in ['general science', 'science']:
+                    subject = Subject.objects.filter(code='science').first()
+                elif subject_code_or_name.lower() in ['social studies']:
+                    subject = Subject.objects.filter(code='social').first()
+                elif subject_code_or_name.lower() in ['economics']:
+                    # Economics might not exist as subject, skip for now
+                    continue
+                
+                # If not found by code, try by name
+                if not subject:
+                    subject = Subject.objects.filter(name_en__icontains=subject_code_or_name).first()
+                
+                if subject:
+                    MajorSubject.objects.get_or_create(
+                        major=major,
+                        subject=subject
+                    )
+        
+        # Also match by exact name for any remaining matches
+        for major in Major.objects.all():
+            # Try to find subject with same name
+            subject = Subject.objects.filter(name_en__iexact=major.name_en).first()
+            if subject:
+                MajorSubject.objects.get_or_create(
+                    major=major,
+                    subject=subject
+                )
+        
+        self.stdout.write(self.style.SUCCESS('MajorSubject relationships created'))
         
         # Create platform settings
         from api.models import PlatformSettings, HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection

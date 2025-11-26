@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
+    Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
     ContactMessage
 )
@@ -36,6 +36,13 @@ class MajorAdmin(admin.ModelAdmin):
 class SubjectAdmin(admin.ModelAdmin):
     list_display = ['name_en', 'name_ar', 'code']
     search_fields = ['name_en', 'name_ar']
+
+
+@admin.register(MajorSubject)
+class MajorSubjectAdmin(admin.ModelAdmin):
+    list_display = ['major', 'subject']
+    list_filter = ['major', 'subject']
+    search_fields = ['major__name_en', 'major__name_ar', 'subject__name_en', 'subject__name_ar']
 
 
 @admin.register(User)

@@ -15,10 +15,18 @@ interface Availability {
   for_university_students?: boolean;
   for_school_students?: boolean;
   grades?: number[];
+  tracks?: number[];
   subjects?: number[];
   is_booked?: boolean;
   booked_by?: number;
   booked_at?: string;
+}
+
+interface Track {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  code: string;
 }
 
 interface Grade {
@@ -64,6 +72,7 @@ const AvailabilityCalendar: React.FC = () => {
     for_university_students: false,
     for_school_students: false,
     grade_ids: [] as number[],
+    track_ids: [] as number[],
     subject_ids: [] as number[],
   });
   const [editFormData, setEditFormData] = useState({
@@ -71,10 +80,13 @@ const AvailabilityCalendar: React.FC = () => {
     for_university_students: false,
     for_school_students: false,
     grade_ids: [] as number[],
+    track_ids: [] as number[],
     subject_ids: [] as number[],
   });
   const [grades, setGrades] = useState<Grade[]>([]);
+  const [tracks, setTracks] = useState<Track[]>([]);
   const [teacherSubjects, setTeacherSubjects] = useState<Subject[]>([]);
+  const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [countries, setCountries] = useState<{ id: number; name_en: string; name_ar: string }[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<number | null>(null);
   const [editSelectedCountry, setEditSelectedCountry] = useState<number | null>(null);
@@ -93,16 +105,23 @@ const AvailabilityCalendar: React.FC = () => {
     fetchAvailabilities();
   }, [selectedWeek]);
 
-  // Fetch countries, grades, and teacher subjects
+  // Fetch countries, grades, tracks, subjects, and teacher subjects
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [countriesRes, userRes] = await Promise.all([
+        const [countriesRes, tracksRes, subjectsRes, userRes] = await Promise.all([
           fetch(`${API_BASE_URL}/countries/`),
+          fetch(`${API_BASE_URL}/tracks/`),
+          fetch(`${API_BASE_URL}/subjects/`),
           fetch(`${API_BASE_URL}/users/me/`, { credentials: 'include' }),
         ]);
         const countriesData = await countriesRes.json();
+        const tracksData = await tracksRes.json();
+        const subjectsData = await subjectsRes.json();
+        
         setCountries(countriesData.results || countriesData);
+        setTracks(tracksData.results || tracksData);
+        setAllSubjects(subjectsData.results || subjectsData);
         
         // Fetch teacher's subjects if user is a teacher
         if (userRes.ok) {
@@ -114,8 +133,8 @@ const AvailabilityCalendar: React.FC = () => {
                 .then(res => res.json())
                 .catch(() => null)
             );
-            const subjectsData = await Promise.all(subjectPromises);
-            setTeacherSubjects(subjectsData.filter((s: Subject | null) => s !== null));
+            const teacherSubjectsData = await Promise.all(subjectPromises);
+            setTeacherSubjects(teacherSubjectsData.filter((s: Subject | null) => s !== null));
           }
         }
       } catch (error) {
@@ -503,10 +522,17 @@ const AvailabilityCalendar: React.FC = () => {
       return;
     }
 
-    if (formData.for_university_students && formData.subject_ids.length === 0) {
-      alert(getText('Please select at least one subject', 'يرجى اختيار مادة واحدة على الأقل'));
-      return;
+    // Check if grades 11-12 are selected, then tracks are required
+    if (formData.for_school_students && formData.grade_ids.length > 0) {
+      const selectedGrades = grades.filter(g => formData.grade_ids.includes(g.id));
+      const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
+      if (hasGrade11Or12 && formData.track_ids.length === 0) {
+        alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+        return;
+      }
     }
+
+    // Subjects are optional for both school and university students
 
     setCreating(true);
     try {
@@ -528,6 +554,7 @@ const AvailabilityCalendar: React.FC = () => {
           for_university_students: formData.for_university_students,
           for_school_students: formData.for_school_students,
           grade_ids: formData.grade_ids,
+          track_ids: formData.track_ids,
           subject_ids: formData.subject_ids,
         }),
       });
@@ -560,6 +587,7 @@ const AvailabilityCalendar: React.FC = () => {
               for_university_students: false,
               for_school_students: false,
               grade_ids: [],
+              track_ids: [],
               subject_ids: [],
             });
             setSelectedCountry(null);
@@ -600,6 +628,7 @@ const AvailabilityCalendar: React.FC = () => {
       for_university_students: false,
       for_school_students: false,
       grade_ids: [],
+      track_ids: [],
       subject_ids: [],
     });
     setSelectedCountry(null);
@@ -626,6 +655,16 @@ const AvailabilityCalendar: React.FC = () => {
     }));
   };
 
+  // Handle track toggle
+  const handleTrackToggle = (trackId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      track_ids: prev.track_ids.includes(trackId)
+        ? prev.track_ids.filter(id => id !== trackId)
+        : [...prev.track_ids, trackId],
+    }));
+  };
+
   // Handle click on availability to open edit modal
   const handleSlotClick = async (dateIdx: number, hourIdx: number) => {
     if (isDragging) return;
@@ -647,6 +686,7 @@ const AvailabilityCalendar: React.FC = () => {
               for_university_students: fullAvailability.for_university_students || false,
               for_school_students: fullAvailability.for_school_students || false,
               grade_ids: fullAvailability.grades || [],
+              track_ids: fullAvailability.tracks || [],
               subject_ids: fullAvailability.subjects || [],
             });
             
@@ -683,6 +723,7 @@ const AvailabilityCalendar: React.FC = () => {
             for_university_students: block.for_university_students || false,
             for_school_students: block.for_school_students || false,
             grade_ids: block.grades || [],
+            track_ids: block.tracks || [],
             subject_ids: block.subjects || [],
           });
           setShowEditModal(true);
@@ -703,6 +744,16 @@ const AvailabilityCalendar: React.FC = () => {
     if (editFormData.for_school_students && editFormData.grade_ids.length === 0) {
       alert(getText('Please select at least one grade', 'يرجى اختيار صف واحد على الأقل'));
       return;
+    }
+
+    // Check if grades 11-12 are selected, then tracks are required
+    if (editFormData.for_school_students && editFormData.grade_ids.length > 0) {
+      const selectedGrades = grades.filter(g => editFormData.grade_ids.includes(g.id));
+      const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
+      if (hasGrade11Or12 && editFormData.track_ids.length === 0) {
+        alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
+        return;
+      }
     }
 
     if (editFormData.for_university_students && editFormData.subject_ids.length === 0) {
@@ -729,6 +780,7 @@ const AvailabilityCalendar: React.FC = () => {
           for_university_students: editFormData.for_university_students,
           for_school_students: editFormData.for_school_students,
           grade_ids: editFormData.grade_ids,
+          track_ids: editFormData.track_ids,
           subject_ids: editFormData.subject_ids,
         }),
       });
@@ -742,6 +794,7 @@ const AvailabilityCalendar: React.FC = () => {
           for_university_students: false,
           for_school_students: false,
           grade_ids: [],
+          track_ids: [],
           subject_ids: [],
         });
         setEditSelectedCountry(null);
@@ -800,6 +853,7 @@ const AvailabilityCalendar: React.FC = () => {
           for_university_students: false,
           for_school_students: false,
           grade_ids: [],
+          track_ids: [],
           subject_ids: [],
         });
         setEditSelectedCountry(null);
@@ -829,6 +883,7 @@ const AvailabilityCalendar: React.FC = () => {
       for_university_students: false,
       for_school_students: false,
       grade_ids: [],
+      track_ids: [],
       subject_ids: [],
     });
     setEditSelectedCountry(null);
@@ -1230,9 +1285,9 @@ const AvailabilityCalendar: React.FC = () => {
                   onChange={(e) => {
                     const countryId = e.target.value ? parseInt(e.target.value) : null;
                     setSelectedCountry(countryId);
-                    // Clear grades when country changes
+                    // Clear grades and tracks when country changes
                     if (formData.for_school_students) {
-                      setFormData(prev => ({ ...prev, grade_ids: [] }));
+                      setFormData(prev => ({ ...prev, grade_ids: [], track_ids: [] }));
                     }
                   }}
                   className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
@@ -1246,6 +1301,77 @@ const AvailabilityCalendar: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Subjects Selection (from teacher's profile) - for both school and university students */}
+              {teacherSubjects.length > 0 && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                    <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    {getText('Select Subjects', 'اختر المواد')}
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-60 overflow-y-auto p-3 bg-dark-200 rounded-lg border border-dark-300">
+                    {/* All Subjects Option */}
+                    <label 
+                      className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border-2 ${
+                        formData.subject_ids.length === teacherSubjects.length && teacherSubjects.length > 0
+                          ? 'bg-primary-500/20 border-primary-500'
+                          : 'hover:bg-dark-300 border-transparent'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.subject_ids.length === teacherSubjects.length && teacherSubjects.length > 0}
+                        onChange={() => {
+                          if (formData.subject_ids.length === teacherSubjects.length) {
+                            // Deselect all
+                            setFormData(prev => ({ ...prev, subject_ids: [] }));
+                          } else {
+                            // Select all
+                            setFormData(prev => ({ ...prev, subject_ids: teacherSubjects.map(s => s.id) }));
+                          }
+                        }}
+                        className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
+                      />
+                      <span className={`text-sm font-medium ${
+                        formData.subject_ids.length === teacherSubjects.length && teacherSubjects.length > 0
+                          ? 'text-white' 
+                          : 'text-gray-300'
+                      }`}>
+                        {getText('All Subjects', 'جميع المواد')}
+                      </span>
+                    </label>
+                    {teacherSubjects.map(subject => (
+                      <label 
+                        key={subject.id} 
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
+                          formData.subject_ids.includes(subject.id)
+                            ? 'bg-primary-500/20 border border-primary-500/50'
+                            : 'hover:bg-dark-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.subject_ids.includes(subject.id)}
+                          onChange={() => handleSubjectToggle(subject.id)}
+                          className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
+                        />
+                        <span className={`text-sm ${
+                          formData.subject_ids.includes(subject.id) ? 'text-white font-medium' : 'text-gray-300'
+                        }`}>
+                          {language === 'ar' ? subject.name_ar : subject.name_en}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {formData.subject_ids.length > 0 && (
+                    <p className="text-xs text-primary-400">
+                      {getText(`${formData.subject_ids.length} subject(s) selected`, `تم اختيار ${formData.subject_ids.length} مادة`)}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Student Type Checkboxes */}
               <div className="space-y-3">
@@ -1266,9 +1392,7 @@ const AvailabilityCalendar: React.FC = () => {
                       checked={formData.for_university_students}
                       onChange={(e) => {
                         setFormData(prev => ({ ...prev, for_university_students: e.target.checked }));
-                        if (!e.target.checked) {
-                          setFormData(prev => ({ ...prev, subject_ids: [] }));
-                        }
+                        // Keep subject_ids - they're shown before student type
                       }}
                       className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
                     />
@@ -1295,7 +1419,7 @@ const AvailabilityCalendar: React.FC = () => {
                       onChange={(e) => {
                         setFormData(prev => ({ ...prev, for_school_students: e.target.checked }));
                         if (!e.target.checked) {
-                          setFormData(prev => ({ ...prev, grade_ids: [] }));
+                          setFormData(prev => ({ ...prev, grade_ids: [], track_ids: [] }));
                           setSelectedCountry(null);
                         }
                       }}
@@ -1314,86 +1438,6 @@ const AvailabilityCalendar: React.FC = () => {
                   </label>
                 </div>
               </div>
-
-              {/* Subjects Selection (only if university students is selected) */}
-              {formData.for_university_students && teacherSubjects.length > 0 && (
-                <div className="space-y-4 p-4 bg-dark-200/50 rounded-xl border border-dark-300">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                    </svg>
-                    <h3 className="text-sm font-semibold text-gray-300">
-                      {getText('University Student Requirements', 'متطلبات طلاب الجامعة')}
-                    </h3>
-                  </div>
-                  
-                  {/* Subjects Selection */}
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                      {getText('Select Subjects', 'اختر المواد')} <span className="text-red-400">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-60 overflow-y-auto p-3 bg-dark-200 rounded-lg border border-dark-300">
-                      {/* All Subjects Option */}
-                      <label 
-                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border-2 ${
-                          formData.subject_ids.length === teacherSubjects.length && teacherSubjects.length > 0
-                            ? 'bg-primary-500/20 border-primary-500'
-                            : 'hover:bg-dark-300 border-transparent'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.subject_ids.length === teacherSubjects.length && teacherSubjects.length > 0}
-                          onChange={() => {
-                            if (formData.subject_ids.length === teacherSubjects.length) {
-                              // Deselect all
-                              setFormData(prev => ({ ...prev, subject_ids: [] }));
-                            } else {
-                              // Select all
-                              setFormData(prev => ({ ...prev, subject_ids: teacherSubjects.map(s => s.id) }));
-                            }
-                          }}
-                          className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
-                        />
-                        <span className={`text-sm font-medium ${
-                          formData.subject_ids.length === teacherSubjects.length && teacherSubjects.length > 0
-                            ? 'text-white' 
-                            : 'text-gray-300'
-                        }`}>
-                          {getText('All Subjects', 'جميع المواد')}
-                        </span>
-                      </label>
-                      {teacherSubjects.map(subject => (
-                        <label 
-                          key={subject.id} 
-                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
-                            formData.subject_ids.includes(subject.id)
-                              ? 'bg-primary-500/20 border border-primary-500/50'
-                              : 'hover:bg-dark-300'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formData.subject_ids.includes(subject.id)}
-                            onChange={() => handleSubjectToggle(subject.id)}
-                            className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
-                          />
-                          <span className={`text-sm ${
-                            formData.subject_ids.includes(subject.id) ? 'text-white font-medium' : 'text-gray-300'
-                          }`}>
-                            {language === 'ar' ? subject.name_ar : subject.name_en}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                    {formData.subject_ids.length > 0 && (
-                      <p className="text-xs text-primary-400">
-                        {getText(`${formData.subject_ids.length} subject(s) selected`, `تم اختيار ${formData.subject_ids.length} مادة`)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Grades Selection (only if school students is selected) */}
               {formData.for_school_students && (
@@ -1486,6 +1530,53 @@ const AvailabilityCalendar: React.FC = () => {
                       </p>
                     </div>
                   )}
+
+                  {/* Tracks Selection (for grades 11-12) */}
+                  {selectedCountry && formData.grade_ids.length > 0 && (() => {
+                    const selectedGrades = grades.filter(g => formData.grade_ids.includes(g.id));
+                    const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
+                    
+                    if (hasGrade11Or12 && tracks.length > 0) {
+                      return (
+                        <div className="space-y-2 mt-4">
+                          <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                            {getText('Select Tracks (for grades 11-12)', 'اختر المسارات (للصفوف 11-12)')} <span className="text-red-400">*</span>
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-3 bg-dark-200 rounded-lg border border-dark-300">
+                            {tracks.map(track => (
+                              <label 
+                                key={track.id} 
+                                className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
+                                  formData.track_ids.includes(track.id)
+                                    ? 'bg-primary-500/20 border border-primary-500/50'
+                                    : 'hover:bg-dark-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={formData.track_ids.includes(track.id)}
+                                  onChange={() => handleTrackToggle(track.id)}
+                                  className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2"
+                                />
+                                <span className={`text-sm ${
+                                  formData.track_ids.includes(track.id) ? 'text-white font-medium' : 'text-gray-300'
+                                }`}>
+                                  {language === 'ar' ? track.name_ar : track.name_en}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                          {formData.track_ids.length > 0 && (
+                            <p className="text-xs text-primary-400">
+                              {getText(`${formData.track_ids.length} track(s) selected`, `تم اختيار ${formData.track_ids.length} مسار`)}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                 </div>
               )}
             </div>
@@ -1637,7 +1728,7 @@ const AvailabilityCalendar: React.FC = () => {
                       onChange={(e) => {
                         setEditFormData(prev => ({ ...prev, for_school_students: e.target.checked }));
                         if (!e.target.checked) {
-                          setEditFormData(prev => ({ ...prev, grade_ids: [] }));
+                          setEditFormData(prev => ({ ...prev, grade_ids: [], track_ids: [] }));
                           setEditSelectedCountry(null);
                         }
                       }}
@@ -1726,6 +1817,42 @@ const AvailabilityCalendar: React.FC = () => {
                     </select>
                   </div>
 
+                  {/* Subjects Selection (from teacher's profile) - for both school and university students */}
+                  {teacherSubjects.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        {getText('Select Subjects', 'اختر المواد')}
+                      </label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-2 bg-dark-200 rounded-lg">
+                        {teacherSubjects.map(subject => (
+                          <label key={subject.id} className="flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editFormData.subject_ids.includes(subject.id)}
+                              onChange={() => {
+                                setEditFormData(prev => ({
+                                  ...prev,
+                                  subject_ids: prev.subject_ids.includes(subject.id)
+                                    ? prev.subject_ids.filter(id => id !== subject.id)
+                                    : [...prev.subject_ids, subject.id],
+                                }));
+                              }}
+                              className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500"
+                            />
+                            <span className="ml-2 text-sm text-gray-300">
+                              {language === 'ar' ? subject.name_ar : subject.name_en}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {editFormData.subject_ids.length > 0 && (
+                        <p className="text-xs text-primary-400 mt-2">
+                          {getText(`${editFormData.subject_ids.length} subject(s) selected`, `تم اختيار ${editFormData.subject_ids.length} مادة`)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Grades Selection */}
                   {editSelectedCountry && grades.length > 0 && (
                     <div>
@@ -1756,6 +1883,46 @@ const AvailabilityCalendar: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Tracks Selection (for grades 11-12) */}
+                  {editSelectedCountry && editFormData.grade_ids.length > 0 && (() => {
+                    const selectedGrades = grades.filter(g => editFormData.grade_ids.includes(g.id));
+                    const hasGrade11Or12 = selectedGrades.some(g => g.grade_number === 11 || g.grade_number === 12);
+                    
+                    if (hasGrade11Or12 && tracks.length > 0) {
+                      return (
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-300 mb-3">
+                            {getText('Tracks (for grades 11-12)', 'المسارات (للصفوف 11-12)')}
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-40 overflow-y-auto p-2 bg-dark-200 rounded-lg">
+                            {tracks.map(track => (
+                              <label key={track.id} className="flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editFormData.track_ids.includes(track.id)}
+                                  onChange={() => {
+                                    setEditFormData(prev => ({
+                                      ...prev,
+                                      track_ids: prev.track_ids.includes(track.id)
+                                        ? prev.track_ids.filter(id => id !== track.id)
+                                        : [...prev.track_ids, track.id],
+                                    }));
+                                  }}
+                                  className="w-4 h-4 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-300">
+                                  {language === 'ar' ? track.name_ar : track.name_en}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                 </div>
               )}
             </div>

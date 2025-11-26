@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import (
-    Country, Grade, Track, Major, Subject, User, TeacherSubject, PlatformSettings,
+    Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
     StudentTask, StudentNote
@@ -154,6 +154,17 @@ class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subject
         fields = ['id', 'name_en', 'name_ar', 'code']
+
+
+class MajorSubjectSerializer(serializers.ModelSerializer):
+    major = MajorSerializer(read_only=True)
+    subject = SubjectSerializer(read_only=True)
+    major_id = serializers.IntegerField(write_only=True, required=False)
+    subject_id = serializers.IntegerField(write_only=True, required=False)
+    
+    class Meta:
+        model = MajorSubject
+        fields = ['id', 'major', 'major_id', 'subject', 'subject_id']
 
 
 class TeacherSubjectSerializer(serializers.ModelSerializer):
@@ -601,6 +612,8 @@ class CourseSerializer(serializers.ModelSerializer):
 class AvailabilitySerializer(serializers.ModelSerializer):
     grades = serializers.PrimaryKeyRelatedField(many=True, queryset=Grade.objects.all(), required=False)
     grade_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    tracks = serializers.PrimaryKeyRelatedField(many=True, queryset=Track.objects.all(), required=False)
+    track_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     subjects = serializers.PrimaryKeyRelatedField(many=True, queryset=Subject.objects.all(), required=False)
     subject_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     is_booked = serializers.BooleanField(read_only=True)
@@ -608,7 +621,7 @@ class AvailabilitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Availability
         fields = ['id', 'teacher', 'title', 'date', 'start_hour', 'end_hour', 'for_university_students', 'for_school_students', 
-                  'grades', 'grade_ids', 'subjects', 'subject_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
+                  'grades', 'grade_ids', 'tracks', 'track_ids', 'subjects', 'subject_ids', 'is_booked', 'booked_by', 'booked_at', 'created_at', 'updated_at']
         read_only_fields = ['teacher', 'created_at', 'updated_at', 'is_booked', 'booked_by', 'booked_at']
     
     def validate_title(self, value):
@@ -681,6 +694,17 @@ class AvailabilitySerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'grades': 'At least one grade must be selected when school students is selected.'
                 })
+            
+            # For grades 11-12, tracks should also be provided
+            from .models import Grade
+            selected_grades = Grade.objects.filter(id__in=grade_ids)
+            has_grade_11_12 = selected_grades.filter(grade_number__in=[11, 12]).exists()
+            if has_grade_11_12:
+                track_ids = attrs.get('track_ids', [])
+                if not track_ids:
+                    raise serializers.ValidationError({
+                        'tracks': 'At least one track must be selected for grades 11-12.'
+                    })
         
         # Validate subjects if university students is selected
         if attrs.get('for_university_students'):
@@ -694,22 +718,28 @@ class AvailabilitySerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         grade_ids = validated_data.pop('grade_ids', [])
+        track_ids = validated_data.pop('track_ids', [])
         subject_ids = validated_data.pop('subject_ids', [])
         availability = Availability.objects.create(**validated_data)
         if grade_ids:
             availability.grades.set(grade_ids)
+        if track_ids:
+            availability.tracks.set(track_ids)
         if subject_ids:
             availability.subjects.set(subject_ids)
         return availability
     
     def update(self, instance, validated_data):
         grade_ids = validated_data.pop('grade_ids', None)
+        track_ids = validated_data.pop('track_ids', None)
         subject_ids = validated_data.pop('subject_ids', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         if grade_ids is not None:
             instance.grades.set(grade_ids)
+        if track_ids is not None:
+            instance.tracks.set(track_ids)
         if subject_ids is not None:
             instance.subjects.set(subject_ids)
         return instance

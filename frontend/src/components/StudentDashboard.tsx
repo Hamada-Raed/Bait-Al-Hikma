@@ -15,6 +15,7 @@ interface User {
   country?: number | null;
   grade?: number | null;
   track?: number | null;
+  major?: number | null;
 }
 
 interface Course {
@@ -87,10 +88,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<number>>(new Set());
   const [gradeDetails, setGradeDetails] = useState<GradeDetails | null>(null);
-  const [teacherDetails, setTeacherDetails] = useState<Map<number, any>>(new Map());
-  const [loadingTeacherDetails, setLoadingTeacherDetails] = useState(false);
   const [expandedBios, setExpandedBios] = useState<Set<number>>(new Set());
   const [showNotes, setShowNotes] = useState(false);
+  const [filteredTeachers, setFilteredTeachers] = useState<any[]>([]);
+  const [loadingTeachers, setLoadingTeachers] = useState(false);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -179,6 +180,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   if (requiresTrackFiltering && !user.track) {
     missingProfileFields.push(getText('Track', 'المسار'));
   }
+  if (isUniversityStudent && !user.major) {
+    missingProfileFields.push(getText('Major', 'التخصص'));
+  }
 
   const hasMatchingProfileData = missingProfileFields.length === 0;
 
@@ -186,106 +190,92 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const matchingCourses = hasMatchingProfileData ? courses : [];
 
   const matchingCount = matchingCourses.length;
-  const recommendationMap = matchingCourses.reduce((acc, course) => {
-    if (!course.teacher && course.teacher !== 0) {
-      return acc;
-    }
-    const teacherId = course.teacher;
-    if (teacherId === null || teacherId === undefined) {
-      return acc;
-    }
-    if (!acc.has(teacherId)) {
-      acc.set(teacherId, {
-        teacherId,
-        teacherName: course.teacher_name || getText('Unknown Teacher', 'معلم غير معروف'),
-        courseCount: 0,
-        subjectNames: new Set<string>(),
-        gradeNames: new Set<string>(),
-        languages: new Set<string>(),
-      });
-    }
-    const entry = acc.get(teacherId)!;
-    entry.courseCount += 1;
-    if (course.subject_name) {
-      entry.subjectNames.add(course.subject_name);
-    }
-    if (course.grade_name) {
-      entry.gradeNames.add(course.grade_name);
-    }
-    if (course.language) {
-      entry.languages.add(course.language);
-    }
-    return acc;
-  }, new Map<number, {
-    teacherId: number;
-    teacherName: string;
-    courseCount: number;
-    subjectNames: Set<string>;
-    gradeNames: Set<string>;
-    languages: Set<string>;
-  }>());
-
-  const teacherRecommendationsBase: TeacherRecommendation[] = Array.from(recommendationMap.values())
-    .map((entry) => ({
-      teacherId: entry.teacherId,
-      teacherName: entry.teacherName,
-      courseCount: entry.courseCount,
-      subjectNames: Array.from(entry.subjectNames),
-      gradeNames: Array.from(entry.gradeNames),
-      languages: Array.from(entry.languages),
-    }))
-    .sort((a, b) => b.courseCount - a.courseCount);
-
-  // Fetch teacher details
+  
+  // Check if we have minimum required data to filter teachers/sessions
+  const hasRequiredDataForTeachers = user.country && (
+    (isSchoolStudent && user.grade && (!requiresTrackFiltering || user.track)) || 
+    (isUniversityStudent && user.major)
+  );
+  
+  // Fetch teachers based on student profile and availability
   useEffect(() => {
-    const fetchTeacherDetails = async () => {
-      if (teacherRecommendationsBase.length === 0) return;
+    const fetchFilteredTeachers = async () => {
+      // Only fetch if we have the required profile data
+      if (!hasRequiredDataForTeachers) {
+        setFilteredTeachers([]);
+        return;
+      }
       
-      setLoadingTeacherDetails(true);
+      setLoadingTeachers(true);
       try {
-        const teacherIds = teacherRecommendationsBase.map(t => t.teacherId);
-        const detailsMap = new Map();
+        const studentType = isSchoolStudent ? 'school' : (isUniversityStudent ? 'university' : null);
+        if (!studentType) {
+          setFilteredTeachers([]);
+          return;
+        }
         
-        await Promise.all(
-          teacherIds.map(async (teacherId) => {
-            try {
-              const response = await fetch(`${API_BASE_URL}/users/${teacherId}/`, {
-                credentials: 'include',
-              });
-              if (response.ok) {
-                const data = await response.json();
-                detailsMap.set(teacherId, data);
-              }
-            } catch (error) {
-              console.error(`Error fetching teacher ${teacherId}:`, error);
-            }
-          })
-        );
+        // Build query parameters
+        const params = new URLSearchParams();
+        params.append('student_type', studentType);
         
-        setTeacherDetails(detailsMap);
+        if (user.country) {
+          params.append('country', user.country.toString());
+        }
+        
+        // For school students, include grade (required for filtering by availability)
+        if (isSchoolStudent && user.grade) {
+          params.append('grade', user.grade.toString());
+          
+          // For grades 11-12, also include track (required for filtering by availability)
+          if (requiresTrackFiltering && user.track) {
+            params.append('track', user.track.toString());
+          }
+        }
+        
+        // For university students, include major (required for filtering by availability subjects)
+        if (isUniversityStudent && user.major) {
+          params.append('major', user.major.toString());
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/users/filter_teachers/?${params.toString()}`, {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const teachersData = await response.json();
+          setFilteredTeachers(teachersData.results || teachersData);
+        } else {
+          console.error('Error fetching filtered teachers:', await response.text());
+          setFilteredTeachers([]);
+        }
       } catch (error) {
-        console.error('Error fetching teacher details:', error);
+        console.error('Error fetching filtered teachers:', error);
+        setFilteredTeachers([]);
       } finally {
-        setLoadingTeacherDetails(false);
+        setLoadingTeachers(false);
       }
     };
 
-    if (activeTab === 'teachers' && teacherRecommendationsBase.length > 0) {
-      fetchTeacherDetails();
+    // Fetch teachers when switching to teachers tab or when profile data changes
+    if (activeTab === 'teachers') {
+      fetchFilteredTeachers();
     }
-  }, [activeTab, teacherRecommendationsBase.length]);
+  }, [activeTab, user.country, user.grade, user.track, user.major, user.user_type, hasRequiredDataForTeachers, isSchoolStudent, isUniversityStudent, requiresTrackFiltering]);
 
-  const teacherRecommendations: TeacherRecommendation[] = teacherRecommendationsBase
-    .map((entry) => {
-      const details = teacherDetails.get(entry.teacherId);
-      return {
-        ...entry,
-        profilePicture: details?.profile_picture || null,
-        bio: details?.bio || null,
-        pricing: details?.pricing || [],
-        subjectDetails: details?.subject_details || [],
-      };
-    });
+  // Convert filtered teachers to TeacherRecommendation format
+  const teacherRecommendations: TeacherRecommendation[] = filteredTeachers.map((teacher: any) => ({
+    teacherId: teacher.id,
+    teacherName: `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim() || teacher.email,
+    courseCount: 0, // We're not showing course count anymore since we're filtering by availability
+    subjectNames: teacher.subject_details?.map((s: any) => language === 'ar' ? s.name_ar : s.name_en) || [],
+    gradeNames: [], // Not needed when filtering by availability
+    languages: [], // Not needed when filtering by availability
+    profilePicture: teacher.profile_picture || null,
+    bio: teacher.bio || null,
+    pricing: teacher.pricing || [],
+    subjectDetails: teacher.subject_details || [],
+  }));
+  
   const recommendedTeachersCount = teacherRecommendations.length;
 
   const toggleBio = (teacherId: number) => {
@@ -444,7 +434,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
             }`}
           >
             <div className="flex items-center gap-2">
-              <span>{getText('Teachers', 'المعلمون')}</span>
+              <span>{getText('Sessions', 'الجلسات')}</span>
               <span className="text-xs bg-dark-300 px-2 py-0.5 rounded-full text-gray-300">
                 {recommendedTeachersCount}
               </span>
@@ -482,14 +472,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           </button>
         </div>
 
-        {/* Courses / Teachers Content */}
+        {/* Courses / Sessions Content */}
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
             <p className="mt-4 text-gray-400">{getText('Loading courses...', 'جاري تحميل الدورات...')}</p>
           </div>
         ) : isTeacherTab ? (
-          !hasMatchingProfileData ? (
+          !hasRequiredDataForTeachers ? (
               <div className="text-center py-12">
                 <svg
                   className="mx-auto h-12 w-12 text-yellow-400"
@@ -506,8 +496,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 </svg>
                 <p className="mt-4 text-gray-300">
                   {getText(
-                    'Add a bit more profile info so we can recommend the right teachers for you.',
-                    'أضف بعض المعلومات إلى ملفك حتى نتمكن من ترشيح المعلمين المناسبين لك.'
+                    'Add a bit more profile info so we can show available sessions for you.',
+                    'أضف بعض المعلومات إلى ملفك حتى نتمكن من عرض الجلسات المتاحة لك.'
                   )}
                 </p>
                 <p className="mt-2 text-sm text-gray-500">
@@ -530,13 +520,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                   />
                 </svg>
                 <p className="mt-4 text-gray-400">
-                  {getText('No teachers match your criteria yet.', 'لا يوجد معلمون يطابقون معاييرك بعد.')}
+                  {getText('No sessions available matching your criteria yet.', 'لا توجد جلسات متاحة تطابق معاييرك بعد.')}
                 </p>
               </div>
-            ) : loadingTeacherDetails ? (
+            ) : loadingTeachers ? (
               <div className="text-center py-12">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
-                <p className="mt-4 text-gray-400">{getText('Loading teachers...', 'جاري تحميل المعلمين...')}</p>
+                <p className="mt-4 text-gray-400">{getText('Loading sessions...', 'جاري تحميل الجلسات...')}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

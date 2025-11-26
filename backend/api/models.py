@@ -67,6 +67,21 @@ class Subject(models.Model):
         return self.name_en
 
 
+class MajorSubject(models.Model):
+    """Relationship between Major and Subject - defines which subjects belong to which major"""
+    major = models.ForeignKey(Major, on_delete=models.CASCADE, related_name='major_subjects')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='major_subjects')
+    
+    class Meta:
+        unique_together = ['major', 'subject']
+        ordering = ['major', 'subject']
+        verbose_name = 'Major Subject'
+        verbose_name_plural = 'Major Subjects'
+    
+    def __str__(self):
+        return f"{self.major.name_en} - {self.subject.name_en}"
+
+
 class User(AbstractUser):
     USER_TYPE_CHOICES = [
         ('school_student', 'School Student'),
@@ -366,6 +381,7 @@ class Availability(models.Model):
     for_university_students = models.BooleanField(default=False)
     for_school_students = models.BooleanField(default=False)
     grades = models.ManyToManyField(Grade, blank=True, related_name='availabilities')
+    tracks = models.ManyToManyField(Track, blank=True, related_name='availabilities', help_text='Tracks for school students (grades 11-12)')
     subjects = models.ManyToManyField(Subject, blank=True, related_name='availabilities', help_text='Subjects for university students')
     is_booked = models.BooleanField(default=False, help_text='Whether this availability has been booked by a student')
     booked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='booked_availabilities')
