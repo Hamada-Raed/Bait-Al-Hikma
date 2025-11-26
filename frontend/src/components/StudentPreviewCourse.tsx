@@ -297,6 +297,7 @@ const StudentPreviewCourse: React.FC = () => {
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
   const [quizResults, setQuizResults] = useState<QuizAttempt | null>(null);
   const [isEnrolling, setIsEnrolling] = useState<boolean>(false);
+  const hasRestoredPosition = useRef<boolean>(false);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -421,15 +422,85 @@ const StudentPreviewCourse: React.FC = () => {
     }
   }, [chapters]);
 
+  // Save current material index to localStorage whenever it changes
   useEffect(() => {
-    if (orderedMaterials.length > 0 && !selectedMaterial) {
-      setSelectedMaterial(orderedMaterials[0]);
-      setCurrentMaterialIndex(0);
+    if (courseId && currentMaterialIndex >= 0 && orderedMaterials.length > 0) {
+      const storageKey = `course_${courseId}_material_index`;
+      localStorage.setItem(storageKey, currentMaterialIndex.toString());
+    }
+  }, [currentMaterialIndex, courseId, orderedMaterials.length]);
+
+  // Restore position on page load/refresh (only once when both materials and completion data are ready)
+  useEffect(() => {
+    // Only restore once when we have both materials and completion data, and loading is complete
+    if (orderedMaterials.length > 0 && courseId && !hasRestoredPosition.current && !loading) {
+      const storageKey = `course_${courseId}_material_index`;
+      const savedIndex = localStorage.getItem(storageKey);
+      
+      if (savedIndex !== null) {
+        const savedIndexNum = parseInt(savedIndex, 10);
+        
+        // Check if saved index is valid
+        if (savedIndexNum >= 0 && savedIndexNum < orderedMaterials.length) {
+          const savedMaterial = orderedMaterials[savedIndexNum];
+          const materialKey = `${savedMaterial.type}-${savedMaterial.data.id}`;
+          const isSavedMaterialCompleted = completedMaterials.has(materialKey);
+          
+          if (isSavedMaterialCompleted) {
+            // If completed, find the next incomplete material
+            let nextIncompleteIndex = savedIndexNum + 1;
+            
+            // Find the next incomplete material
+            while (nextIncompleteIndex < orderedMaterials.length) {
+              const material = orderedMaterials[nextIncompleteIndex];
+              const matKey = `${material.type}-${material.data.id}`;
+              if (!completedMaterials.has(matKey)) {
+                break;
+              }
+              nextIncompleteIndex++;
+            }
+            
+            // If we found an incomplete material, go to it
+            if (nextIncompleteIndex < orderedMaterials.length) {
+              setCurrentMaterialIndex(nextIncompleteIndex);
+              setSelectedMaterial(orderedMaterials[nextIncompleteIndex]);
+            } else {
+              // All materials after saved index are completed, go to the last one
+              const lastIndex = orderedMaterials.length - 1;
+              setCurrentMaterialIndex(lastIndex);
+              setSelectedMaterial(orderedMaterials[lastIndex]);
+            }
+          } else {
+            // If not completed, return to the saved material
+            setCurrentMaterialIndex(savedIndexNum);
+            setSelectedMaterial(savedMaterial);
+          }
+          hasRestoredPosition.current = true;
+        } else {
+          // Invalid saved index, start from beginning
+          setCurrentMaterialIndex(0);
+          setSelectedMaterial(orderedMaterials[0]);
+          hasRestoredPosition.current = true;
+        }
+      } else {
+        // No saved position, start from the beginning
+        if (!selectedMaterial) {
+          setCurrentMaterialIndex(0);
+          setSelectedMaterial(orderedMaterials[0]);
+        }
+        hasRestoredPosition.current = true;
+      }
     } else if (orderedMaterials.length > 0 && currentMaterialIndex >= orderedMaterials.length) {
+      // Handle case where index is out of bounds
       setCurrentMaterialIndex(0);
       setSelectedMaterial(orderedMaterials[0]);
     }
-  }, [orderedMaterials.length]);
+  }, [orderedMaterials, completedMaterials, courseId, loading, selectedMaterial]); // Run when materials and completion data are loaded
+
+  // Reset restoration flag when course changes
+  useEffect(() => {
+    hasRestoredPosition.current = false;
+  }, [courseId]);
 
   useEffect(() => {
     if (orderedMaterials.length > 0 && currentMaterialIndex >= 0 && currentMaterialIndex < orderedMaterials.length) {
@@ -1139,29 +1210,41 @@ const StudentPreviewCourse: React.FC = () => {
                                       return (
                                         <div
                                           key={`video-${video.id}`}
-                                          className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
+                                          className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''} ${isCompleted ? 'structure-item-completed' : ''}`}
                                           onClick={() => handleMaterialClick(material)}
                                           style={{
                                             cursor: isAccessible ? 'pointer' : 'not-allowed',
-                                            opacity: isAccessible ? 1 : 0.6
+                                            opacity: isAccessible ? 1 : 0.6,
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
                                           }}
                                         >
-                                          <input
-                                            type="checkbox"
-                                            checked={isCompleted}
-                                            onChange={(e) => handleToggleMaterialCompletion(material, e.target.checked)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            disabled={!isEnrolled}
-                                            style={{
-                                              marginRight: '8px',
-                                              cursor: isEnrolled ? 'pointer' : 'not-allowed'
-                                            }}
-                                          />
-                                          <span className="item-icon">📹</span>
-                                          <span className="item-title-structure">{video.title}</span>
-                                          {!isAccessible && (
-                                            <span className="lock-icon-structure">🔒</span>
-                                          )}
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                                            <span className="item-icon">📹</span>
+                                            <span className="item-title-structure">{video.title}</span>
+                                            {!isAccessible && (
+                                              <span className="lock-icon-structure">🔒</span>
+                                            )}
+                                          </div>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            {isCompleted && (
+                                              <span style={{
+                                                color: '#10b981',
+                                                fontSize: '16px',
+                                                fontWeight: 'bold',
+                                                display: 'flex',
+                                                alignItems: 'center'
+                                              }}>✓</span>
+                                            )}
+                                            <input
+                                              type="checkbox"
+                                              checked={isCompleted}
+                                              onChange={(e) => handleToggleMaterialCompletion(material, e.target.checked)}
+                                              onClick={(e) => e.stopPropagation()}
+                                              disabled={!isEnrolled}
+                                            />
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -1185,29 +1268,41 @@ const StudentPreviewCourse: React.FC = () => {
                                       return (
                                         <div
                                           key={`quiz-${quiz.id}`}
-                                          className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
+                                          className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''} ${isCompleted ? 'structure-item-completed' : ''}`}
                                           onClick={() => handleMaterialClick(material)}
                                           style={{
                                             cursor: isAccessible ? 'pointer' : 'not-allowed',
-                                            opacity: isAccessible ? 1 : 0.6
+                                            opacity: isAccessible ? 1 : 0.6,
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
                                           }}
                                         >
-                                          <input
-                                            type="checkbox"
-                                            checked={isCompleted}
-                                            onChange={(e) => handleToggleMaterialCompletion(material, e.target.checked)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            disabled={!isEnrolled}
-                                            style={{
-                                              marginRight: '8px',
-                                              cursor: isEnrolled ? 'pointer' : 'not-allowed'
-                                            }}
-                                          />
-                                          <span className="item-icon">📝</span>
-                                          <span className="item-title-structure">{quiz.title}</span>
-                                          {!isAccessible && (
-                                            <span className="lock-icon-structure">🔒</span>
-                                          )}
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                                            <span className="item-icon">📝</span>
+                                            <span className="item-title-structure">{quiz.title}</span>
+                                            {!isAccessible && (
+                                              <span className="lock-icon-structure">🔒</span>
+                                            )}
+                                          </div>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            {isCompleted && (
+                                              <span style={{
+                                                color: '#10b981',
+                                                fontSize: '16px',
+                                                fontWeight: 'bold',
+                                                display: 'flex',
+                                                alignItems: 'center'
+                                              }}>✓</span>
+                                            )}
+                                            <input
+                                              type="checkbox"
+                                              checked={isCompleted}
+                                              onChange={(e) => handleToggleMaterialCompletion(material, e.target.checked)}
+                                              onClick={(e) => e.stopPropagation()}
+                                              disabled={!isEnrolled}
+                                            />
+                                          </div>
                                         </div>
                                       );
                                     })}

@@ -98,22 +98,22 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               {t('nav.teachers')}
             </a>
             <a
+              href="#sessions"
+              className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
+            >
+              {language === 'ar' ? 'الجلسات' : 'Sessions'}
+            </a>
+            <a
               href="#about"
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
             >
-              {t('nav.about')}
+              {language === 'ar' ? 'من نحن' : 'About us'}
             </a>
-            <button
-              onClick={() => navigate('/contact?focus=private-lessons')}
-              className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
-            >
-              {t('nav.privateLessons')}
-            </button>
             <button
               onClick={() => navigate('/contact')}
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
             >
-              {t('nav.contact')}
+              {language === 'ar' ? 'اتصل بنا' : 'Contact us'}
             </button>
           </nav>
 
@@ -315,21 +315,19 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                 {t('nav.teachers')}
               </a>
               <a
+                href="#sessions"
+                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {language === 'ar' ? 'الجلسات' : 'Sessions'}
+              </a>
+              <a
                 href="#about"
                 className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200"
                 onClick={() => setIsMenuOpen(false)}
               >
-                {t('nav.about')}
+                {language === 'ar' ? 'من نحن' : 'About us'}
               </a>
-            <button
-              onClick={() => {
-                setIsMenuOpen(false);
-                navigate('/contact?focus=private-lessons');
-              }}
-              className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200 text-left rtl:text-right w-full"
-            >
-              {t('nav.privateLessons')}
-            </button>
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
@@ -337,7 +335,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
                 }}
                 className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200 text-left rtl:text-right w-full"
               >
-                {t('nav.contact')}
+                {language === 'ar' ? 'اتصل بنا' : 'Contact us'}
               </button>
               <div className="pt-4 border-t border-dark-300 flex flex-col space-y-3">
                 {user ? (

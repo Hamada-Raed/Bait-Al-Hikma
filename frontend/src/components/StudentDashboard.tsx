@@ -771,7 +771,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 key={course.id}
                 className="bg-dark-200 rounded-xl overflow-hidden border border-dark-300 hover:border-primary-500/50 transition-all"
               >
-                {/* Course Image with Preview Icon Overlay */}
+                {/* Course Image */}
                 {course.image_url ? (
                   <div className="relative w-full h-48 overflow-hidden bg-dark-300 group">
                     <img
@@ -779,40 +779,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                       alt={course.name}
                       className="w-full h-full object-cover transition-transform group-hover:scale-105"
                     />
-                    {/* Preview Icon Overlay - Top Right */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/student-course/${course.id}`);
-                      }}
-                      className="absolute top-3 right-3 w-10 h-10 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all hover:scale-110 z-10"
-                      title={getText('View Course', 'عرض الدورة')}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </button>
                   </div>
                 ) : (
                   <div className="relative w-full h-48 flex items-center justify-center bg-gradient-to-br from-primary-500/20 to-accent-purple/20">
                     <svg className="w-16 h-16 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
-                    {/* Preview Icon Overlay - Top Right (even when no image) */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/student-course/${course.id}`);
-                      }}
-                      className="absolute top-3 right-3 w-10 h-10 bg-black/60 hover:bg-black/80 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-all hover:scale-110 z-10"
-                      title={getText('View Course', 'عرض الدورة')}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    </button>
                   </div>
                 )}
                 
@@ -954,78 +926,87 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                     </div>
                   )}
 
-                  {/* Action Buttons - Side by Side */}
-                  <div className="flex gap-3 mt-4">
-                    {/* Preview Button (Secondary) */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/student-course/${course.id}`);
-                      }}
-                      className="flex-1 py-2.5 px-4 border border-dark-300 hover:border-primary-500 text-gray-300 hover:text-primary-400 font-medium rounded-lg transition-all flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      {getText('Preview', 'معاينة')}
-                    </button>
-
-                    {/* Primary Action Button - Changes based on status */}
-                    <button
-                      onClick={() => {
-                        if (!course.progress_status || course.progress_status === 'not_enrolled') {
-                          handleEnroll(course.id);
-                        } else {
-                          // Navigate to course or continue
-                          navigate(`/courses/${course.id}`);
-                        }
-                      }}
-                      className={`flex-[1.5] py-2.5 px-4 font-semibold rounded-lg transition-all ${
-                        course.progress_status === 'completed'
-                          ? 'bg-dark-300 hover:bg-dark-400 text-gray-300 border border-dark-300'
-                          : 'bg-gradient-to-r from-primary-500 to-accent-purple hover:from-primary-600 hover:to-accent-purple/90 text-white'
-                      } flex items-center justify-center gap-2`}
-                    >
-                      {/* Button Icon based on status */}
-                      {!course.progress_status || (course.progress_status !== 'enrolled' && course.progress_status !== 'in_progress' && course.progress_status !== 'completed') ? (
-                        // Enroll icon
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                      ) : course.progress_status === 'in_progress' ? (
-                        // Continue icon
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : course.progress_status === 'completed' ? (
-                        // View icon
+                  {/* Action Buttons - Based on enrollment status */}
+                  {(!course.progress_status || course.progress_status === 'not_enrolled') ? (
+                    // Not enrolled: Show Preview and Enroll buttons
+                    <div className="flex gap-3 mt-4">
+                      {/* Preview Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/student-course/${course.id}`);
+                        }}
+                        className="flex-1 py-2.5 px-4 border border-dark-300 hover:border-primary-500 text-gray-300 hover:text-primary-400 font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                      ) : (
-                        // Start icon (play)
+                        {getText('Preview', 'معاينة')}
+                      </button>
+
+                      {/* Enroll Button */}
+                      <button
+                        onClick={() => {
+                          handleEnroll(course.id);
+                        }}
+                        className="flex-1 py-2.5 px-4 bg-gradient-to-r from-primary-500 to-accent-purple hover:from-primary-600 hover:to-accent-purple/90 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        {getText('Enroll', 'سجل الآن')}
+                      </button>
+                    </div>
+                  ) : course.progress_status === 'enrolled' ? (
+                    // Enrolled: Show only Start Course button
+                    <div className="mt-4">
+                      <button
+                        onClick={() => {
+                          navigate(`/student-course/${course.id}`);
+                        }}
+                        className="w-full py-2.5 px-4 bg-gradient-to-r from-primary-500 to-accent-purple hover:from-primary-600 hover:to-accent-purple/90 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                      )}
-                      
-                      {/* Button Text based on status */}
-                      {!course.progress_status || course.progress_status === 'not_enrolled'
-                        ? getText('Enroll', 'سجل الآن')
-                        : course.progress_status === 'in_progress'
-                        ? getText('Continue Course', 'متابعة الدورة')
-                        : course.progress_status === 'completed'
-                        ? getText('View Course', 'عرض الدورة')
-                        : course.progress_status === 'enrolled'
-                        ? getText('Start Course', 'بدء الدورة')
-                        : getText('Enroll', 'سجل الآن')
-                      }
-                    </button>
-                  </div>
+                        {getText('Start Course', 'بدء الدورة')}
+                      </button>
+                    </div>
+                  ) : course.progress_status === 'in_progress' ? (
+                    // In Progress: Show only Continue button
+                    <div className="mt-4">
+                      <button
+                        onClick={() => {
+                          navigate(`/student-course/${course.id}`);
+                        }}
+                        className="w-full py-2.5 px-4 bg-gradient-to-r from-primary-500 to-accent-purple hover:from-primary-600 hover:to-accent-purple/90 text-white font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {getText('Continue', 'متابعة')}
+                      </button>
+                    </div>
+                  ) : course.progress_status === 'completed' ? (
+                    // Completed: Show only View the course button
+                    <div className="mt-4">
+                      <button
+                        onClick={() => {
+                          navigate(`/student-course/${course.id}`);
+                        }}
+                        className="w-full py-2.5 px-4 bg-dark-300 hover:bg-dark-400 text-gray-300 border border-dark-300 font-semibold rounded-lg transition-all flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        {getText('View the course', 'عرض الدورة')}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

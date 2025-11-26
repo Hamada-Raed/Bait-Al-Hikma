@@ -928,6 +928,61 @@
   box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2), 0 2px 8px rgba(14, 165, 233, 0.2);
 }
 
+.structure-item.structure-item-completed {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.structure-item.structure-item-completed:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.structure-item.structure-item-completed .item-title-structure {
+  color: #6ee7b7; /* green-300 */
+}
+
+/* Enhanced checkbox styling for completed materials */
+.structure-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #0ea5e9;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  background-color: transparent;
+}
+
+.structure-item input[type="checkbox"]:checked {
+  background-color: #10b981;
+  border-color: #10b981;
+}
+
+.structure-item input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.structure-item input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.structure-item input[type="checkbox"]:hover:not(:disabled) {
+  border-color: #10b981;
+  transform: scale(1.1);
+}
+
 .item-icon {
   font-size: 16px;
   min-width: 20px;
