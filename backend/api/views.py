@@ -1594,6 +1594,84 @@ class AvailabilityViewSet(viewsets.ModelViewSet):
             'error_count': len(errors)
         }, status=status.HTTP_201_CREATED)
     
+    @action(detail=False, methods=['post'])
+    def check_pricing(self, request):
+        """Check if teacher has pricing for the availability being created"""
+        if not request.user.is_authenticated or request.user.user_type != 'teacher':
+            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        
+        for_school_students = request.data.get('for_school_students', False)
+        for_university_students = request.data.get('for_university_students', False)
+        grade_ids = request.data.get('grade_ids', [])
+        subject_ids = request.data.get('subject_ids', [])
+        
+        missing_pricing = []
+        
+        # Check pricing for school students
+        if for_school_students and grade_ids and subject_ids:
+            from .models import Grade, Subject
+            existing_prices = PrivateLessonPrice.objects.filter(
+                teacher=request.user,
+                student_type='school_student'
+            )
+            
+            for grade_id in grade_ids:
+                for subject_id in subject_ids:
+                    # Check if pricing exists for this (grade, subject) combination
+                    price_exists = existing_prices.filter(
+                        grade_id=grade_id,
+                        subject_id=subject_id
+                    ).exists()
+                    
+                    if not price_exists:
+                        # Get names for display
+                        try:
+                            grade = Grade.objects.get(id=grade_id)
+                            subject = Subject.objects.get(id=subject_id)
+                            missing_pricing.append({
+                                'student_type': 'school_student',
+                                'grade_id': grade_id,
+                                'grade_name_en': grade.name_en,
+                                'grade_name_ar': grade.name_ar,
+                                'subject_id': subject_id,
+                                'subject_name_en': subject.name_en,
+                                'subject_name_ar': subject.name_ar,
+                            })
+                        except (Grade.DoesNotExist, Subject.DoesNotExist):
+                            pass
+        
+        # Check pricing for university students
+        if for_university_students and subject_ids:
+            from .models import Subject
+            existing_prices = PrivateLessonPrice.objects.filter(
+                teacher=request.user,
+                student_type='university_student'
+            )
+            
+            for subject_id in subject_ids:
+                # For university students, grade is None
+                price_exists = existing_prices.filter(
+                    subject_id=subject_id,
+                    grade__isnull=True
+                ).exists()
+                
+                if not price_exists:
+                    try:
+                        subject = Subject.objects.get(id=subject_id)
+                        missing_pricing.append({
+                            'student_type': 'university_student',
+                            'subject_id': subject_id,
+                            'subject_name_en': subject.name_en,
+                            'subject_name_ar': subject.name_ar,
+                        })
+                    except Subject.DoesNotExist:
+                        pass
+        
+        return Response({
+            'has_all_pricing': len(missing_pricing) == 0,
+            'missing_pricing': missing_pricing
+        })
+    
     @action(detail=False, methods=['delete'])
     def bulk_delete(self, request):
         """Delete availability blocks by IDs"""

@@ -180,7 +180,7 @@ class TeacherSubjectSerializer(serializers.ModelSerializer):
 class PlatformSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlatformSettings
-        fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage']
+        fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage', 'private_lesson_commission_percentage']
 
 
 class HeroSectionSerializer(serializers.ModelSerializer):

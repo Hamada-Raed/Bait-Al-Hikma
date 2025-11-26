@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from './Header';
 import { ensureCsrfToken } from '../utils/csrf';
 
@@ -78,6 +78,7 @@ const PricingTab: React.FC<PricingTabProps> = ({ user, subjects, grades, countri
   const [editingPrice, setEditingPrice] = useState<PrivateLessonPrice | null>(null);
   const [userCountry, setUserCountry] = useState<Country | null>(null);
   const [userCurrency, setUserCurrency] = useState<{code: string, symbol: string, name: string} | null>(null);
+  const [commissionPercentage, setCommissionPercentage] = useState<number>(10); // Default to 10%
   
   const [newPrice, setNewPrice] = useState({
     student_type: 'university_student' as 'university_student' | 'school_student',
@@ -129,6 +130,26 @@ const PricingTab: React.FC<PricingTabProps> = ({ user, subjects, grades, countri
     }
   }, [countries, language]);
 
+  // Fetch platform settings for commission percentage
+  useEffect(() => {
+    const fetchPlatformSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/platform-settings/current/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.private_lesson_commission_percentage !== undefined) {
+            setCommissionPercentage(parseFloat(data.private_lesson_commission_percentage));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching platform settings:', err);
+      }
+    };
+    fetchPlatformSettings();
+  }, []);
+
   // Fetch existing prices
   useEffect(() => {
     const fetchPrices = async () => {
@@ -152,13 +173,13 @@ const PricingTab: React.FC<PricingTabProps> = ({ user, subjects, grades, countri
 
   const calculateNetPrice = (grossPrice: number): number => {
     if (!grossPrice || grossPrice <= 0) return 0;
-    const commissionAmount = (grossPrice * 10) / 100;
+    const commissionAmount = (grossPrice * commissionPercentage) / 100;
     return Math.round(grossPrice - commissionAmount);
   };
 
   const calculateCommissionAmount = (grossPrice: number): number => {
     if (!grossPrice || grossPrice <= 0) return 0;
-    return Math.round((grossPrice * 10) / 100);
+    return Math.round((grossPrice * commissionPercentage) / 100);
   };
 
   const handleAddPrice = async (e: React.FormEvent) => {
@@ -564,7 +585,7 @@ const PricingTab: React.FC<PricingTabProps> = ({ user, subjects, grades, countri
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-400">
-                  {getText('Platform Fee', 'رسوم المنصة')} (10%):
+                  {getText('Platform Fee', 'رسوم المنصة')} ({commissionPercentage}%):
                 </span>
                 <span className="text-red-400 font-semibold">
                   -{calculateCommissionAmount(parseFloat(newPrice.price)).toLocaleString()} {userCurrency.name}
@@ -767,6 +788,7 @@ const Profile: React.FC = () => {
   const { user, checkAuth } = useAuth();
   const { language } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [countries, setCountries] = useState<Country[]>([]);
@@ -797,6 +819,14 @@ const Profile: React.FC = () => {
   });
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
+
+  // Check URL parameter for tab
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'pricing' && user?.user_type === 'teacher') {
+      setActiveTab('pricing');
+    }
+  }, [searchParams, user]);
 
   useEffect(() => {
     if (!user) {

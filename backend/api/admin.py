@@ -61,8 +61,8 @@ class TeacherSubjectAdmin(admin.ModelAdmin):
 
 @admin.register(PlatformSettings)
 class PlatformSettingsAdmin(admin.ModelAdmin):
-    list_display = ['name_en', 'name_ar', 'platform_commission_percentage', 'updated_at']
-    fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage']
+    list_display = ['name_en', 'name_ar', 'platform_commission_percentage', 'private_lesson_commission_percentage', 'updated_at']
+    fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage', 'private_lesson_commission_percentage']
     
     def has_add_permission(self, request):
         # Only allow one instance

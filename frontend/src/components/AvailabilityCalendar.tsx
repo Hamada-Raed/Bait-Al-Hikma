@@ -103,6 +103,8 @@ const AvailabilityCalendar: React.FC = () => {
   const [deleteConfirmChecked, setDeleteConfirmChecked] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [missingPricing, setMissingPricing] = useState<any[]>([]);
 
   const getText = (en: string, ar: string) => (language === 'ar' ? ar : en);
 
@@ -544,6 +546,44 @@ const AvailabilityCalendar: React.FC = () => {
           alert(getText('Please select at least one track for grades 11-12', 'يرجى اختيار مسار واحد على الأقل للصفوف 11-12'));
           return;
         }
+      }
+    }
+
+    // FIRST: Check pricing for teachers before creating availability
+    if (!isStudent) {
+      try {
+        const csrfToken = await ensureCsrfToken();
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (csrfToken) {
+          headers['X-CSRFToken'] = csrfToken;
+        }
+
+        const pricingCheckResponse = await fetch(getApiEndpoint('/check_pricing/'), {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({
+            for_university_students: formData.for_university_students,
+            for_school_students: formData.for_school_students,
+            grade_ids: formData.grade_ids,
+            subject_ids: formData.subject_ids,
+          }),
+        });
+
+        if (pricingCheckResponse.ok) {
+          const pricingCheck = await pricingCheckResponse.json();
+          
+          if (!pricingCheck.has_all_pricing) {
+            setMissingPricing(pricingCheck.missing_pricing || []);
+            setShowPricingModal(true);
+            return; // Stop here, don't create availability
+          }
+        }
+      } catch (error) {
+        console.error('Error checking pricing:', error);
+        // Continue with creation even if pricing check fails
       }
     }
 
@@ -2253,6 +2293,69 @@ const AvailabilityCalendar: React.FC = () => {
               >
                 {getText('OK', 'موافق')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Missing Pricing Modal */}
+      {showPricingModal && missingPricing.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-dark-100 rounded-lg shadow-xl w-full max-w-md m-4">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 className="text-xl font-bold text-white">
+                  {getText('Missing Pricing Information', 'معلومات التسعير مفقودة')}
+                </h3>
+              </div>
+              <p className="text-gray-300 mb-4">
+                {getText(
+                  'You need to add pricing for the following to create availability:',
+                  'تحتاج إلى إضافة التسعير لما يلي لإنشاء التوفر:'
+                )}
+              </p>
+              <div className="max-h-64 overflow-y-auto mb-4">
+                <ul className="list-disc list-inside text-gray-400 space-y-2">
+                  {missingPricing.map((item, idx) => (
+                    <li key={idx} className="text-sm">
+                      {item.student_type === 'school_student' ? (
+                        <>
+                          {language === 'ar' ? item.subject_name_ar : item.subject_name_en} -{' '}
+                          {language === 'ar' ? item.grade_name_ar : item.grade_name_en}
+                        </>
+                      ) : (
+                        <>
+                          {language === 'ar' ? item.subject_name_ar : item.subject_name_en} ({getText('University Student', 'طالب جامعي')})
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowPricingModal(false);
+                    setMissingPricing([]);
+                  }}
+                  className="flex-1 px-4 py-2 bg-dark-300 text-white rounded-lg hover:bg-dark-400 transition-colors"
+                >
+                  {getText('Cancel', 'إلغاء')}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPricingModal(false);
+                    setMissingPricing([]);
+                    navigate('/profile?tab=pricing');
+                  }}
+                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+                >
+                  {getText('Add Pricing', 'إضافة التسعير')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

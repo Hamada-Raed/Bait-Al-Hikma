@@ -234,6 +234,12 @@ class PlatformSettings(models.Model):
         default=25.00,
         help_text='Platform commission percentage (e.g., 25.00 for 25%)'
     )
+    private_lesson_commission_percentage = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=10.00,
+        help_text='Commission percentage for private lessons (e.g., 10.00 for 10%)'
+    )
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -253,7 +259,8 @@ class PlatformSettings(models.Model):
         obj, created = cls.objects.get_or_create(pk=1, defaults={
             'name_en': 'Bait Al-Hikma',
             'name_ar': 'بيت الحكمة',
-            'platform_commission_percentage': 25.00
+            'platform_commission_percentage': 25.00,
+            'private_lesson_commission_percentage': 10.00
         })
         return obj
 
