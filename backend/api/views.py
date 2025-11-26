@@ -1729,14 +1729,9 @@ class TodoListViewSet(viewsets.ModelViewSet):
     pagination_class = NoPagination
     
     def get_queryset(self):
-        # Students can only see their own todo lists
+        # Students can only see their own todo lists (including past ones)
         if self.request.user.is_authenticated and self.request.user.user_type in ['school_student', 'university_student']:
-            today = date.today()
-            # Filter out past dates - only show today and future lists
-            return TodoList.objects.filter(
-                student=self.request.user,
-                date__gte=today
-            )
+            return TodoList.objects.filter(student=self.request.user)
         return TodoList.objects.none()
     
     def perform_create(self, serializer):

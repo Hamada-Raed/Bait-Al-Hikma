@@ -1277,120 +1277,135 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                     )}
                   </div>
                 </div>
-                <div className="space-y-3 mb-6">
+                <ul className="space-y-3 mb-6">
                   {selectedTodoList.items && selectedTodoList.items.length > 0 ? (
                     selectedTodoList.items
                       .filter((item: any) => item && item.id) // Filter out items without IDs
                       .map((item: any) => (
-                      <div
+                      <li
                         key={item.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                        className={`flex items-center gap-4 p-5 rounded-lg border list-none ${
                           item.is_completed
                             ? 'bg-dark-200/50 border-dark-300'
                             : 'bg-dark-200 border-dark-300'
                         }`}
+                        style={{ listStyleType: 'disc', marginLeft: '1rem' }}
                       >
-                        {editingItems.has(item.id) ? (
-                          <div className="flex-1 flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={editingItems.get(item.id) || ''}
-                              onChange={(e) => handleItemTextChange(item.id, e.target.value, e)}
-                              onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key === 'Enter') {
+                        <span className="text-primary-400 mr-2">•</span>
+                          {editingItems.has(item.id) ? (
+                            <div className="flex-1 flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={editingItems.get(item.id) || ''}
+                                onChange={(e) => handleItemTextChange(item.id, e.target.value, e)}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (!item?.id) {
+                                      console.error('Cannot save: item.id is missing', item);
+                                      return;
+                                    }
+                                    handleSaveEdit(item.id, e);
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    if (item?.id) {
+                                      handleCancelEdit(item.id, e);
+                                    }
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-1 px-4 py-2 text-base bg-dark-300 border border-dark-400 rounded text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                autoFocus
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   e.preventDefault();
                                   if (!item?.id) {
                                     console.error('Cannot save: item.id is missing', item);
                                     return;
                                   }
                                   handleSaveEdit(item.id, e);
-                                } else if (e.key === 'Escape') {
+                                }}
+                                className="p-2 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={getText('Save', 'حفظ')}
+                                type="button"
+                                disabled={!item?.id}
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   e.preventDefault();
                                   if (item?.id) {
                                     handleCancelEdit(item.id, e);
                                   }
-                                }
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 px-3 py-1 bg-dark-300 border border-dark-400 rounded text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                              autoFocus
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                if (!item?.id) {
-                                  console.error('Cannot save: item.id is missing', item);
-                                  return;
-                                }
-                                handleSaveEdit(item.id, e);
-                              }}
-                              className="p-1.5 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={getText('Save', 'حفظ')}
-                              type="button"
-                              disabled={!item?.id}
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                if (item?.id) {
-                                  handleCancelEdit(item.id, e);
-                                }
-                              }}
-                              className="p-1.5 text-gray-400 hover:text-gray-300 transition-colors"
-                              title={getText('Cancel', 'إلغاء')}
-                              type="button"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
+                                }}
+                                className="p-2 text-gray-400 hover:text-gray-300 transition-colors"
+                                title={getText('Cancel', 'إلغاء')}
+                                type="button"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
                         ) : (
                           <>
                             <span
-                              className={`flex-1 text-gray-300 ${
-                                item.is_completed ? 'line-through text-gray-500' : ''
+                              className={`flex-1 text-base text-gray-300 ${
+                                item.is_completed ? 'line-through decoration-2 text-gray-500' : ''
                               }`}
                             >
                               {item.text}
                             </span>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={item.is_completed || false}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  if (item?.id) {
+                                    handleToggleTodoItem(item.id, item.is_completed || false);
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-5 h-5 rounded border-dark-400 bg-dark-300 text-primary-500 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                                title={getText(item.is_completed ? 'Mark as incomplete' : 'Mark as complete', item.is_completed ? 'وضع علامة غير مكتمل' : 'وضع علامة مكتمل')}
+                              />
                               <button
                                 onClick={(e) => handleStartEdit(item, e)}
-                                className="p-1.5 text-gray-400 hover:text-primary-400 transition-colors"
+                                className="p-2 text-gray-400 hover:text-primary-400 transition-colors"
                                 title={getText('Edit', 'تعديل')}
                                 type="button"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
                               <button
                                 onClick={(e) => handleDeleteTodoItem(item.id, e)}
-                                className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
+                                className="p-2 text-gray-400 hover:text-red-400 transition-colors"
                                 title={getText('Delete', 'حذف')}
                                 type="button"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
                             </div>
                           </>
                         )}
-                      </div>
+                      </li>
                     ))
                   ) : (
-                    <p className="text-gray-500 text-center py-4">{getText('No items yet', 'لا توجد عناصر بعد')}</p>
+                    <li className="text-gray-500 text-center py-4 list-none">{getText('No items yet', 'لا توجد عناصر بعد')}</li>
                   )}
-                </div>
+                </ul>
                 <div className="flex gap-3">
                   <input
                     type="text"
@@ -1459,20 +1474,34 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                           })}
                         </p>
                         {list.items && list.items.length > 0 ? (
-                          <div className="space-y-2">
-                            {list.items.slice(0, 3).map((item: any) => (
-                              <div key={item.id} className="flex items-center gap-2 text-sm text-gray-300">
-                                <span className={`${item.is_completed ? 'line-through text-gray-500' : ''}`}>
+                          <ul className="space-y-2 list-disc list-inside">
+                            {list.items.slice(0, 6).map((item: any) => (
+                              <li key={item.id} className="flex items-center gap-2 text-base text-gray-300">
+                                <input
+                                  type="checkbox"
+                                  checked={item.is_completed || false}
+                                  onChange={async (e) => {
+                                    e.stopPropagation();
+                                    if (item?.id) {
+                                      await handleToggleTodoItem(item.id, item.is_completed || false);
+                                      await fetchTodoLists();
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-5 h-5 rounded border-dark-400 bg-dark-300 text-primary-500 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                                  title={getText(item.is_completed ? 'Mark as incomplete' : 'Mark as complete', item.is_completed ? 'وضع علامة غير مكتمل' : 'وضع علامة مكتمل')}
+                                />
+                                <span className={`flex-1 ${item.is_completed ? 'line-through decoration-2 text-gray-500' : ''}`}>
                                   {item.text}
                                 </span>
-                              </div>
+                              </li>
                             ))}
-                            {list.items.length > 3 && (
-                              <p className="text-xs text-gray-500">
-                                +{list.items.length - 3} {getText('more items', 'عناصر أخرى')}
+                            {list.items.length > 6 && (
+                              <p className="text-sm text-gray-500 mt-2">
+                                +{list.items.length - 6} {getText('more items', 'عناصر أخرى')}
                               </p>
                             )}
-                          </div>
+                          </ul>
                         ) : (
                           <div className="flex items-center gap-2 text-sm text-gray-500">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
