@@ -1089,7 +1089,7 @@ class TodoItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = TodoItem
         fields = ['id', 'todo_list', 'text', 'is_completed', 'order', 'created_at', 'updated_at']
-        read_only_fields = ['todo_list', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
     
     def validate_text(self, value):
         if not value or not value.strip():

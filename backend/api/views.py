@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import time
 import os
+from datetime import date
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -1730,7 +1731,12 @@ class TodoListViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Students can only see their own todo lists
         if self.request.user.is_authenticated and self.request.user.user_type in ['school_student', 'university_student']:
-            return TodoList.objects.filter(student=self.request.user)
+            today = date.today()
+            # Filter out past dates - only show today and future lists
+            return TodoList.objects.filter(
+                student=self.request.user,
+                date__gte=today
+            )
         return TodoList.objects.none()
     
     def perform_create(self, serializer):
@@ -1752,10 +1758,18 @@ class TodoItemViewSet(viewsets.ModelViewSet):
         return TodoItem.objects.none()
     
     def perform_create(self, serializer):
-        # Verify that the todo_list belongs to the current user
+        # Get the todo_list from validated_data (serializer converts ID to object automatically)
         todo_list = serializer.validated_data.get('todo_list')
-        if todo_list and todo_list.student != self.request.user:
+        
+        if not todo_list:
+            raise serializers.ValidationError({'todo_list': 'Todo list is required.'})
+        
+        # Verify that the todo_list belongs to the current user
+        if todo_list.student != self.request.user:
             raise serializers.ValidationError({'todo_list': 'You can only add items to your own todo lists.'})
+        
+        # Save the item - serializer.save() will use the validated todo_list
+        serializer.save()
 
 
 # Course Structure Management Views

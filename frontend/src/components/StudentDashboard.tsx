@@ -106,8 +106,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [newTodoDate, setNewTodoDate] = useState('');
   const [newTodoItemText, setNewTodoItemText] = useState('');
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [editingItemText, setEditingItemText] = useState<string>('');
+  // Use a Map to store editing state for each item independently
+  const [editingItems, setEditingItems] = useState<Map<number, string>>(new Map());
+  const [showDeleteItemConfirm, setShowDeleteItemConfirm] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+  const [showDeleteListConfirm, setShowDeleteListConfirm] = useState(false);
+  const [isCreatingList, setIsCreatingList] = useState(false);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -391,7 +395,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const shouldShowMatchingProfileNotice = isMatchingTab && !hasMatchingProfileData;
   const filteredCourses = shouldShowMatchingProfileNotice ? [] : getFilteredCourses();
 
-  // Fetch todo lists
+  // Fetch todo lists (backend filters out past dates)
   const fetchTodoLists = async () => {
     try {
       setLoadingTodos(true);
@@ -415,6 +419,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     if (!newTodoTitle.trim() || !newTodoDate) {
       return;
     }
+    setIsCreatingList(true);
     try {
       const csrfToken = await ensureCsrfToken();
       const headers: HeadersInit = {
@@ -433,14 +438,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
         }),
       });
       if (response.ok) {
+        const newList = await response.json();
         setNewTodoTitle('');
         setNewTodoDate('');
         setShowCreateTodoForm(false);
-        await fetchTodoLists();
+        // Open the newly created list and keep isCreatingList true so checkboxes are hidden
+        const fullList = await fetch(`${API_BASE_URL}/todo-lists/${newList.id}/`, {
+          credentials: 'include',
+        }).then(r => r.json());
+        setSelectedTodoList(fullList);
         setActiveTab('todo');
+        // Keep isCreatingList true until user closes the form
       }
     } catch (error) {
       console.error('Error creating todo list:', error);
+      setIsCreatingList(false);
     }
   };
 
@@ -449,6 +461,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     if (!newTodoItemText.trim()) {
       return;
     }
+    if (!todoListId) {
+      console.error('Cannot add item: todo list ID is missing');
+      return;
+    }
+    
     const itemText = newTodoItemText.trim();
     setNewTodoItemText(''); // Clear input immediately for better UX
     
@@ -470,18 +487,30 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           order: selectedTodoList?.items?.length || 0,
         }),
       });
+      
       if (response.ok) {
         const newItem = await response.json();
-        // Optimistically update the selected todo list
-        if (selectedTodoList) {
-          setSelectedTodoList({
-            ...selectedTodoList,
-            items: [...(selectedTodoList.items || []), newItem]
-          });
+        // Ensure the item has an ID before adding it
+        if (newItem && newItem.id) {
+          // Refresh the selected list to get updated data with all items
+          if (selectedTodoList && selectedTodoList.id) {
+            const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+              credentials: 'include',
+            }).then(r => r.json());
+            if (updatedList && updatedList.id) {
+              setSelectedTodoList(updatedList);
+            }
+          }
+          // Refresh all todo lists to update the item count
+          await fetchTodoLists();
+        } else {
+          console.error('New item does not have an ID:', newItem);
+          // If failed, restore the text
+          setNewTodoItemText(itemText);
         }
-        // Also refresh all todo lists to update the item count
-        await fetchTodoLists();
       } else {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        console.error('Failed to add todo item:', response.status, errorData);
         // If failed, restore the text
         setNewTodoItemText(itemText);
       }
@@ -545,10 +574,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   };
 
   // Delete todo item
-  const handleDeleteTodoItem = async (itemId: number) => {
-    if (!confirm(getText('Are you sure you want to delete this item?', 'هل أنت متأكد من حذف هذا العنصر؟'))) {
-      return;
+  const handleDeleteTodoItem = async (itemId: number, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
     }
+    setItemToDelete(itemId);
+    setShowDeleteItemConfirm(true);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!itemToDelete) return;
+    
+    const itemId = itemToDelete;
+    setShowDeleteItemConfirm(false);
+    setItemToDelete(null);
     
     // Optimistically remove from UI
     if (selectedTodoList) {
@@ -593,35 +633,82 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     }
   };
 
-  // Edit todo item handlers
-  const handleStartEdit = (item: any) => {
-    setEditingItemId(item.id);
-    setEditingItemText(item.text);
+  // Edit todo item handlers - each item has independent state
+  const handleStartEdit = (item: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setEditingItems(prev => {
+      const newMap = new Map(prev);
+      newMap.set(item.id, item.text);
+      return newMap;
+    });
   };
 
-  const handleCancelEdit = () => {
-    setEditingItemId(null);
-    setEditingItemText('');
+  const handleCancelEdit = (itemId: number, e?: React.MouseEvent | React.KeyboardEvent<HTMLInputElement>) => {
+    if (e) {
+      e.stopPropagation();
+      if ('preventDefault' in e) {
+        e.preventDefault();
+      }
+    }
+    setEditingItems(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(itemId);
+      return newMap;
+    });
   };
 
-  const handleSaveEdit = async (itemId: number) => {
-    if (!editingItemText.trim()) {
+  const handleItemTextChange = (itemId: number, text: string, e?: React.ChangeEvent<HTMLInputElement>) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setEditingItems(prev => {
+      const newMap = new Map(prev);
+      newMap.set(itemId, text);
+      return newMap;
+    });
+  };
+
+  const handleSaveEdit = async (itemId: number | undefined, e?: React.MouseEvent | React.KeyboardEvent<HTMLInputElement>) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    
+    // Validate itemId exists
+    if (!itemId || itemId === undefined) {
+      console.error('Cannot save: item ID is undefined');
       return;
     }
     
-    const itemText = editingItemText.trim();
+    const editingText = editingItems.get(itemId);
+    if (!editingText || !editingText.trim()) {
+      handleCancelEdit(itemId);
+      return;
+    }
+    
+    const itemText = editingText.trim();
+    const previousText = selectedTodoList?.items?.find((item: any) => item.id === itemId)?.text || '';
+    
+    // Remove from editing state immediately
+    setEditingItems(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(itemId);
+      return newMap;
+    });
     
     // Optimistically update UI
     if (selectedTodoList) {
       setSelectedTodoList({
         ...selectedTodoList,
-        items: selectedTodoList.items.map((item: any) =>
-          item.id === itemId ? { ...item, text: itemText } : item
-        )
+        items: selectedTodoList.items
+          .filter((item: any) => item && item.id) // Ensure all items have IDs
+          .map((item: any) =>
+            item.id === itemId ? { ...item, text: itemText } : item
+          )
       });
     }
-    setEditingItemId(null);
-    setEditingItemText('');
     
     try {
       const csrfToken = await ensureCsrfToken();
@@ -639,24 +726,52 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           text: itemText,
         }),
       });
-      if (!response.ok) {
-        // Revert on error
-        if (selectedTodoList) {
+      if (response.ok) {
+        // Refresh the selected list to get updated data
+        if (selectedTodoList && selectedTodoList.id) {
           const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
             credentials: 'include',
           }).then(r => r.json());
-          setSelectedTodoList(updatedList);
+          if (updatedList && updatedList.id) {
+            setSelectedTodoList(updatedList);
+          }
         }
+        // Also refresh all lists
+        await fetchTodoLists();
+      } else {
+        // Revert on error
+        if (selectedTodoList) {
+          setSelectedTodoList({
+            ...selectedTodoList,
+            items: selectedTodoList.items.map((item: any) =>
+              item.id === itemId ? { ...item, text: previousText } : item
+            )
+          });
+        }
+        // Put back in editing state on error
+        setEditingItems(prev => {
+          const newMap = new Map(prev);
+          newMap.set(itemId, itemText);
+          return newMap;
+        });
       }
     } catch (error) {
       console.error('Error updating todo item:', error);
       // Revert on error
       if (selectedTodoList) {
-        const updatedList = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
-          credentials: 'include',
-        }).then(r => r.json());
-        setSelectedTodoList(updatedList);
+        setSelectedTodoList({
+          ...selectedTodoList,
+          items: selectedTodoList.items.map((item: any) =>
+            item.id === itemId ? { ...item, text: previousText } : item
+          )
+        });
       }
+      // Put back in editing state on error
+      setEditingItems(prev => {
+        const newMap = new Map(prev);
+        newMap.set(itemId, itemText);
+        return newMap;
+      });
     }
   };
 
@@ -669,8 +784,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
       if (response.ok) {
         const data = await response.json();
         setSelectedTodoList(data);
-        setEditingItemId(null);
-        setEditingItemText('');
+        setEditingItems(new Map()); // Clear all editing states
+        setIsCreatingList(false); // Reset creating state when opening existing list
       }
     } catch (error) {
       console.error('Error fetching todo list:', error);
@@ -697,7 +812,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   };
 
   const handleSaveList = async () => {
-    if (!selectedTodoList || !editingListTitle.trim() || !editingListDate) {
+    if (!selectedTodoList || !selectedTodoList.id || !editingListTitle.trim() || !editingListDate) {
+      if (!selectedTodoList || !selectedTodoList.id) {
+        console.error('Cannot save: todo list or list ID is missing', selectedTodoList);
+      }
       return;
     }
     
@@ -720,9 +838,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
       });
       if (response.ok) {
         const updatedList = await response.json();
-        setSelectedTodoList(updatedList);
-        setIsEditingList(false);
-        await fetchTodoLists();
+        if (updatedList && updatedList.id) {
+          // Refresh the list with all items to ensure we have the latest data
+          const fullList = await fetch(`${API_BASE_URL}/todo-lists/${updatedList.id}/`, {
+            credentials: 'include',
+          }).then(r => r.json());
+          if (fullList && fullList.id) {
+            setSelectedTodoList(fullList);
+            setIsEditingList(false);
+            await fetchTodoLists();
+          } else {
+            console.error('Failed to fetch updated list with items:', fullList);
+            setSelectedTodoList(updatedList);
+            setIsEditingList(false);
+            await fetchTodoLists();
+          }
+        } else {
+          console.error('Updated list does not have an ID:', updatedList);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        console.error('Failed to update todo list:', response.status, errorData);
       }
     } catch (error) {
       console.error('Error updating todo list:', error);
@@ -731,11 +867,33 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   // Delete todo list
   const handleDeleteTodoList = async () => {
-    if (!selectedTodoList) return;
-    
-    if (!confirm(getText('Are you sure you want to delete this list?', 'هل أنت متأكد من حذف هذه القائمة؟'))) {
+    if (!selectedTodoList || !selectedTodoList.id) {
+      console.error('Cannot delete: todo list or list ID is missing', selectedTodoList);
       return;
     }
+    setShowDeleteListConfirm(true);
+  };
+
+  const confirmDeleteList = async () => {
+    if (!selectedTodoList || !selectedTodoList.id) {
+      console.error('Cannot delete: todo list or list ID is missing', selectedTodoList);
+      setShowDeleteListConfirm(false);
+      setSelectedTodoList(null);
+      return;
+    }
+    
+    // Store the ID before closing the modal to avoid race conditions
+    const listId = selectedTodoList.id;
+    
+    // Double-check the ID is valid before proceeding
+    if (!listId || listId === undefined || listId === null || String(listId) === 'undefined') {
+      console.error('Cannot delete: list ID is invalid', listId, selectedTodoList);
+      setShowDeleteListConfirm(false);
+      setSelectedTodoList(null);
+      return;
+    }
+    
+    setShowDeleteListConfirm(false);
     
     try {
       const csrfToken = await ensureCsrfToken();
@@ -743,7 +901,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
       if (csrfToken) {
         headers['X-CSRFToken'] = csrfToken;
       }
-      const response = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+      const response = await fetch(`${API_BASE_URL}/todo-lists/${listId}/`, {
         method: 'DELETE',
         headers,
         credentials: 'include',
@@ -751,6 +909,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
       if (response.ok) {
         setSelectedTodoList(null);
         await fetchTodoLists();
+      } else {
+        console.error('Failed to delete todo list:', response.status, await response.text());
       }
     } catch (error) {
       console.error('Error deleting todo list:', error);
@@ -944,6 +1104,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                       type="date"
                       value={newTodoDate}
                       onChange={(e) => setNewTodoDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
                       className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
@@ -983,6 +1144,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                         type="date"
                         value={editingListDate}
                         onChange={(e) => setEditingListDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
                         className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
@@ -1023,6 +1185,53 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                     ) : (
                       <>
                         <button
+                          onClick={async () => {
+                            // Save the list and return to todo tab
+                            if (selectedTodoList && selectedTodoList.id) {
+                              try {
+                                const csrfToken = await ensureCsrfToken();
+                                const headers: HeadersInit = {
+                                  'Content-Type': 'application/json',
+                                };
+                                if (csrfToken) {
+                                  headers['X-CSRFToken'] = csrfToken;
+                                }
+                                const response = await fetch(`${API_BASE_URL}/todo-lists/${selectedTodoList.id}/`, {
+                                  method: 'PATCH',
+                                  headers,
+                                  credentials: 'include',
+                                  body: JSON.stringify({
+                                    title: selectedTodoList.title,
+                                    date: selectedTodoList.date,
+                                  }),
+                                });
+                                if (response.ok) {
+                                  // Save successful, refresh lists and return to list view
+                                  await fetchTodoLists();
+                                  // Clear selected list to return to list view
+                                  setSelectedTodoList(null);
+                                  setEditingItems(new Map());
+                                  setIsEditingList(false);
+                                  setNewTodoItemText('');
+                                } else {
+                                  const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                                  console.error('Failed to save todo list:', response.status, errorData);
+                                }
+                              } catch (error) {
+                                console.error('Error saving todo list:', error);
+                              }
+                            } else {
+                              console.error('Cannot save: list ID is undefined', selectedTodoList);
+                            }
+                          }}
+                          className="p-2 text-green-400 hover:text-green-300 transition-colors"
+                          title={getText('Save List & Return', 'حفظ القائمة والعودة')}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                          </svg>
+                        </button>
+                        <button
                           onClick={handleStartEditList}
                           className="p-2 text-gray-400 hover:text-primary-400 transition-colors"
                           title={getText('Edit List', 'تعديل القائمة')}
@@ -1032,9 +1241,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                           </svg>
                         </button>
                         <button
-                          onClick={handleDeleteTodoList}
-                          className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!selectedTodoList || !selectedTodoList.id) {
+                              console.error('Cannot delete: todo list or list ID is missing', selectedTodoList);
+                              return;
+                            }
+                            handleDeleteTodoList();
+                          }}
+                          className="p-2 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           title={getText('Delete List', 'حذف القائمة')}
+                          disabled={!selectedTodoList || !selectedTodoList.id}
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1045,6 +1262,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                             setSelectedTodoList(null);
                             setNewTodoItemText('');
                             setIsEditingList(false);
+                            setIsCreatingList(false);
+                            setEditingItems(new Map());
+                            fetchTodoLists();
                           }}
                           className="p-2 text-gray-400 hover:text-white transition-colors"
                           title={getText('Close', 'إغلاق')}
@@ -1059,53 +1279,73 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                 </div>
                 <div className="space-y-3 mb-6">
                   {selectedTodoList.items && selectedTodoList.items.length > 0 ? (
-                    selectedTodoList.items.map((item: any) => (
+                    selectedTodoList.items
+                      .filter((item: any) => item && item.id) // Filter out items without IDs
+                      .map((item: any) => (
                       <div
                         key={item.id}
-                        className="flex items-center gap-3"
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          item.is_completed
+                            ? 'bg-dark-200/50 border-dark-300'
+                            : 'bg-dark-200 border-dark-300'
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={item.is_completed}
-                          onChange={() => handleToggleTodoItem(item.id, item.is_completed)}
-                          className="w-5 h-5 text-primary-500 bg-dark-300 border-dark-400 rounded focus:ring-primary-500 focus:ring-2 cursor-pointer flex-shrink-0"
-                        />
-                        <div
-                          className={`flex-1 flex items-center gap-3 p-3 rounded-lg border ${
-                            item.is_completed
-                              ? 'bg-dark-200/50 border-dark-300'
-                              : 'bg-dark-200 border-dark-300'
-                          }`}
-                        >
-                        {editingItemId === item.id ? (
+                        {editingItems.has(item.id) ? (
                           <div className="flex-1 flex items-center gap-2">
                             <input
                               type="text"
-                              value={editingItemText}
-                              onChange={(e) => setEditingItemText(e.target.value)}
-                              onKeyPress={(e) => {
+                              value={editingItems.get(item.id) || ''}
+                              onChange={(e) => handleItemTextChange(item.id, e.target.value, e)}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
                                 if (e.key === 'Enter') {
-                                  handleSaveEdit(item.id);
+                                  e.preventDefault();
+                                  if (!item?.id) {
+                                    console.error('Cannot save: item.id is missing', item);
+                                    return;
+                                  }
+                                  handleSaveEdit(item.id, e);
                                 } else if (e.key === 'Escape') {
-                                  handleCancelEdit();
+                                  e.preventDefault();
+                                  if (item?.id) {
+                                    handleCancelEdit(item.id, e);
+                                  }
                                 }
                               }}
+                              onClick={(e) => e.stopPropagation()}
                               className="flex-1 px-3 py-1 bg-dark-300 border border-dark-400 rounded text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                               autoFocus
                             />
                             <button
-                              onClick={() => handleSaveEdit(item.id)}
-                              className="p-1.5 text-green-400 hover:text-green-300 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (!item?.id) {
+                                  console.error('Cannot save: item.id is missing', item);
+                                  return;
+                                }
+                                handleSaveEdit(item.id, e);
+                              }}
+                              className="p-1.5 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title={getText('Save', 'حفظ')}
+                              type="button"
+                              disabled={!item?.id}
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
                             </button>
                             <button
-                              onClick={handleCancelEdit}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                if (item?.id) {
+                                  handleCancelEdit(item.id, e);
+                                }
+                              }}
                               className="p-1.5 text-gray-400 hover:text-gray-300 transition-colors"
                               title={getText('Cancel', 'إلغاء')}
+                              type="button"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1123,18 +1363,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                             </span>
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => handleStartEdit(item)}
+                                onClick={(e) => handleStartEdit(item, e)}
                                 className="p-1.5 text-gray-400 hover:text-primary-400 transition-colors"
                                 title={getText('Edit', 'تعديل')}
+                                type="button"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
                               <button
-                                onClick={() => handleDeleteTodoItem(item.id)}
+                                onClick={(e) => handleDeleteTodoItem(item.id, e)}
                                 className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
                                 title={getText('Delete', 'حذف')}
+                                type="button"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1143,7 +1385,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                             </div>
                           </>
                         )}
-                        </div>
                       </div>
                     ))
                   ) : (
@@ -1161,46 +1402,15 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                       }
                     }}
                     placeholder={getText('Add new item...', 'أضف عنصر جديد...')}
-                    className="flex-1 px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="flex-1 px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
                   />
                   <button
                     onClick={() => handleAddTodoItem(selectedTodoList.id)}
-                    className="px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                    className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white font-semibold rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-primary-500/20"
                   >
-                    {getText('Add', 'إضافة')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedTodoList(null);
-                      setNewTodoItemText('');
-                      setIsEditingList(false);
-                      fetchTodoLists();
-                    }}
-                    className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    {getText('Save & Display', 'حفظ وعرض')}
-                  </button>
-                </div>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={newTodoItemText}
-                    onChange={(e) => setNewTodoItemText(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleAddTodoItem(selectedTodoList.id);
-                      }
-                    }}
-                    placeholder={getText('Add new item...', 'أضف عنصر جديد...')}
-                    className="flex-1 px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <button
-                    onClick={() => handleAddTodoItem(selectedTodoList.id)}
-                    className="px-6 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
-                  >
                     {getText('Add', 'إضافة')}
                   </button>
                 </div>
@@ -1248,16 +1458,115 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                             day: 'numeric'
                           })}
                         </p>
-                        <div className="flex items-center gap-2 text-sm text-gray-500">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                          <span>{list.items?.length || 0} {getText('items', 'عنصر')}</span>
-                        </div>
+                        {list.items && list.items.length > 0 ? (
+                          <div className="space-y-2">
+                            {list.items.slice(0, 3).map((item: any) => (
+                              <div key={item.id} className="flex items-center gap-2 text-sm text-gray-300">
+                                <span className={`${item.is_completed ? 'line-through text-gray-500' : ''}`}>
+                                  {item.text}
+                                </span>
+                              </div>
+                            ))}
+                            {list.items.length > 3 && (
+                              <p className="text-xs text-gray-500">
+                                +{list.items.length - 3} {getText('more items', 'عناصر أخرى')}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span>0 {getText('items', 'عنصر')}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            
+            {/* Delete Item Confirmation Modal */}
+            {showDeleteItemConfirm && (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="bg-dark-100 rounded-xl p-6 border border-dark-300 max-w-md w-full mx-4 shadow-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">
+                      {getText('Delete Item', 'حذف العنصر')}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setShowDeleteItemConfirm(false);
+                        setItemToDelete(null);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-gray-300 mb-6">
+                    {getText('Are you sure you want to delete this item? This action cannot be undone.', 'هل أنت متأكد من حذف هذا العنصر؟ لا يمكن التراجع عن هذا الإجراء.')}
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowDeleteItemConfirm(false);
+                        setItemToDelete(null);
+                      }}
+                      className="flex-1 px-4 py-2 bg-dark-300 hover:bg-dark-400 text-gray-300 font-medium rounded-lg transition-all"
+                    >
+                      {getText('Cancel', 'إلغاء')}
+                    </button>
+                    <button
+                      onClick={confirmDeleteItem}
+                      className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-all"
+                    >
+                      {getText('Delete', 'حذف')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delete List Confirmation Modal */}
+            {showDeleteListConfirm && (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                <div className="bg-dark-100 rounded-xl p-6 border border-dark-300 max-w-md w-full mx-4 shadow-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-white">
+                      {getText('Delete List', 'حذف القائمة')}
+                    </h3>
+                    <button
+                      onClick={() => setShowDeleteListConfirm(false)}
+                      className="p-1 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-gray-300 mb-6">
+                    {getText('Are you sure you want to delete this list? All items will be deleted. This action cannot be undone.', 'هل أنت متأكد من حذف هذه القائمة؟ سيتم حذف جميع العناصر. لا يمكن التراجع عن هذا الإجراء.')}
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowDeleteListConfirm(false)}
+                      className="flex-1 px-4 py-2 bg-dark-300 hover:bg-dark-400 text-gray-300 font-medium rounded-lg transition-all"
+                    >
+                      {getText('Cancel', 'إلغاء')}
+                    </button>
+                    <button
+                      onClick={confirmDeleteList}
+                      className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-all"
+                    >
+                      {getText('Delete', 'حذف')}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
