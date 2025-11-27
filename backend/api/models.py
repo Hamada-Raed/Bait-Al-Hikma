@@ -864,3 +864,21 @@ class TodoItem(models.Model):
     
     def __str__(self):
         return f"{self.todo_list.title} - {self.text[:50]}"
+
+
+class StudyTimer(models.Model):
+    """Study timers for students"""
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='study_timers')
+    title = models.CharField(max_length=200)
+    study_minutes = models.PositiveIntegerField(help_text='Study duration in minutes')
+    break_minutes = models.PositiveIntegerField(default=0, help_text='Break duration in minutes (0 means no break)')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Study Timer'
+        verbose_name_plural = 'Study Timers'
+    
+    def __str__(self):
+        return f"{self.student.email} - {self.title} ({self.study_minutes}min)"

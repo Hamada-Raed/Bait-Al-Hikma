@@ -21,7 +21,7 @@ from .models import (
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
     StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule,
-    TodoList, TodoItem
+    TodoList, TodoItem, StudyTimer
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
@@ -29,7 +29,7 @@ from .serializers import (
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
     WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
     PrivateLessonPriceSerializer, ContactMessageSerializer, StudentTaskSerializer, StudentNoteSerializer,
-    StudentScheduleSerializer, TodoListSerializer, TodoItemSerializer
+    StudentScheduleSerializer, TodoListSerializer, TodoItemSerializer, StudyTimerSerializer
 )
 
 
@@ -1843,6 +1843,21 @@ class TodoItemViewSet(viewsets.ModelViewSet):
         
         # Save the item - serializer.save() will use the validated todo_list
         serializer.save()
+
+
+class StudyTimerViewSet(viewsets.ModelViewSet):
+    serializer_class = StudyTimerSerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        # Students can only see their own study timers
+        if self.request.user.is_authenticated and self.request.user.user_type in ['school_student', 'university_student']:
+            return StudyTimer.objects.filter(student=self.request.user)
+        return StudyTimer.objects.none()
+    
+    def perform_create(self, serializer):
+        # Automatically set the student to the current user
+        serializer.save(student=self.request.user)
 
 
 # Course Structure Management Views

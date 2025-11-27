@@ -112,6 +112,30 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const [showDeleteListConfirm, setShowDeleteListConfirm] = useState(false);
   const [isCreatingList, setIsCreatingList] = useState(false);
+  
+  // Timer state
+  const [studyTimers, setStudyTimers] = useState<Array<{
+    id: number;
+    title: string;
+    study_minutes: number;
+    break_minutes: number;
+    created_at: string;
+    updated_at: string;
+  }>>([]);
+  const [loadingTimers, setLoadingTimers] = useState(false);
+  const [showCreateTimerForm, setShowCreateTimerForm] = useState(false);
+  const [selectedTimer, setSelectedTimer] = useState<any | null>(null);
+  const [newTimerTitle, setNewTimerTitle] = useState('');
+  const [newTimerStudyMinutes, setNewTimerStudyMinutes] = useState<string>('25');
+  const [newTimerBreakMinutes, setNewTimerBreakMinutes] = useState<string>('5');
+  const [useBreak, setUseBreak] = useState<boolean>(true);
+  
+  // Active timer state
+  const [timeRemaining, setTimeRemaining] = useState<number>(0); // in seconds
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
+  const [isBreakTime, setIsBreakTime] = useState<boolean>(false);
+  const [studyCompleted, setStudyCompleted] = useState<boolean>(false);
+  const [breakCompleted, setBreakCompleted] = useState<boolean>(false);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const getLanguageLabel = (code: string) => {
@@ -926,6 +950,216 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     }
   }, [isTodoTab]);
 
+  // Timer helper functions
+  const formatTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    const formatNumber = (num: number) => num.toString().padStart(2, '0');
+    
+    if (hours > 0) {
+      return `${formatNumber(hours)}:${formatNumber(minutes)}:${formatNumber(seconds)}`;
+    }
+    return `${formatNumber(minutes)}:${formatNumber(seconds)}`;
+  };
+
+  // Timer countdown effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    
+    if (isTimerRunning && timeRemaining > 0) {
+      interval = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            setIsTimerRunning(false);
+            
+            // Study timer completed
+            if (!isBreakTime) {
+              setStudyCompleted(true);
+              // If break is enabled, offer to start break timer
+              if (useBreak && selectedTimer && selectedTimer.break_minutes > 0) {
+                // Don't auto-start, just show the option
+              }
+            } else {
+              // Break timer completed
+              setBreakCompleted(true);
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning, timeRemaining, isBreakTime, useBreak, selectedTimer]);
+
+  // Fetch study timers
+  const fetchStudyTimers = async () => {
+    try {
+      setLoadingTimers(true);
+      const response = await fetch(`${API_BASE_URL}/study-timers/`, {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const timers = data.results || data;
+        setStudyTimers(timers);
+      }
+    } catch (error) {
+      console.error('Error fetching study timers:', error);
+    } finally {
+      setLoadingTimers(false);
+    }
+  };
+
+  // Create timer handler
+  const handleCreateTimer = async () => {
+    if (!newTimerTitle.trim()) {
+      alert(getText('Please enter a timer title.', 'يرجى إدخال عنوان للمؤقت.'));
+      return;
+    }
+    
+    const studyMins = parseInt(newTimerStudyMinutes) || 0;
+    if (studyMins <= 0) {
+      alert(getText('Please enter a valid study duration (minutes).', 'يرجى إدخال مدة دراسة صحيحة (بالدقائق).'));
+      return;
+    }
+    
+    const breakMins = useBreak ? (parseInt(newTimerBreakMinutes) || 0) : 0;
+    
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/study-timers/`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          title: newTimerTitle.trim(),
+          study_minutes: studyMins,
+          break_minutes: breakMins,
+        }),
+      });
+      
+      if (response.ok) {
+        const newTimer = await response.json();
+        setStudyTimers([...studyTimers, newTimer]);
+        setNewTimerTitle('');
+        setNewTimerStudyMinutes('25');
+        setNewTimerBreakMinutes('5');
+        setUseBreak(true);
+        setShowCreateTimerForm(false);
+      } else {
+        const error = await response.json();
+        console.error('Error creating timer:', error);
+        alert(getText('Failed to create timer.', 'فشل إنشاء المؤقت.'));
+      }
+    } catch (error) {
+      console.error('Error creating timer:', error);
+      alert(getText('Error creating timer.', 'حدث خطأ أثناء إنشاء المؤقت.'));
+    }
+  };
+
+  // Start timer handler
+  const handleStartTimer = (timer: any) => {
+    setSelectedTimer(timer);
+    setTimeRemaining(timer.study_minutes * 60);
+    setIsTimerRunning(true);
+    setIsBreakTime(false);
+    setStudyCompleted(false);
+    setBreakCompleted(false);
+    setUseBreak(timer.break_minutes > 0);
+  };
+
+  // Start break manually
+  const handleStartBreak = () => {
+    if (!selectedTimer || selectedTimer.break_minutes <= 0) return;
+    
+    setStudyCompleted(false);
+    setIsBreakTime(true);
+    setTimeRemaining(selectedTimer.break_minutes * 60);
+    setIsTimerRunning(true);
+    setBreakCompleted(false);
+  };
+
+  // Timer control handlers
+  const handlePauseTimer = () => {
+    setIsTimerRunning(false);
+  };
+
+  const handleResumeTimer = () => {
+    setIsTimerRunning(true);
+  };
+
+  const handleResetTimer = () => {
+    if (isBreakTime && selectedTimer) {
+      setTimeRemaining(selectedTimer.break_minutes * 60);
+    } else if (selectedTimer) {
+      setTimeRemaining(selectedTimer.study_minutes * 60);
+      setIsBreakTime(false);
+    }
+    setIsTimerRunning(false);
+    setStudyCompleted(false);
+    setBreakCompleted(false);
+  };
+
+  const handleStopTimer = () => {
+    setIsTimerRunning(false);
+    setTimeRemaining(0);
+    setSelectedTimer(null);
+    setIsBreakTime(false);
+    setStudyCompleted(false);
+    setBreakCompleted(false);
+  };
+
+  // Delete timer handler
+  const handleDeleteTimer = async (timerId: number) => {
+    try {
+      const csrfToken = await ensureCsrfToken();
+      const headers: HeadersInit = {};
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/study-timers/${timerId}/`, {
+        method: 'DELETE',
+        headers,
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        setStudyTimers(studyTimers.filter(t => t.id !== timerId));
+        if (selectedTimer && selectedTimer.id === timerId) {
+          handleStopTimer();
+        }
+      } else {
+        console.error('Error deleting timer');
+        alert(getText('Failed to delete timer.', 'فشل حذف المؤقت.'));
+      }
+    } catch (error) {
+      console.error('Error deleting timer:', error);
+      alert(getText('Error deleting timer.', 'حدث خطأ أثناء حذف المؤقت.'));
+    }
+  };
+
+  // Fetch study timers when timer tab is active
+  useEffect(() => {
+    if (isTimerTab) {
+      fetchStudyTimers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTimerTab]);
+
   return (
     <div className="space-y-6">
 
@@ -1631,11 +1865,339 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           </div>
         ) : isTimerTab ? (
           <div className="py-6">
-            <div className="bg-dark-100 rounded-xl p-8 border border-dark-300 text-center">
-              <p className="text-gray-400">
-                {getText('Timer functionality coming soon.', 'ميزة المؤقت قادمة قريباً.')}
-              </p>
-            </div>
+            {loadingTimers ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400"></div>
+                <p className="mt-4 text-gray-400">{getText('Loading...', 'جاري التحميل...')}</p>
+              </div>
+            ) : showCreateTimerForm ? (
+              // Create Timer Form
+              <div className="max-w-md mx-auto bg-dark-100 rounded-xl p-6 border border-dark-300">
+                <h3 className="text-xl font-bold text-white mb-4">
+                  {getText('Create New Study Timer', 'إنشاء مؤقت دراسة جديد')}
+                </h3>
+                <div className="space-y-4">
+                  {/* Timer Title */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {getText('Timer Title', 'عنوان المؤقت')} <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newTimerTitle}
+                      onChange={(e) => setNewTimerTitle(e.target.value)}
+                      placeholder={getText('e.g., Studying Mathematics', 'مثال: دراسة الرياضيات')}
+                      className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+                  
+                  {/* Study Duration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {getText('Study Duration (minutes)', 'مدة الدراسة (بالدقائق)')} <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="300"
+                      value={newTimerStudyMinutes}
+                      onChange={(e) => setNewTimerStudyMinutes(e.target.value)}
+                      className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="25"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      {getText('Recommended: 25 minutes (Pomodoro technique)', 'موصى به: 25 دقيقة (تقنية بومودورو)')}
+                    </p>
+                  </div>
+                  
+                  {/* Break Time Option */}
+                  <div>
+                    <label className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={useBreak}
+                        onChange={(e) => setUseBreak(e.target.checked)}
+                        className="w-4 h-4 rounded border-dark-400 bg-dark-300 text-primary-500 focus:ring-2 focus:ring-primary-500"
+                      />
+                      <span className="text-sm font-medium text-gray-300">
+                        {getText('Include break time after study', 'تضمين وقت استراحة بعد الدراسة')}
+                      </span>
+                    </label>
+                    
+                    {useBreak && (
+                      <div className="mt-2">
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          {getText('Break Duration (minutes)', 'مدة الاستراحة (بالدقائق)')}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="60"
+                          value={newTimerBreakMinutes}
+                          onChange={(e) => setNewTimerBreakMinutes(e.target.value)}
+                          className="w-full px-4 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="5"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleCreateTimer}
+                      className="flex-1 py-2 px-4 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                    >
+                      {getText('Create Timer', 'إنشاء المؤقت')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCreateTimerForm(false);
+                        setNewTimerTitle('');
+                        setNewTimerStudyMinutes('25');
+                        setNewTimerBreakMinutes('5');
+                        setUseBreak(true);
+                      }}
+                      className="flex-1 py-2 px-4 bg-dark-300 hover:bg-dark-400 text-gray-300 font-medium rounded-lg transition-all"
+                    >
+                      {getText('Cancel', 'إلغاء')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : selectedTimer ? (
+              // Timer Running View
+              <div className="max-w-2xl mx-auto bg-dark-100 rounded-xl p-8 border border-dark-300">
+                {/* Timer Title */}
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold text-white mb-2">
+                    {selectedTimer.title}
+                  </h2>
+                  <p className="text-gray-400">
+                    {isBreakTime 
+                      ? getText('Break Time', 'وقت الاستراحة')
+                      : getText('Study Time', 'وقت الدراسة')}
+                  </p>
+                </div>
+                
+                {/* Timer Display */}
+                <div className="text-center mb-8">
+                  <div className={`text-7xl font-mono font-bold mb-4 ${
+                    timeRemaining <= 60 && timeRemaining > 0
+                      ? 'text-red-400 animate-pulse'
+                      : isBreakTime
+                      ? 'text-green-400'
+                      : 'text-primary-400'
+                  }`}>
+                    {formatTime(timeRemaining)}
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="max-w-md mx-auto mb-6">
+                    <div className="w-full bg-dark-300 rounded-full h-3">
+                      <div
+                        className={`h-3 rounded-full transition-all duration-1000 ${
+                          isBreakTime
+                            ? 'bg-green-500'
+                            : 'bg-gradient-to-r from-primary-500 to-accent-purple'
+                        }`}
+                        style={{
+                          width: (() => {
+                            let progress = 0;
+                            if (isBreakTime && selectedTimer.break_minutes > 0) {
+                              const totalBreak = selectedTimer.break_minutes * 60;
+                              progress = totalBreak > 0 ? ((totalBreak - timeRemaining) / totalBreak) * 100 : 0;
+                            } else if (selectedTimer.study_minutes > 0) {
+                              const totalStudy = selectedTimer.study_minutes * 60;
+                              progress = totalStudy > 0 ? ((totalStudy - timeRemaining) / totalStudy) * 100 : 0;
+                            }
+                            return `${Math.max(0, Math.min(100, progress))}%`;
+                          })()
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Study Completed - Offer Break */}
+                {studyCompleted && !isBreakTime && selectedTimer.break_minutes > 0 && (
+                  <div className="mb-6 text-center">
+                    <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-6">
+                      <svg className="w-16 h-16 text-green-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-2xl font-bold text-green-400 mb-2">
+                        {getText('Study Session Completed!', 'اكتملت جلسة الدراسة!')}
+                      </p>
+                      <p className="text-gray-300 mb-4">
+                        {getText('Great job! Time for a break?', 'عمل رائع! حان وقت الاستراحة؟')}
+                      </p>
+                      <button
+                        onClick={handleStartBreak}
+                        className="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all"
+                      >
+                        {getText(`Start ${selectedTimer.break_minutes} Minute Break`, `بدء استراحة ${selectedTimer.break_minutes} دقيقة`)}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Break Completed */}
+                {breakCompleted && (
+                  <div className="mb-6 text-center">
+                    <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-6">
+                      <svg className="w-16 h-16 text-green-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-2xl font-bold text-green-400 mb-2">
+                        {getText('Break Completed!', 'اكتملت الاستراحة!')}
+                      </p>
+                      <p className="text-gray-300">
+                        {getText('Ready to continue studying?', 'مستعد للاستمرار في الدراسة؟')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Timer Controls */}
+                <div className="flex justify-center gap-4">
+                  {!isTimerRunning ? (
+                    <button
+                      onClick={handleResumeTimer}
+                      disabled={timeRemaining === 0 && !studyCompleted && !breakCompleted}
+                      className="px-8 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {getText('Resume', 'استئناف')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handlePauseTimer}
+                      className="px-8 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition-all flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {getText('Pause', 'إيقاف مؤقت')}
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={handleResetTimer}
+                    disabled={isTimerRunning}
+                    className="px-8 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {getText('Reset', 'إعادة تعيين')}
+                  </button>
+                  
+                  <button
+                    onClick={handleStopTimer}
+                    className="px-8 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-all flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                    </svg>
+                    {getText('Stop', 'إيقاف')}
+                  </button>
+                </div>
+                
+                {/* Back Button */}
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={handleStopTimer}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    {getText('← Back to Timer List', '← العودة إلى قائمة المؤقتات')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Timer List View
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-white">
+                    {getText('Study Timers', 'مؤقتات الدراسة')}
+                  </h2>
+                  <button
+                    onClick={() => setShowCreateTimerForm(true)}
+                    className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    {getText('Add New Timer', 'إضافة مؤقت جديد')}
+                  </button>
+                </div>
+                
+                {studyTimers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <svg className="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-gray-400 mb-4">
+                      {getText('No study timers yet', 'لا توجد مؤقتات دراسة بعد')}
+                    </p>
+                    <button
+                      onClick={() => setShowCreateTimerForm(true)}
+                      className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                    >
+                      {getText('Create Your First Timer', 'أنشئ مؤقتك الأول')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {studyTimers.map((timer) => (
+                      <div
+                        key={timer.id}
+                        className="bg-dark-100 rounded-xl p-6 border border-dark-300 hover:border-primary-500 transition-all"
+                      >
+                        <h3 className="text-xl font-bold text-white mb-2">{timer.title}</h3>
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center gap-2 text-sm text-gray-300">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span>{getText('Study', 'دراسة')}: {timer.study_minutes} {getText('min', 'دقيقة')}</span>
+                          </div>
+                          {timer.break_minutes > 0 && (
+                            <div className="flex items-center gap-2 text-sm text-gray-300">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span>{getText('Break', 'استراحة')}: {timer.break_minutes} {getText('min', 'دقيقة')}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleStartTimer(timer)}
+                            className="flex-1 py-2 px-4 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-all"
+                          >
+                            {getText('Start', 'بدء')}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTimer(timer.id)}
+                            className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-all"
+                            title={getText('Delete', 'حذف')}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : loading ? (
           <div className="text-center py-12">

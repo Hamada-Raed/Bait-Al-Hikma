@@ -6,7 +6,7 @@ from .views import (
     HeroSectionViewSet, FeatureViewSet, FeaturesSectionViewSet,
     WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet,
     PrivateLessonPriceViewSet, StudentTaskViewSet, StudentNoteViewSet, StudentScheduleViewSet,
-    TodoListViewSet, TodoItemViewSet,
+    TodoListViewSet, TodoItemViewSet, StudyTimerViewSet,
     manage_chapter, manage_section, manage_video, manage_section_quiz,
     reorder_chapters, reorder_sections, reorder_videos, reorder_quizzes,
     submit_contact_message, stream_video
@@ -31,6 +31,7 @@ router.register(r'availabilities', AvailabilityViewSet, basename='availability')
 router.register(r'student-schedules', StudentScheduleViewSet, basename='student-schedule')
 router.register(r'todo-lists', TodoListViewSet, basename='todo-list')
 router.register(r'todo-items', TodoItemViewSet, basename='todo-item')
+router.register(r'study-timers', StudyTimerViewSet, basename='study-timer')
 router.register(r'private-lesson-prices', PrivateLessonPriceViewSet, basename='private-lesson-price')
 router.register(r'student-tasks', StudentTaskViewSet, basename='student-task')
 router.register(r'student-notes', StudentNoteViewSet, basename='student-note')

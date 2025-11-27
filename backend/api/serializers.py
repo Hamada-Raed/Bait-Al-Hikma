@@ -5,7 +5,7 @@ from .models import (
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
     Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
     StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule,
-    TodoList, TodoItem
+    TodoList, TodoItem, StudyTimer
 )
 
 
@@ -1125,3 +1125,34 @@ class TodoListSerializer(serializers.ModelSerializer):
         # Automatically set the student to the current user
         validated_data['student'] = self.context['request'].user
         return TodoList.objects.create(**validated_data)
+
+
+class StudyTimerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudyTimer
+        fields = ['id', 'student', 'title', 'study_minutes', 'break_minutes', 'created_at', 'updated_at']
+        read_only_fields = ['student', 'created_at', 'updated_at']
+    
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Title is required.')
+        return value.strip()
+    
+    def validate_study_minutes(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Study duration must be greater than 0.')
+        if value > 600:  # Max 10 hours
+            raise serializers.ValidationError('Study duration cannot exceed 600 minutes (10 hours).')
+        return value
+    
+    def validate_break_minutes(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Break duration cannot be negative.')
+        if value > 120:  # Max 2 hours
+            raise serializers.ValidationError('Break duration cannot exceed 120 minutes (2 hours).')
+        return value
+    
+    def create(self, validated_data):
+        # Automatically set the student to the current user
+        validated_data['student'] = self.context['request'].user
+        return StudyTimer.objects.create(**validated_data)

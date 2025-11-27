@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
     HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    ContactMessage, Enrollment, MaterialCompletion, QuizAttempt
+    ContactMessage, Enrollment, MaterialCompletion, QuizAttempt, TodoList, TodoItem, StudyTimer
 )
 
 
@@ -205,3 +205,16 @@ class QuizAttemptAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('student', 'quiz')
+
+
+@admin.register(StudyTimer)
+class StudyTimerAdmin(admin.ModelAdmin):
+    list_display = ['student', 'title', 'study_minutes', 'break_minutes', 'created_at']
+    list_filter = ['created_at', 'study_minutes']
+    search_fields = ['student__email', 'student__first_name', 'student__last_name', 'title']
+    readonly_fields = ['created_at', 'updated_at']
+    fields = ['student', 'title', 'study_minutes', 'break_minutes', 'created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('student')
