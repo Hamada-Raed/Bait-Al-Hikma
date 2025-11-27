@@ -97,6 +97,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
   const [showNotes, setShowNotes] = useState(false);
   const [filteredTeachers, setFilteredTeachers] = useState<any[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
+  const [countryCurrency, setCountryCurrency] = useState<{code: string, symbol: string, name_en: string} | null>(null);
+  const [studentMajorSubjects, setStudentMajorSubjects] = useState<number[]>([]);
   
   // Todo List state
   const [todoLists, setTodoLists] = useState<any[]>([]);
@@ -221,6 +223,80 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
 
   const isSchoolStudent = user.user_type === 'school_student';
   const isUniversityStudent = user.user_type === 'university_student';
+
+  // Fetch country currency information
+  useEffect(() => {
+    const fetchCountryCurrency = async () => {
+      if (!user.country) {
+        setCountryCurrency(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/countries/${user.country}/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const countryData = await response.json();
+          if (countryData.currency_code && countryData.currency_symbol) {
+            setCountryCurrency({
+              code: countryData.currency_code,
+              symbol: countryData.currency_symbol,
+              name_en: countryData.currency_name_en || (countryData.currency_symbol === 'شيكل' ? 'Shakel' : countryData.currency_symbol === 'د.أ' || countryData.currency_symbol === 'د.ك' ? 'Dinar' : countryData.currency_symbol)
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching country currency:', error);
+      }
+    };
+
+    fetchCountryCurrency();
+  }, [user.country]);
+
+  // Fetch student's major subjects for university students
+  useEffect(() => {
+    const fetchMajorSubjects = async () => {
+      if (!isUniversityStudent || !user.major) {
+        setStudentMajorSubjects([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/majors/${user.major}/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const majorData = await response.json();
+          // Get subject IDs from major_subjects
+          if (majorData.major_subjects && Array.isArray(majorData.major_subjects)) {
+            // Extract subject_id from the major_subjects array
+            const subjectIds = majorData.major_subjects
+              .map((ms: any) => {
+                // Handle both formats: {subject_id: X} or {subject: {id: X}}
+                if (ms.subject_id) {
+                  return ms.subject_id;
+                } else if (ms.subject && typeof ms.subject === 'object' && ms.subject.id) {
+                  return ms.subject.id;
+                } else if (typeof ms.subject === 'number') {
+                  return ms.subject;
+                }
+                return null;
+              })
+              .filter((id: any) => id != null);
+            setStudentMajorSubjects(subjectIds);
+          } else {
+            // If major_subjects not available, set empty array (will hide pricing until loaded)
+            setStudentMajorSubjects([]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching major subjects:', error);
+      }
+    };
+
+    fetchMajorSubjects();
+  }, [user.major, isUniversityStudent]);
   const gradeNumber = gradeDetails?.grade_number;
   const requiresTrackFiltering =
     isSchoolStudent &&
@@ -2344,34 +2420,89 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
                           </div>
                         </div>
 
-                        {/* Pricing */}
-                        {teacher.pricing && teacher.pricing.length > 0 && (
-                          <div className="mb-4">
-                            <h5 className="text-xs font-medium text-gray-400 mb-2">
-                              {getText('Pricing', 'الأسعار')}
-                            </h5>
-                            <div className="space-y-1">
-                              {teacher.pricing.map((price, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex justify-between items-center text-sm"
-                                >
-                                  <span className="text-gray-300">
-                                    {language === 'ar' ? price.subject_name_ar : price.subject_name_en}
-                                    {price.grade_name_en && (
-                                      <span className="text-gray-500">
-                                        {' '}({language === 'ar' ? price.grade_name_ar : price.grade_name_en})
+                        {/* Pricing - Show only prices matching student's major subjects */}
+                        {teacher.pricing && teacher.pricing.length > 0 && (() => {
+                          let filteredPricing = teacher.pricing;
+                          
+                          // For university students, ONLY show prices for subjects in student's major
+                          if (isUniversityStudent) {
+                            if (studentMajorSubjects.length > 0) {
+                              // Filter pricing to only show prices for subjects in student's major
+                              filteredPricing = teacher.pricing.filter((price: any) => 
+                                studentMajorSubjects.includes(price.subject_id)
+                              );
+                            } else {
+                              // If major subjects aren't loaded yet, don't show any pricing
+                              return null;
+                            }
+                            
+                            // If multiple prices exist for the same subject, take the last one (most recently updated)
+                            if (filteredPricing.length > 0) {
+                              // Group by subject_id and take the last one for each subject
+                              const pricingBySubject = new Map();
+                              filteredPricing.forEach((price: any) => {
+                                pricingBySubject.set(price.subject_id, price);
+                              });
+                              filteredPricing = Array.from(pricingBySubject.values());
+                            }
+                          }
+                          // For school students, show all pricing (no filtering needed)
+                          
+                          // If no filtered pricing, don't show the section
+                          if (filteredPricing.length === 0) {
+                            return null;
+                          }
+
+                          return (
+                            <div className="mb-4">
+                              <h5 className="text-xs font-medium text-gray-400 mb-2">
+                                {getText('Pricing', 'الأسعار')}
+                              </h5>
+                              <div className="space-y-1">
+                                {filteredPricing.map((price: any, idx: number) => {
+                                  const priceValue = parseFloat(String(price.price));
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="flex justify-between items-center text-sm"
+                                    >
+                                      <span className="text-gray-300">
+                                        {language === 'ar' ? price.subject_name_ar : price.subject_name_en}
+                                        {price.grade_name_en && (
+                                          <span className="text-gray-500">
+                                            {' '}({language === 'ar' ? price.grade_name_ar : price.grade_name_en})
+                                          </span>
+                                        )}
                                       </span>
-                                    )}
-                                  </span>
-                                  <span className="text-primary-400 font-semibold">
-                                    ${price.price}/{getText('hr', 'ساعة')}
-                                  </span>
-                                </div>
-                              ))}
+                                      <span className="text-primary-400 font-semibold">
+                                        {countryCurrency ? (
+                                          language === 'ar' ? (
+                                            // Arabic: number first, then currency (RTL)
+                                            <span dir="rtl">
+                                              <span dir="ltr">{priceValue.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                              {' '}
+                                              {countryCurrency.symbol}
+                                              {' '}
+                                              / {getText('hr', 'ساعة')}
+                                            </span>
+                                          ) : (
+                                            // English: currency first, then number (LTR)
+                                            <span dir="ltr">
+                                              {countryCurrency.name_en} {priceValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {getText('hr', 'hr')}
+                                            </span>
+                                          )
+                                        ) : (
+                                          // Fallback if currency not loaded
+                                          `$${priceValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / ${getText('hr', 'hr')}`
+                                        )}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Book Session Button */}
                         <button

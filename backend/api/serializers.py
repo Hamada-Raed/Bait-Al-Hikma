@@ -146,9 +146,25 @@ class TrackSerializer(serializers.ModelSerializer):
 
 
 class MajorSerializer(serializers.ModelSerializer):
+    major_subjects = serializers.SerializerMethodField()
+    
     class Meta:
         model = Major
-        fields = ['id', 'name_en', 'name_ar', 'code']
+        fields = ['id', 'name_en', 'name_ar', 'code', 'major_subjects']
+    
+    def get_major_subjects(self, obj):
+        """Return list of subject IDs for this major"""
+        return [
+            {
+                'subject_id': ms.subject.id,
+                'subject': {
+                    'id': ms.subject.id,
+                    'name_en': ms.subject.name_en,
+                    'name_ar': ms.subject.name_ar,
+                }
+            }
+            for ms in obj.major_subjects.all()
+        ]
 
 
 class SubjectSerializer(serializers.ModelSerializer):
