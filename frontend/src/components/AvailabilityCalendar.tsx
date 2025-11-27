@@ -536,7 +536,8 @@ const AvailabilityCalendar: React.FC = () => {
         return;
       }
 
-      if (!selectedCountry) {
+      // Country is required only if school students are selected
+      if (formData.for_school_students && !selectedCountry) {
         showValidation(getText('Please select a country', 'يرجى اختيار بلد'));
         return;
       }
@@ -701,7 +702,6 @@ const AvailabilityCalendar: React.FC = () => {
       track_ids: [],
       subject_ids: [],
     });
-    setSelectedCountry(null);
     setSelectedCountry(null);
     setPendingSlots([]);
   };
@@ -1412,38 +1412,6 @@ const AvailabilityCalendar: React.FC = () => {
                 />
               </div>
 
-              {/* Country Selection - For Teachers Only */}
-              {!isStudent && (
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
-                  <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002 2h2.945M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  {getText('Country', 'البلد')} <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={selectedCountry || ''}
-                  onChange={(e) => {
-                    const countryId = e.target.value ? parseInt(e.target.value) : null;
-                    setSelectedCountry(countryId);
-                    // Clear grades and tracks when country changes
-                    if (formData.for_school_students) {
-                      setFormData(prev => ({ ...prev, grade_ids: [], track_ids: [] }));
-                    }
-                  }}
-                  className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                  required
-                >
-                  <option value="">{getText('Select a country', 'اختر بلداً')}</option>
-                  {countries.map(country => (
-                    <option key={country.id} value={country.id}>
-                      {language === 'ar' ? country.name_ar : country.name_en}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              )}
-
               {/* Subjects Selection (from teacher's profile) - For Teachers Only */}
               {!isStudent && teacherSubjects.length > 0 && (
                 <div className="space-y-2">
@@ -1580,6 +1548,38 @@ const AvailabilityCalendar: React.FC = () => {
                     </div>
                   </label>
                 </div>
+              </div>
+              )}
+
+              {/* Country Selection - For Teachers Only, shown only if school students are selected */}
+              {!isStudent && formData.for_school_students && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                  <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 002 2h2.945M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {getText('Country', 'البلد')} <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={selectedCountry || ''}
+                  onChange={(e) => {
+                    const countryId = e.target.value ? parseInt(e.target.value) : null;
+                    setSelectedCountry(countryId);
+                    // Clear grades and tracks when country changes
+                    if (formData.for_school_students) {
+                      setFormData(prev => ({ ...prev, grade_ids: [], track_ids: [] }));
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  required={formData.for_school_students}
+                >
+                  <option value="">{getText('Select a country', 'اختر بلداً')}</option>
+                  {countries.map(country => (
+                    <option key={country.id} value={country.id}>
+                      {language === 'ar' ? country.name_ar : country.name_en}
+                    </option>
+                  ))}
+                </select>
               </div>
               )}
 

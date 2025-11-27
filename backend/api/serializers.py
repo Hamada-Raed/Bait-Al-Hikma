@@ -505,10 +505,23 @@ class CourseSerializer(serializers.ModelSerializer):
                                 matches = True
                     
                     elif obj.course_type == 'university' and student.user_type == 'university_student':
-                        if obj.country and student.country == obj.country:
-                            matches = True
-                        elif not obj.country:
-                            matches = True
+                        # For university courses, match based on major subjects, not country
+                        if student.major_id:
+                            from .models import MajorSubject
+                            # Get all subject IDs for the student's major
+                            major_subject_ids = set(MajorSubject.objects.filter(
+                                major_id=student.major_id
+                            ).values_list('subject_id', flat=True).distinct())
+                            
+                            # Get course subject IDs
+                            course_subject_ids = set(obj.subjects.values_list('id', flat=True))
+                            
+                            # Match if there's any overlap between major subjects and course subjects
+                            if major_subject_ids and course_subject_ids and major_subject_ids.intersection(course_subject_ids):
+                                matches = True
+                        else:
+                            # If student has no major, don't match (or could match all, depending on requirements)
+                            matches = False
                     
                     # Create enrollment if course matches
                     if matches:
@@ -651,28 +664,44 @@ class CourseSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
     
     def validate(self, attrs):
-        # Country is required for both school and university courses
+        # Get course type first
+        course_type = attrs.get('course_type') or (self.instance.course_type if self.instance else None)
+        
+        # Country is required only for school courses
         country = attrs.get('country') or (self.instance.country if self.instance else None)
-        if not country:
-            raise serializers.ValidationError({
-                'country': 'Country is required.'
-            })
-        
-        # Get country ID (handle both Country object and ID)
-        if hasattr(country, 'id'):
-            country_id = country.id
-        elif hasattr(country, 'pk'):
-            country_id = country.pk
+        if course_type == 'school':
+            if not country:
+                raise serializers.ValidationError({
+                    'country': 'Country is required for school courses.'
+                })
+            
+            # Get country ID (handle both Country object and ID)
+            if hasattr(country, 'id'):
+                country_id = country.id
+            elif hasattr(country, 'pk'):
+                country_id = country.pk
+            else:
+                country_id = int(country) if country else None
+            
+            if not country_id:
+                raise serializers.ValidationError({
+                    'country': 'Country is required for school courses.'
+                })
         else:
-            country_id = int(country) if country else None
-        
-        if not country_id:
-            raise serializers.ValidationError({
-                'country': 'Country is required.'
-            })
+            # For university courses, country is optional (can be None)
+            country_id = None
+            if country:
+                if hasattr(country, 'id'):
+                    country_id = country.id
+                elif hasattr(country, 'pk'):
+                    country_id = country.pk
+                else:
+                    try:
+                        country_id = int(country) if country else None
+                    except (ValueError, TypeError):
+                        country_id = None
         
         # If course type is school, validate grade belongs to the selected country
-        course_type = attrs.get('course_type') or (self.instance.course_type if self.instance else None)
         if course_type == 'school':
             # Check if country or grade is being updated
             country_updated = 'country' in attrs

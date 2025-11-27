@@ -321,10 +321,7 @@ class UserViewSet(viewsets.ModelViewSet):
             
         elif user_type_filter == 'university':
             # For university students: filter teachers who have availability for university students
-            # in the same country, AND whose availability subjects match the student's major subjects
-            if not country_id:
-                return Response({'error': 'Country is required for university students.'}, status=status.HTTP_400_BAD_REQUEST)
-            
+            # whose availability subjects match the student's major subjects (no country filtering)
             if not major_id:
                 # Try to get major from authenticated user if not provided
                 if request.user.is_authenticated and request.user.user_type == 'university_student':
@@ -348,11 +345,10 @@ class UserViewSet(viewsets.ModelViewSet):
                 logger.warning(f"Major {major_id_int} has no associated subjects. Returning no teachers.")
                 queryset = User.objects.none()
             else:
-                # Build the base query for university students
+                # Build the base query for university students (no country filter)
                 availability_query = Availability.objects.filter(
                     for_university_students=True,
                     teacher__is_approved=True,
-                    teacher__country_id=country_id,
                     subjects__id__in=major_subject_ids,  # Only teachers whose availability subjects match the major's subjects
                     date__gte=today,
                     is_booked=False
@@ -362,7 +358,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 
                 # Debug: Log the query details
                 logger.info(f"Filtering teachers for university students:")
-                logger.info(f"  - country_id: {country_id}, major_id: {major_id_int}")
+                logger.info(f"  - major_id: {major_id_int}")
                 logger.info(f"  - Major subject IDs: {list(major_subject_ids)}")
                 logger.info(f"  - Matching availabilities: {availability_query.count()}")
                 logger.info(f"  - Teacher IDs found: {list(teacher_ids)}")
@@ -567,9 +563,20 @@ class CourseViewSet(viewsets.ModelViewSet):
                 # Level 1: Filter by university course type
                 queryset = queryset.filter(course_type='university')
                 
-                # Level 2: Filter by country
-                if user.country_id:
-                    queryset = queryset.filter(country_id=user.country_id)
+                # Level 2: Filter by major (course subjects must match student's major subjects)
+                if user.major_id:
+                    from .models import MajorSubject
+                    # Get all subject IDs for the student's major
+                    major_subject_ids = MajorSubject.objects.filter(
+                        major_id=user.major_id
+                    ).values_list('subject_id', flat=True).distinct()
+                    
+                    if major_subject_ids:
+                        # Filter courses that have at least one subject matching the major's subjects
+                        queryset = queryset.filter(subjects__id__in=major_subject_ids).distinct()
+                    else:
+                        # If major has no subjects, return no courses
+                        queryset = queryset.none()
 
             # Debug logging (can be removed after testing)
             import logging
@@ -678,14 +685,26 @@ class CourseViewSet(viewsets.ModelViewSet):
                     pass
         
         elif course.course_type == 'university':
-            # Match university students
-            matching_students = User.objects.filter(
-                user_type='university_student'
-            )
+            # Match university students based on major subjects, not country
+            from .models import MajorSubject
             
-            # Filter by country
-            if course.country:
-                matching_students = matching_students.filter(country=course.country)
+            # Get all course subject IDs
+            course_subject_ids = set(course.subjects.values_list('id', flat=True))
+            
+            if course_subject_ids:
+                # Get all major IDs that have at least one subject matching the course subjects
+                matching_major_ids = MajorSubject.objects.filter(
+                    subject_id__in=course_subject_ids
+                ).values_list('major_id', flat=True).distinct()
+                
+                # Filter students by matching majors
+                matching_students = User.objects.filter(
+                    user_type='university_student',
+                    major_id__in=matching_major_ids
+                )
+            else:
+                # If course has no subjects, no matches
+                matching_students = User.objects.none()
         
         # Create Enrollment records with 'not_enrolled' status
         enrollments_to_create = []
@@ -1334,14 +1353,26 @@ class AdminCourseViewSet(viewsets.ReadOnlyModelViewSet):
                     pass
         
         elif course.course_type == 'university':
-            # Match university students
-            matching_students = User.objects.filter(
-                user_type='university_student'
-            )
+            # Match university students based on major subjects, not country
+            from .models import MajorSubject
             
-            # Filter by country
-            if course.country:
-                matching_students = matching_students.filter(country=course.country)
+            # Get all course subject IDs
+            course_subject_ids = set(course.subjects.values_list('id', flat=True))
+            
+            if course_subject_ids:
+                # Get all major IDs that have at least one subject matching the course subjects
+                matching_major_ids = MajorSubject.objects.filter(
+                    subject_id__in=course_subject_ids
+                ).values_list('major_id', flat=True).distinct()
+                
+                # Filter students by matching majors
+                matching_students = User.objects.filter(
+                    user_type='university_student',
+                    major_id__in=matching_major_ids
+                )
+            else:
+                # If course has no subjects, no matches
+                matching_students = User.objects.none()
         
         # Create Enrollment records with 'not_enrolled' status
         enrollments_to_create = []

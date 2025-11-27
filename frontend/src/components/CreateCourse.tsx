@@ -589,7 +589,7 @@ const CreateCourse: React.FC = () => {
     if (name === 'course_type') {
       setFormData(prev => ({
         ...prev,
-        country: '',
+        country: value === 'university' ? '' : prev.country, // Clear country only if switching to university
         grade: '',
         track: '',
       }));
@@ -657,8 +657,8 @@ const CreateCourse: React.FC = () => {
       setError(getText('At least one subject is required.', 'يجب اختيار مادة واحدة على الأقل.'));
       return false;
     }
-    if (!formData.country) {
-      setError(getText('Country is required.', 'البلد مطلوب.'));
+    if (formData.course_type === 'school' && !formData.country) {
+      setError(getText('Country is required for school courses.', 'البلد مطلوب للدورات المدرسية.'));
       return false;
     }
     if (formData.course_type === 'school' && !formData.grade) {
@@ -713,9 +713,10 @@ const CreateCourse: React.FC = () => {
       formData.subjects.forEach(subjectId => {
         formDataToSend.append('subject_ids', subjectId.toString());
       });
-      formDataToSend.append('country', formData.country);
       
+      // Only append country if course type is school
       if (formData.course_type === 'school') {
+        formDataToSend.append('country', formData.country);
         formDataToSend.append('grade', formData.grade);
         if (formData.track) {
           formDataToSend.append('track', formData.track);
@@ -911,7 +912,7 @@ const CreateCourse: React.FC = () => {
               )}
             </div>
 
-            {/* Teaching Language, Country, and Course Type - Same Line */}
+            {/* Teaching Language, Course Type, and Country - Same Line */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -932,26 +933,6 @@ const CreateCourse: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {getText('Country', 'البلد')} *
-                </label>
-                <select
-                  name="country"
-                  value={formData.country}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">{getText('Select Country', 'اختر البلد')}</option>
-                  {countries.map((country) => (
-                    <option key={country.id} value={country.id}>
-                      {getName(country)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
                   {getText('Course Type', 'نوع الدورة')} *
                 </label>
                 <select
@@ -965,6 +946,28 @@ const CreateCourse: React.FC = () => {
                   <option value="university">{getText('University', 'جامعي')}</option>
                 </select>
               </div>
+
+              {formData.course_type === 'school' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    {getText('Country', 'البلد')} *
+                  </label>
+                  <select
+                    name="country"
+                    value={formData.country}
+                    onChange={handleChange}
+                    required={formData.course_type === 'school'}
+                    className="w-full px-4 py-3 bg-dark-200 border border-dark-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">{getText('Select Country', 'اختر البلد')}</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>
+                        {getName(country)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Subject */}
