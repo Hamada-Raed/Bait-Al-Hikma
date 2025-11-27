@@ -844,45 +844,50 @@ const PreviewCourse: React.FC = () => {
 
                               {expandedSections.has(section.id) && (
                                 <div className="structure-section-content">
-                                  {/* Videos */}
-                                  {section.videos
-                                    .sort((a, b) => a.order - b.order)
-                                    .map((video) => {
-                                      const isSelected = selectedMaterial?.type === 'video' && selectedMaterial.data.id === video.id;
-                                      return (
-                                        <div
-                                          key={`video-${video.id}`}
-                                          className={`structure-item ${video.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
-                                          onClick={() => scrollToMaterial(video.id, 'video', true)}
-                                        >
-                                          <span className="item-icon">📹</span>
-                                          <span className="item-title-structure">{video.title}</span>
-                                          {video.is_locked && (
-                                            <span className="lock-icon-structure">🔒</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                  {/* Unified Materials List (Videos and Quizzes combined) */}
+                                  {(() => {
+                                    // Combine videos and quizzes, sorted by unified order
+                                    const allMaterials: Array<{ type: 'video' | 'quiz'; data: Video | Quiz }> = [
+                                      ...section.videos.map(v => ({ type: 'video' as const, data: v })),
+                                      ...section.quizzes.map(q => ({ type: 'quiz' as const, data: q }))
+                                    ].sort((a, b) => a.data.order - b.data.order);
 
-                                  {/* Quizzes */}
-                                  {section.quizzes
-                                    .sort((a, b) => a.order - b.order)
-                                    .map((quiz) => {
-                                      const isSelected = selectedMaterial?.type === 'quiz' && selectedMaterial.data.id === quiz.id;
-                                      return (
-                                        <div
-                                          key={`quiz-${quiz.id}`}
-                                          className={`structure-item ${quiz.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
-                                          onClick={() => scrollToMaterial(quiz.id, 'quiz', true)}
-                                        >
-                                          <span className="item-icon">📝</span>
-                                          <span className="item-title-structure">{quiz.title}</span>
-                                          {quiz.is_locked && (
-                                            <span className="lock-icon-structure">🔒</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                    return allMaterials.map((material) => {
+                                      if (material.type === 'video') {
+                                        const video = material.data as Video;
+                                        const isSelected = selectedMaterial?.type === 'video' && selectedMaterial.data.id === video.id;
+                                        return (
+                                          <div
+                                            key={`video-${video.id}`}
+                                            className={`structure-item ${video.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
+                                            onClick={() => scrollToMaterial(video.id, 'video', true)}
+                                          >
+                                            <span className="item-icon">📹</span>
+                                            <span className="item-title-structure">{video.title}</span>
+                                            {video.is_locked && (
+                                              <span className="lock-icon-structure">🔒</span>
+                                            )}
+                                          </div>
+                                        );
+                                      } else {
+                                        const quiz = material.data as Quiz;
+                                        const isSelected = selectedMaterial?.type === 'quiz' && selectedMaterial.data.id === quiz.id;
+                                        return (
+                                          <div
+                                            key={`quiz-${quiz.id}`}
+                                            className={`structure-item ${quiz.is_locked ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''}`}
+                                            onClick={() => scrollToMaterial(quiz.id, 'quiz', true)}
+                                          >
+                                            <span className="item-icon">📝</span>
+                                            <span className="item-title-structure">{quiz.title}</span>
+                                            {quiz.is_locked && (
+                                              <span className="lock-icon-structure">🔒</span>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+                                    });
+                                  })()}
                                 </div>
                               )}
                             </div>

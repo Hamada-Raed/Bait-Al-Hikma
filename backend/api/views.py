@@ -2181,13 +2181,14 @@ def manage_video(request):
         except Section.DoesNotExist:
             return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Adjust order if needed
-        max_order = Video.objects.filter(section=section).count()
-        if order > max_order:
-            order = max_order
+        # Adjust order if needed - consider all materials (videos + quizzes)
+        total_materials = Video.objects.filter(section=section).count() + Quiz.objects.filter(section=section).count()
+        if order > total_materials:
+            order = total_materials
         
-        # Shift existing videos with order >= new order
+        # Shift existing videos and quizzes with order >= new order
         Video.objects.filter(section=section, order__gte=order).update(order=models.F('order') + 1)
+        Quiz.objects.filter(section=section, order__gte=order).update(order=models.F('order') + 1)
         
         video = Video.objects.create(
             section=section,
@@ -2287,12 +2288,13 @@ def manage_section_quiz(request):
         except Section.DoesNotExist:
             return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Adjust order if needed
-        max_order = Quiz.objects.filter(section=section).count()
-        if order > max_order:
-            order = max_order
+        # Adjust order if needed - consider all materials (videos + quizzes)
+        total_materials = Video.objects.filter(section=section).count() + Quiz.objects.filter(section=section).count()
+        if order > total_materials:
+            order = total_materials
         
-        # Shift existing quizzes with order >= new order
+        # Shift existing videos and quizzes with order >= new order
+        Video.objects.filter(section=section, order__gte=order).update(order=models.F('order') + 1)
         Quiz.objects.filter(section=section, order__gte=order).update(order=models.F('order') + 1)
         
         quiz = Quiz.objects.create(
@@ -2548,6 +2550,55 @@ def reorder_quizzes(request):
         quiz_id = item.get('id')
         new_order = item.get('order')
         if quiz_id and new_order is not None:
+            try:
+                quiz = Quiz.objects.get(pk=quiz_id, section=section)
+                quiz.order = new_order
+                quiz.save()
+            except Quiz.DoesNotExist:
+                continue
+    
+    return Response({'success': True}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reorder_materials(request):
+    """Unified reorder endpoint for videos and quizzes within a section"""
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+    
+    if request.user.user_type != 'teacher':
+        return Response({'error': 'Only teachers can reorder materials.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    section_id = request.data.get('section_id')
+    video_orders = request.data.get('video_orders', [])
+    quiz_orders = request.data.get('quiz_orders', [])
+    
+    if not section_id:
+        return Response({'error': 'section_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        section = Section.objects.get(pk=section_id, chapter__course__teacher=request.user)
+    except Section.DoesNotExist:
+        return Response({'error': 'Section not found.'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Update video orders
+    for item in video_orders:
+        video_id = item.get('id')
+        new_order = item.get('order')
+        if video_id is not None and new_order is not None:
+            try:
+                video = Video.objects.get(pk=video_id, section=section)
+                video.order = new_order
+                video.save()
+            except Video.DoesNotExist:
+                continue
+    
+    # Update quiz orders
+    for item in quiz_orders:
+        quiz_id = item.get('id')
+        new_order = item.get('order')
+        if quiz_id is not None and new_order is not None:
             try:
                 quiz = Quiz.objects.get(pk=quiz_id, section=section)
                 quiz.order = new_order

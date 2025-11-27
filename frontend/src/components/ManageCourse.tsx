@@ -125,6 +125,17 @@ interface DraggedQuiz {
   sectionId: number;
 }
 
+// Unified material type for combined video/quiz list
+type MaterialItem = {
+  type: 'video' | 'quiz';
+  data: Video | Quiz;
+};
+
+interface DraggedMaterial {
+  material: MaterialItem;
+  sectionId: number;
+}
+
 interface EditingSection extends Section {
   chapter_id: number;
 }
@@ -222,6 +233,7 @@ const ManageCourse: React.FC = () => {
   const [draggedSection, setDraggedSection] = useState<DraggedSection | null>(null);
   const [draggedVideo, setDraggedVideo] = useState<DraggedVideo | null>(null);
   const [draggedQuiz, setDraggedQuiz] = useState<DraggedQuiz | null>(null);
+  const [draggedMaterial, setDraggedMaterial] = useState<DraggedMaterial | null>(null);
 
   // Edit states for videos and quizzes
   const [editingVideo, setEditingVideo] = useState<Video | null>(null);
@@ -771,7 +783,8 @@ const ManageCourse: React.FC = () => {
 
     const chapter = chapters.find(c => c.sections.some(s => s.id === videoModalSection));
     const section = chapter?.sections.find(s => s.id === videoModalSection);
-    const order = section ? section.videos.length : 0;
+    // Calculate order based on all materials (videos + quizzes)
+    const order = section ? (section.videos.length + section.quizzes.length) : 0;
 
     const formData = new FormData();
     formData.append('section_id', videoModalSection.toString());
@@ -1253,7 +1266,8 @@ const ManageCourse: React.FC = () => {
 
     const chapter = chapters.find(c => c.sections.some(s => s.id === quizModalSection));
     const section = chapter?.sections.find(s => s.id === quizModalSection);
-    const order = section ? section.quizzes.length : 0;
+    // Calculate order based on all materials (videos + quizzes)
+    const order = section ? (section.videos.length + section.quizzes.length) : 0;
 
     try {
       // Check if any question has an image file
@@ -2067,6 +2081,123 @@ const ManageCourse: React.FC = () => {
     }
   };
 
+  // Unified Drag and Drop for Videos and Quizzes
+  const handleMaterialDragStart = (e: React.DragEvent, material: MaterialItem, sectionId: number): void => {
+    setDraggedMaterial({ material, sectionId });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleMaterialDragOver = (e: React.DragEvent): void => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleMaterialDrop = async (e: React.DragEvent, targetMaterial: MaterialItem, sectionId: number): Promise<void> => {
+    e.preventDefault();
+    if (!draggedMaterial || 
+        (draggedMaterial.material.type === targetMaterial.type && 
+         draggedMaterial.material.data.id === targetMaterial.data.id) || 
+        draggedMaterial.sectionId !== sectionId) {
+      setDraggedMaterial(null);
+      return;
+    }
+
+    const chapter = chapters.find(c => c.sections.some(s => s.id === sectionId));
+    const section = chapter?.sections.find(s => s.id === sectionId);
+    if (!section) return;
+
+    // Combine videos and quizzes into one array, sorted by order
+    const allMaterials: MaterialItem[] = [
+      ...section.videos.map(v => ({ type: 'video' as const, data: v })),
+      ...section.quizzes.map(q => ({ type: 'quiz' as const, data: q }))
+    ].sort((a, b) => a.data.order - b.data.order);
+
+    // Find indices
+    const draggedIndex = allMaterials.findIndex(
+      m => m.type === draggedMaterial.material.type && m.data.id === draggedMaterial.material.data.id
+    );
+    const targetIndex = allMaterials.findIndex(
+      m => m.type === targetMaterial.type && m.data.id === targetMaterial.data.id
+    );
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedMaterial(null);
+      return;
+    }
+
+    // Reorder materials
+    const newMaterials = [...allMaterials];
+    newMaterials.splice(draggedIndex, 1);
+    newMaterials.splice(targetIndex, 0, draggedMaterial.material);
+
+    // Update order numbers
+    newMaterials.forEach((material, index) => {
+      material.data.order = index;
+    });
+
+    // Separate back into videos and quizzes
+    const newVideos = newMaterials.filter(m => m.type === 'video').map(m => m.data as Video);
+    const newQuizzes = newMaterials.filter(m => m.type === 'quiz').map(m => m.data as Quiz);
+
+    // Update chapters state
+    setChapters(prevChapters => 
+      prevChapters.map(c => ({
+        ...c,
+        sections: c.sections.map(s => 
+          s.id === sectionId 
+            ? { ...s, videos: newVideos, quizzes: newQuizzes }
+            : s
+        )
+      }))
+    );
+
+    calculateStats(chapters.map(c => ({
+      ...c,
+      sections: c.sections.map(s => 
+        s.id === sectionId 
+          ? { ...s, videos: newVideos, quizzes: newQuizzes }
+          : s
+      )
+    })));
+    setDraggedMaterial(null);
+
+    // Send to backend
+    try {
+      const video_orders = newVideos.map((video, index) => ({
+        id: video.id,
+        order: video.order
+      }));
+
+      const quiz_orders = newQuizzes.map((quiz, index) => ({
+        id: quiz.id,
+        order: quiz.order
+      }));
+
+      const response = await fetch('http://localhost:8000/api/reorder-materials/', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({
+          section_id: sectionId,
+          video_orders: video_orders,
+          quiz_orders: quiz_orders
+        }),
+      });
+
+      if (response.ok) {
+        showSuccess('Material order updated!');
+        await fetchCourseStructure();
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to update material order');
+        await fetchCourseStructure();
+      }
+    } catch (err) {
+      setError('Failed to update material order');
+      await fetchCourseStructure();
+    }
+  };
+
   if (loading) {
     return (
       <div className="manage-course-loading">
@@ -2350,119 +2481,135 @@ const ManageCourse: React.FC = () => {
                               {/* Expanded Section Content */}
                               {expandedSections[section.id] && (
                                 <div className="section-content">
-                                  {/* Videos List */}
-                                  {section.videos.length > 0 && (
-                                    <div className="content-list">
-                                      <h5>📹 {t.videos}</h5>
-                                      {section.videos.map((video, videoIndex) => (
-                                        <div 
-                                          key={video.id} 
-                                          className={`content-item video-item ${draggedVideo?.video.id === video.id ? 'dragging' : ''}`}
-                                          draggable
-                                          onDragStart={(e) => handleVideoDragStart(e, video, section.id)}
-                                          onDragOver={handleVideoDragOver}
-                                          onDrop={(e) => handleVideoDrop(e, video, section.id)}
-                                        >
-                                          <div className="item-info">
-                                            <span className="drag-handle" title={t.dragToReorder}>☰</span>
-                                            <span className="item-number">{videoIndex + 1}.</span>
-                                            <div className="item-details">
-                                              <p className="item-title">
-                                                {video.title}
-                                                <span className="item-badge video-badge">🎥 Video {videoIndex + 1}</span>
-                                              </p>
-                                              <p className="item-meta">
-                                                ⏱️ {video.duration_minutes} min
-                                                {video.video_url && typeof video.video_url === 'string' && video.video_url.trim() && (
-                                                  <a href={video.video_url} target="_blank" rel="noopener noreferrer"> 🔗 Link</a>
-                                                )}
-                                                <span className={`lock-status ${video.is_locked ? 'locked' : 'unlocked'}`}>
-                                                  {video.is_locked ? '🔒 ' + t.locked : '🔓 ' + t.unlocked}
-                                                </span>
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <div className="item-actions">
-                                            <button 
-                                              className={`action-btn lock ${video.is_locked ? 'locked' : 'unlocked'}`}
-                                              onClick={() => handleToggleVideoLock(video.id, video.is_locked)}
-                                              title={video.is_locked ? t.unlockMaterial : t.lockMaterial}
-                                            >
-                                              {video.is_locked ? '🔒' : '🔓'}
-                                            </button>
-                                            <button 
-                                              className="action-btn edit"
-                                              onClick={() => openVideoModal(section.id, video)}
-                                            >
-                                              ✏️
-                                            </button>
-                                            <button 
-                                              className="action-btn delete"
-                                              onClick={() => handleDeleteVideo(video.id)}
-                                            >
-                                              🗑️
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                  {/* Unified Materials List (Videos and Quizzes) */}
+                                  {(() => {
+                                    // Combine videos and quizzes, sorted by order
+                                    const allMaterials: MaterialItem[] = [
+                                      ...section.videos.map(v => ({ type: 'video' as const, data: v })),
+                                      ...section.quizzes.map(q => ({ type: 'quiz' as const, data: q }))
+                                    ].sort((a, b) => a.data.order - b.data.order);
 
-                                  {/* Quizzes List */}
-                                  {section.quizzes.length > 0 && (
-                                    <div className="content-list">
-                                      <h5>📝 {t.quizzes}</h5>
-                                      {section.quizzes.map((quiz, quizIndex) => (
-                                        <div 
-                                          key={quiz.id} 
-                                          className={`content-item quiz-item ${draggedQuiz?.quiz.id === quiz.id ? 'dragging' : ''}`}
-                                          draggable
-                                          onDragStart={(e) => handleQuizDragStart(e, quiz, section.id)}
-                                          onDragOver={handleQuizDragOver}
-                                          onDrop={(e) => handleQuizDrop(e, quiz, section.id)}
-                                        >
-                                          <div className="item-info">
-                                            <span className="drag-handle" title={t.dragToReorder}>☰</span>
-                                            <span className="item-number">{quizIndex + 1}.</span>
-                                            <div className="item-details">
-                                              <p className="item-title">
-                                                {quiz.title}
-                                                <span className="item-badge quiz-badge">📝 Quiz {quizIndex + 1}</span>
-                                              </p>
-                                              <p className="item-description">{quiz.description}</p>
-                                              <p className="item-meta">
-                                                ⏱️ {quiz.duration_minutes} min
-                                                <span className={`lock-status ${quiz.is_locked ? 'locked' : 'unlocked'}`}>
-                                                  {quiz.is_locked ? '🔒 ' + t.locked : '🔓 ' + t.unlocked}
-                                                </span>
-                                              </p>
-                                            </div>
-                                          </div>
-                                          <div className="item-actions">
-                                            <button 
-                                              className={`action-btn lock ${quiz.is_locked ? 'locked' : 'unlocked'}`}
-                                              onClick={() => handleToggleQuizLock(quiz.id, quiz.is_locked)}
-                                              title={quiz.is_locked ? t.unlockMaterial : t.lockMaterial}
-                                            >
-                                              {quiz.is_locked ? '🔒' : '🔓'}
-                                            </button>
-                                            <button 
-                                              className="action-btn edit"
-                                              onClick={() => openQuizModal(section.id, quiz)}
-                                            >
-                                              ✏️
-                                            </button>
-                                            <button 
-                                              className="action-btn delete"
-                                              onClick={() => handleDeleteQuiz(quiz.id)}
-                                            >
-                                              🗑️
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                    if (allMaterials.length === 0) {
+                                      return <p className="empty-text">{t.noMaterials || 'No materials in this section'}</p>;
+                                    }
+
+                                    return (
+                                      <div className="content-list">
+                                        <h5>📚 {t.materials || 'Materials'}</h5>
+                                        {allMaterials.map((material, materialIndex) => {
+                                          const isDragging = draggedMaterial && 
+                                            draggedMaterial.material.type === material.type && 
+                                            draggedMaterial.material.data.id === material.data.id;
+                                          
+                                          if (material.type === 'video') {
+                                            const video = material.data as Video;
+                                            return (
+                                              <div 
+                                                key={`video-${video.id}`}
+                                                className={`content-item video-item ${isDragging ? 'dragging' : ''}`}
+                                                draggable
+                                                onDragStart={(e) => handleMaterialDragStart(e, material, section.id)}
+                                                onDragOver={handleMaterialDragOver}
+                                                onDrop={(e) => handleMaterialDrop(e, material, section.id)}
+                                              >
+                                                <div className="item-info">
+                                                  <span className="drag-handle" title={t.dragToReorder}>☰</span>
+                                                  <span className="item-number">{materialIndex + 1}.</span>
+                                                  <div className="item-details">
+                                                    <p className="item-title">
+                                                      {video.title}
+                                                      <span className="item-badge video-badge">🎥 {t.video || 'Video'}</span>
+                                                    </p>
+                                                    <p className="item-meta">
+                                                      ⏱️ {video.duration_minutes} min
+                                                      {video.video_url && typeof video.video_url === 'string' && video.video_url.trim() && (
+                                                        <a href={video.video_url} target="_blank" rel="noopener noreferrer"> 🔗 Link</a>
+                                                      )}
+                                                      <span className={`lock-status ${video.is_locked ? 'locked' : 'unlocked'}`}>
+                                                        {video.is_locked ? '🔒 ' + t.locked : '🔓 ' + t.unlocked}
+                                                      </span>
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                                <div className="item-actions">
+                                                  <button 
+                                                    className={`action-btn lock ${video.is_locked ? 'locked' : 'unlocked'}`}
+                                                    onClick={() => handleToggleVideoLock(video.id, video.is_locked)}
+                                                    title={video.is_locked ? t.unlockMaterial : t.lockMaterial}
+                                                  >
+                                                    {video.is_locked ? '🔒' : '🔓'}
+                                                  </button>
+                                                  <button 
+                                                    className="action-btn edit"
+                                                    onClick={() => openVideoModal(section.id, video)}
+                                                  >
+                                                    ✏️
+                                                  </button>
+                                                  <button 
+                                                    className="action-btn delete"
+                                                    onClick={() => handleDeleteVideo(video.id)}
+                                                  >
+                                                    🗑️
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          } else {
+                                            const quiz = material.data as Quiz;
+                                            return (
+                                              <div 
+                                                key={`quiz-${quiz.id}`}
+                                                className={`content-item quiz-item ${isDragging ? 'dragging' : ''}`}
+                                                draggable
+                                                onDragStart={(e) => handleMaterialDragStart(e, material, section.id)}
+                                                onDragOver={handleMaterialDragOver}
+                                                onDrop={(e) => handleMaterialDrop(e, material, section.id)}
+                                              >
+                                                <div className="item-info">
+                                                  <span className="drag-handle" title={t.dragToReorder}>☰</span>
+                                                  <span className="item-number">{materialIndex + 1}.</span>
+                                                  <div className="item-details">
+                                                    <p className="item-title">
+                                                      {quiz.title}
+                                                      <span className="item-badge quiz-badge">📝 {t.quiz || 'Quiz'}</span>
+                                                    </p>
+                                                    <p className="item-description">{quiz.description}</p>
+                                                    <p className="item-meta">
+                                                      ⏱️ {quiz.duration_minutes} min
+                                                      <span className={`lock-status ${quiz.is_locked ? 'locked' : 'unlocked'}`}>
+                                                        {quiz.is_locked ? '🔒 ' + t.locked : '🔓 ' + t.unlocked}
+                                                      </span>
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                                <div className="item-actions">
+                                                  <button 
+                                                    className={`action-btn lock ${quiz.is_locked ? 'locked' : 'unlocked'}`}
+                                                    onClick={() => handleToggleQuizLock(quiz.id, quiz.is_locked)}
+                                                    title={quiz.is_locked ? t.unlockMaterial : t.lockMaterial}
+                                                  >
+                                                    {quiz.is_locked ? '🔒' : '🔓'}
+                                                  </button>
+                                                  <button 
+                                                    className="action-btn edit"
+                                                    onClick={() => openQuizModal(section.id, quiz)}
+                                                  >
+                                                    ✏️
+                                                  </button>
+                                                  <button 
+                                                    className="action-btn delete"
+                                                    onClick={() => handleDeleteQuiz(quiz.id)}
+                                                  >
+                                                    🗑️
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+                                        })}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               )}
                             </div>

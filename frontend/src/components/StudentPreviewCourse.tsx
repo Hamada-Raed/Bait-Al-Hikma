@@ -1191,121 +1191,115 @@ const StudentPreviewCourse: React.FC = () => {
 
                               {expandedSections.has(section.id) && (
                                 <div className="structure-section-content">
-                                  {section.videos
-                                    .sort((a, b) => a.order - b.order)
-                                    .map((video) => {
-                                      const material: MaterialItem = {
-                                        type: 'video',
-                                        data: video,
-                                        chapterTitle: chapter.title,
-                                        sectionTitle: section.title,
-                                        chapterId: chapter.id,
-                                        sectionId: section.id,
-                                        globalOrder: 0
-                                      };
-                                      const isSelected = selectedMaterial?.type === 'video' && selectedMaterial.data.id === video.id;
-                                      const isAccessible = isMaterialAccessible(material);
-                                      const isCompleted = isMaterialCompleted(material);
-                                      
-                                      return (
-                                        <div
-                                          key={`video-${video.id}`}
-                                          className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''} ${isCompleted ? 'structure-item-completed' : ''}`}
-                                          onClick={() => handleMaterialClick(material)}
-                                          style={{
-                                            cursor: isAccessible ? 'pointer' : 'not-allowed',
-                                            opacity: isAccessible ? 1 : 0.6,
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center'
-                                          }}
-                                        >
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                                            <span className="item-icon">📹</span>
-                                            <span className="item-title-structure">{video.title}</span>
-                                            {!isAccessible && (
-                                              <span className="lock-icon-structure">🔒</span>
-                                            )}
-                                          </div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {isCompleted && (
-                                              <span style={{
-                                                color: '#10b981',
-                                                fontSize: '16px',
-                                                fontWeight: 'bold',
-                                                display: 'flex',
-                                                alignItems: 'center'
-                                              }}>✓</span>
-                                            )}
-                                            <input
-                                              type="checkbox"
-                                              checked={isCompleted}
-                                              onChange={(e) => handleToggleMaterialCompletion(material, e.target.checked)}
-                                              onClick={(e) => e.stopPropagation()}
-                                              disabled={!isEnrolled}
-                                            />
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
+                                  {/* Unified Materials List (Videos and Quizzes combined) */}
+                                  {(() => {
+                                    // Combine videos and quizzes, sorted by unified order
+                                    const allMaterials: Array<{ type: 'video' | 'quiz'; data: Video | Quiz }> = [
+                                      ...section.videos.map(v => ({ type: 'video' as const, data: v })),
+                                      ...section.quizzes.map(q => ({ type: 'quiz' as const, data: q }))
+                                    ].sort((a, b) => a.data.order - b.data.order);
 
-                                  {section.quizzes
-                                    .sort((a, b) => a.order - b.order)
-                                    .map((quiz) => {
-                                      const material: MaterialItem = {
-                                        type: 'quiz',
-                                        data: quiz,
+                                    return allMaterials.map((material) => {
+                                      const materialItem: MaterialItem = {
+                                        type: material.type,
+                                        data: material.data,
                                         chapterTitle: chapter.title,
                                         sectionTitle: section.title,
                                         chapterId: chapter.id,
                                         sectionId: section.id,
                                         globalOrder: 0
                                       };
-                                      const isSelected = selectedMaterial?.type === 'quiz' && selectedMaterial.data.id === quiz.id;
-                                      const isAccessible = isMaterialAccessible(material);
-                                      const isCompleted = isMaterialCompleted(material);
-                                      
-                                      return (
-                                        <div
-                                          key={`quiz-${quiz.id}`}
-                                          className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''} ${isCompleted ? 'structure-item-completed' : ''}`}
-                                          onClick={() => handleMaterialClick(material)}
-                                          style={{
-                                            cursor: isAccessible ? 'pointer' : 'not-allowed',
-                                            opacity: isAccessible ? 1 : 0.6,
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center'
-                                          }}
-                                        >
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                                            <span className="item-icon">📝</span>
-                                            <span className="item-title-structure">{quiz.title}</span>
-                                            {!isAccessible && (
-                                              <span className="lock-icon-structure">🔒</span>
-                                            )}
+                                      const isSelected = selectedMaterial?.type === material.type && selectedMaterial.data.id === material.data.id;
+                                      const isAccessible = isMaterialAccessible(materialItem);
+                                      const isCompleted = isMaterialCompleted(materialItem);
+
+                                      if (material.type === 'video') {
+                                        const video = material.data as Video;
+                                        return (
+                                          <div
+                                            key={`video-${video.id}`}
+                                            className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''} ${isCompleted ? 'structure-item-completed' : ''}`}
+                                            onClick={() => handleMaterialClick(materialItem)}
+                                            style={{
+                                              cursor: isAccessible ? 'pointer' : 'not-allowed',
+                                              opacity: isAccessible ? 1 : 0.6,
+                                              display: 'flex',
+                                              justifyContent: 'space-between',
+                                              alignItems: 'center'
+                                            }}
+                                          >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                                              <span className="item-icon">📹</span>
+                                              <span className="item-title-structure">{video.title}</span>
+                                              {!isAccessible && (
+                                                <span className="lock-icon-structure">🔒</span>
+                                              )}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                              {isCompleted && (
+                                                <span style={{
+                                                  color: '#10b981',
+                                                  fontSize: '16px',
+                                                  fontWeight: 'bold',
+                                                  display: 'flex',
+                                                  alignItems: 'center'
+                                                }}>✓</span>
+                                              )}
+                                              <input
+                                                type="checkbox"
+                                                checked={isCompleted}
+                                                onChange={(e) => handleToggleMaterialCompletion(materialItem, e.target.checked)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                disabled={!isEnrolled}
+                                              />
+                                            </div>
                                           </div>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            {isCompleted && (
-                                              <span style={{
-                                                color: '#10b981',
-                                                fontSize: '16px',
-                                                fontWeight: 'bold',
-                                                display: 'flex',
-                                                alignItems: 'center'
-                                              }}>✓</span>
-                                            )}
-                                            <input
-                                              type="checkbox"
-                                              checked={isCompleted}
-                                              onChange={(e) => handleToggleMaterialCompletion(material, e.target.checked)}
-                                              onClick={(e) => e.stopPropagation()}
-                                              disabled={!isEnrolled}
-                                            />
+                                        );
+                                      } else {
+                                        const quiz = material.data as Quiz;
+                                        return (
+                                          <div
+                                            key={`quiz-${quiz.id}`}
+                                            className={`structure-item ${!isAccessible ? 'structure-item-locked' : ''} ${isSelected ? 'structure-item-selected' : ''} ${isCompleted ? 'structure-item-completed' : ''}`}
+                                            onClick={() => handleMaterialClick(materialItem)}
+                                            style={{
+                                              cursor: isAccessible ? 'pointer' : 'not-allowed',
+                                              opacity: isAccessible ? 1 : 0.6,
+                                              display: 'flex',
+                                              justifyContent: 'space-between',
+                                              alignItems: 'center'
+                                            }}
+                                          >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                                              <span className="item-icon">📝</span>
+                                              <span className="item-title-structure">{quiz.title}</span>
+                                              {!isAccessible && (
+                                                <span className="lock-icon-structure">🔒</span>
+                                              )}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                              {isCompleted && (
+                                                <span style={{
+                                                  color: '#10b981',
+                                                  fontSize: '16px',
+                                                  fontWeight: 'bold',
+                                                  display: 'flex',
+                                                  alignItems: 'center'
+                                                }}>✓</span>
+                                              )}
+                                              <input
+                                                type="checkbox"
+                                                checked={isCompleted}
+                                                onChange={(e) => handleToggleMaterialCompletion(materialItem, e.target.checked)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                disabled={!isEnrolled}
+                                              />
+                                            </div>
                                           </div>
-                                        </div>
-                                      );
-                                    })}
+                                        );
+                                      }
+                                    });
+                                  })()}
                                 </div>
                               )}
                             </div>
