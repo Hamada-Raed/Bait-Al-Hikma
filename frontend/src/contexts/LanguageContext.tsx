@@ -8,6 +8,7 @@ interface LanguageContextType {
   t: (key: string) => string;
   isRTL: boolean;
   platformName: string;
+  platformLogoUrl: string | null;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -167,20 +168,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   
   const [platformName, setPlatformName] = useState<string>('Bait Al-Hikma');
   const [platformNameAr, setPlatformNameAr] = useState<string>('بيت الحكمة');
+  const [platformLogoUrl, setPlatformLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch platform name from API
+    // Fetch platform settings from API
     fetch(`${API_BASE_URL}/platform-settings/current/`)
       .then(res => res.json())
       .then(data => {
         setPlatformName(data.name_en || 'Bait Al-Hikma');
         setPlatformNameAr(data.name_ar || 'بيت الحكمة');
+        setPlatformLogoUrl(data.logo_url || null);
       })
       .catch(err => {
-        console.error('Error fetching platform name:', err);
+        console.error('Error fetching platform settings:', err);
         // Use defaults on error
         setPlatformName('Bait Al-Hikma');
         setPlatformNameAr('بيت الحكمة');
+        setPlatformLogoUrl(null);
       });
   }, []);
 
@@ -206,7 +210,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isRTL = language === 'ar';
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, isRTL, platformName: currentPlatformName }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, isRTL, platformName: currentPlatformName, platformLogoUrl }}>
       {children}
     </LanguageContext.Provider>
   );

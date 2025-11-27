@@ -227,7 +227,7 @@ class CourseApprovalRequest(models.Model):
 class PlatformSettings(models.Model):
     name_en = models.CharField(max_length=100, default='Bait Al-Hikma')
     name_ar = models.CharField(max_length=100, default='بيت الحكمة')
-    logo_url = models.URLField(blank=True, null=True)
+    logo = models.ImageField(upload_to='platform_logos/', blank=True, null=True, help_text='Platform logo image')
     platform_commission_percentage = models.DecimalField(
         max_digits=5, 
         decimal_places=2, 

@@ -445,7 +445,7 @@ class PlatformSettingsViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def current(self, request):
         settings = PlatformSettings.load()
-        serializer = self.get_serializer(settings)
+        serializer = self.get_serializer(settings, context={'request': request})
         return Response(serializer.data)
 
 

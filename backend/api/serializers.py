@@ -178,9 +178,20 @@ class TeacherSubjectSerializer(serializers.ModelSerializer):
 
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):
+    logo_url = serializers.SerializerMethodField()
+    
     class Meta:
         model = PlatformSettings
-        fields = ['name_en', 'name_ar', 'logo_url', 'platform_commission_percentage', 'private_lesson_commission_percentage']
+        fields = ['name_en', 'name_ar', 'logo', 'logo_url', 'platform_commission_percentage', 'private_lesson_commission_percentage']
+        read_only_fields = ['logo_url']
+    
+    def get_logo_url(self, obj):
+        if obj.logo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.logo.url)
+            return obj.logo.url
+        return None
 
 
 class HeroSectionSerializer(serializers.ModelSerializer):
