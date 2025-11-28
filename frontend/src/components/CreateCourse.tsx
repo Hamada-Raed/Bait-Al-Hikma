@@ -15,6 +15,7 @@ interface Country {
   code: string;
   currency_code?: string;
   currency_symbol?: string;
+  currency_name_en?: string;
 }
 
 interface Subject {
@@ -402,23 +403,39 @@ const CreateCourse: React.FC = () => {
   }, []);
 
   // Update currency when country changes (for both school and university courses)
+  // If no country is selected, use teacher's country currency as fallback
   useEffect(() => {
     if (formData.country) {
+      // Country is selected - use its currency
       const countryId = parseInt(formData.country);
       const selectedCountry = countries.find(c => c.id === countryId);
       if (selectedCountry && selectedCountry.currency_code && selectedCountry.currency_symbol) {
         setSelectedCountryCurrency({
           code: selectedCountry.currency_code,
           symbol: selectedCountry.currency_symbol,
-          name: getCurrencyName(selectedCountry.code)
+          name: selectedCountry.currency_name_en || getCurrencyName(selectedCountry.code)
         });
       } else {
         setSelectedCountryCurrency(null);
       }
     } else {
-      setSelectedCountryCurrency(null);
+      // No country selected - use teacher's country currency as fallback
+      if (teacherCountry && countries.length > 0) {
+        const teacherCountryData = countries.find(c => c.id === teacherCountry);
+        if (teacherCountryData && teacherCountryData.currency_code && teacherCountryData.currency_symbol) {
+          setSelectedCountryCurrency({
+            code: teacherCountryData.currency_code,
+            symbol: teacherCountryData.currency_symbol,
+            name: teacherCountryData.currency_name_en || getCurrencyName(teacherCountryData.code)
+          });
+        } else {
+          setSelectedCountryCurrency(null);
+        }
+      } else {
+        setSelectedCountryCurrency(null);
+      }
     }
-  }, [formData.country, countries, language]);
+  }, [formData.country, teacherCountry, countries, language]);
 
   // Fetch course data when in edit mode
   useEffect(() => {

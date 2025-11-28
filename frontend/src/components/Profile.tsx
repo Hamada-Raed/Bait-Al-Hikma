@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Header from './Header';
 import { ensureCsrfToken } from '../utils/csrf';
+import TeacherPaymentRecords from './TeacherPaymentRecords';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -1450,29 +1451,7 @@ const Profile: React.FC = () => {
 
           {/* Payment Tab - Only for teachers */}
           {activeTab === 'payment' && user?.user_type === 'teacher' && (
-            <div className="space-y-6">
-              <div className="text-center py-12">
-                <svg
-                  className="w-16 h-16 text-gray-400 mx-auto mb-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                  />
-                </svg>
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  {getText('Payment Information', 'معلومات الدفع')}
-                </h3>
-                <p className="text-gray-400">
-                  {getText('Payment settings will be available soon.', 'إعدادات الدفع ستكون متاحة قريباً.')}
-                </p>
-              </div>
-            </div>
+            <TeacherPaymentRecords user={user} getText={getText} />
           )}
         </div>
       </main>

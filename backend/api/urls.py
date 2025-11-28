@@ -38,6 +38,8 @@ router.register(r'student-notes', StudentNoteViewSet, basename='student-note')
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Payment endpoints
+    path('', include('payments.urls')),
     # Secure video streaming endpoint
     path('stream-video/<int:video_id>/', stream_video, name='stream-video'),
     # Course structure management endpoints

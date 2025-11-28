@@ -55,6 +55,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
   const [publishing, setPublishing] = useState(false);
   const [unpublishReason, setUnpublishReason] = useState('');
   const [publishConfirmChecked, setPublishConfirmChecked] = useState(false);
+  const [showMessagePopup, setShowMessagePopup] = useState(false);
+  const [messagePopupContent, setMessagePopupContent] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -338,14 +340,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
       if (response && !response.ok && response.status !== 404) {
         try {
           const data = await response.json();
-          alert(data.error || data.message || getText('Failed to process your request.', 'فشل معالجة طلبك.'));
+          setMessagePopupContent({
+            type: 'error',
+            message: data.error || data.message || getText('Failed to process your request.', 'فشل معالجة طلبك.')
+          });
+          setShowMessagePopup(true);
         } catch (parseError) {
-          alert(getText('Failed to process your request. Please try again.', 'فشل معالجة طلبك. يرجى المحاولة مرة أخرى.'));
+          setMessagePopupContent({
+            type: 'error',
+            message: getText('Failed to process your request. Please try again.', 'فشل معالجة طلبك. يرجى المحاولة مرة أخرى.')
+          });
+          setShowMessagePopup(true);
         }
       }
     } catch (error) {
       console.error('Error processing publish/unpublish:', error);
-      alert(getText('Error processing your request.', 'حدث خطأ أثناء معالجة طلبك.'));
+      setMessagePopupContent({
+        type: 'error',
+        message: getText('Error processing your request.', 'حدث خطأ أثناء معالجة طلبك.')
+      });
+      setShowMessagePopup(true);
     } finally {
       setPublishing(false);
     }
@@ -384,7 +398,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
     // If course has students, require admin approval and message
     if (hasStudents) {
       if (!deleteMessage.trim()) {
-        alert(getText('Please provide a reason for deletion as there are enrolled students.', 'يرجى تقديم سبب الحذف لأن هناك طلاب مسجلين في الدورة.'));
+        setMessagePopupContent({
+          type: 'error',
+          message: getText('Please provide a reason for deletion as there are enrolled students.', 'يرجى تقديم سبب الحذف لأن هناك طلاب مسجلين في الدورة.')
+        });
+        setShowMessagePopup(true);
         return;
       }
 
@@ -409,20 +427,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           });
 
           if (response.ok) {
-            alert(getText(
-              'Your deletion request has been submitted for admin approval.',
-              'تم إرسال طلب الحذف للموافقة من قبل الإدارة.'
-            ));
-          setDeleteModalOpen(false);
-          setCourseToDelete(null);
-          setDeleteMessage('');
-          setDeleteConfirmChecked(false);
+            setMessagePopupContent({
+              type: 'success',
+              message: getText(
+                'Your deletion request has been submitted for admin approval.',
+                'تم إرسال طلب الحذف للموافقة من قبل الإدارة.'
+              )
+            });
+            setShowMessagePopup(true);
+            setDeleteModalOpen(false);
+            setCourseToDelete(null);
+            setDeleteMessage('');
+            setDeleteConfirmChecked(false);
           } else if (response.status === 404) {
             // Endpoint not implemented yet - show admin approval message
-            alert(getText(
-              'Your deletion request has been recorded. It requires admin approval since there are enrolled students. An administrator will review your request along with the reason provided and approve the deletion. You will be notified once the request is approved.',
-              'تم تسجيل طلب الحذف. يتطلب موافقة الإدارة لأن هناك طلاب مسجلين في الدورة. سيقوم أحد المشرفين بمراجعة طلبك والسبب المقدم والموافقة على الحذف. سيتم إشعارك بمجرد الموافقة على الطلب.'
-            ));
+            setMessagePopupContent({
+              type: 'info',
+              message: getText(
+                'Your deletion request has been recorded. It requires admin approval since there are enrolled students. An administrator will review your request along with the reason provided and approve the deletion. You will be notified once the request is approved.',
+                'تم تسجيل طلب الحذف. يتطلب موافقة الإدارة لأن هناك طلاب مسجلين في الدورة. سيقوم أحد المشرفين بمراجعة طلبك والسبب المقدم والموافقة على الحذف. سيتم إشعارك بمجرد الموافقة على الطلب.'
+              )
+            });
+            setShowMessagePopup(true);
             setDeleteModalOpen(false);
             setCourseToDelete(null);
             setDeleteMessage('');
@@ -430,18 +456,30 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           } else {
             try {
               const data = await response.json();
-              alert(data.error || data.message || getText('Failed to submit deletion request.', 'فشل إرسال طلب الحذف.'));
+              setMessagePopupContent({
+                type: 'error',
+                message: data.error || data.message || getText('Failed to submit deletion request.', 'فشل إرسال طلب الحذف.')
+              });
+              setShowMessagePopup(true);
             } catch (parseError) {
-              alert(getText('Failed to submit deletion request. Please try again.', 'فشل إرسال طلب الحذف. يرجى المحاولة مرة أخرى.'));
+              setMessagePopupContent({
+                type: 'error',
+                message: getText('Failed to submit deletion request. Please try again.', 'فشل إرسال طلب الحذف. يرجى المحاولة مرة أخرى.')
+              });
+              setShowMessagePopup(true);
             }
           }
         } catch (error) {
           console.error('Error submitting deletion request:', error);
           // If the endpoint doesn't exist, show admin approval message
-          alert(getText(
-            'Your deletion request has been recorded. It requires admin approval since there are enrolled students. An administrator will review your request along with the reason provided and approve the deletion. You will be notified once the request is approved.',
-            'تم تسجيل طلب الحذف. يتطلب موافقة الإدارة لأن هناك طلاب مسجلين في الدورة. سيقوم أحد المشرفين بمراجعة طلبك والسبب المقدم والموافقة على الحذف. سيتم إشعارك بمجرد الموافقة على الطلب.'
-          ));
+          setMessagePopupContent({
+            type: 'info',
+            message: getText(
+              'Your deletion request has been recorded. It requires admin approval since there are enrolled students. An administrator will review your request along with the reason provided and approve the deletion. You will be notified once the request is approved.',
+              'تم تسجيل طلب الحذف. يتطلب موافقة الإدارة لأن هناك طلاب مسجلين في الدورة. سيقوم أحد المشرفين بمراجعة طلبك والسبب المقدم والموافقة على الحذف. سيتم إشعارك بمجرد الموافقة على الطلب.'
+            )
+          });
+          setShowMessagePopup(true);
           setDeleteModalOpen(false);
           setCourseToDelete(null);
           setDeleteMessage('');
@@ -471,11 +509,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
           setDeleteMessage('');
           setDeleteConfirmChecked(false);
         } else {
-          alert(getText('Failed to delete course.', 'فشل حذف الدورة.'));
+          setMessagePopupContent({
+            type: 'error',
+            message: getText('Failed to delete course.', 'فشل حذف الدورة.')
+          });
+          setShowMessagePopup(true);
         }
       } catch (error) {
         console.error('Error deleting course:', error);
-        alert(getText('Error deleting course.', 'حدث خطأ أثناء حذف الدورة.'));
+        setMessagePopupContent({
+          type: 'error',
+          message: getText('Error deleting course.', 'حدث خطأ أثناء حذف الدورة.')
+        });
+        setShowMessagePopup(true);
       } finally {
         setDeleting(false);
       }
@@ -1153,6 +1199,77 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user }) => {
                       : getText('Submit for Review', 'إرسال للمراجعة')
                     )
                 }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Message Popup Modal */}
+      {showMessagePopup && messagePopupContent && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => {
+            setShowMessagePopup(false);
+            setMessagePopupContent(null);
+          }}
+        >
+          <div 
+            className="bg-dark-100 rounded-2xl border border-dark-300 p-8 max-w-md w-full mx-4 shadow-2xl transform transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 ${
+                messagePopupContent.type === 'success'
+                  ? 'bg-green-500/20' 
+                  : messagePopupContent.type === 'error'
+                  ? 'bg-red-500/20'
+                  : 'bg-blue-500/20'
+              }`}>
+                {messagePopupContent.type === 'success' ? (
+                  <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : messagePopupContent.type === 'error' ? (
+                  <svg className="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <h3 className={`text-2xl font-bold mb-3 ${
+                messagePopupContent.type === 'success'
+                  ? 'text-green-400' 
+                  : messagePopupContent.type === 'error'
+                  ? 'text-red-400'
+                  : 'text-blue-400'
+              }`}>
+                {messagePopupContent.type === 'success'
+                  ? getText('Success', 'نجح')
+                  : messagePopupContent.type === 'error'
+                  ? getText('Error', 'خطأ')
+                  : getText('Information', 'معلومة')}
+              </h3>
+              <p className="text-gray-300 mb-6 text-lg">
+                {messagePopupContent.message}
+              </p>
+              <button
+                onClick={() => {
+                  setShowMessagePopup(false);
+                  setMessagePopupContent(null);
+                }}
+                className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors ${
+                  messagePopupContent.type === 'success'
+                    ? 'bg-green-500 hover:bg-green-600 text-white'
+                    : messagePopupContent.type === 'error'
+                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+              >
+                {getText('OK', 'موافق')}
               </button>
             </div>
           </div>

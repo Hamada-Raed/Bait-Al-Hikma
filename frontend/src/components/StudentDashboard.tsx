@@ -153,7 +153,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
     }
   };
   const handleBookPrivateLesson = (teacherId: number) => {
-    console.log('Book private lesson with teacher:', teacherId);
+    // Navigate to availability calendar to book a lesson
+    navigate('/availability-calendar');
   };
 
   const fetchEnrolledCourses = async () => {

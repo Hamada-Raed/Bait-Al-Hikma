@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import { ensureCsrfToken } from '../utils/csrf';
+import AdminPaymentManagement from './AdminPaymentManagement';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -37,6 +38,7 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('all');
   const [processing, setProcessing] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'courses' | 'payments'>('courses');
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
@@ -157,15 +159,46 @@ const AdminDashboard: React.FC = () => {
       {/* Header */}
       <div className="bg-gradient-to-r from-primary-500/20 to-accent-purple/20 rounded-xl p-6 border border-primary-500/30 mt-5">
         <h2 className="text-2xl font-bold text-white mb-2">
-          {getText('Admin Dashboard - Course Management', 'لوحة تحكم الإدارة - إدارة الدورات')}
+          {getText('Admin Dashboard', 'لوحة تحكم الإدارة')}
         </h2>
         <p className="text-gray-300">
           {getText(
-            'Review and manage course approval requests.',
-            'مراجعة وإدارة طلبات موافقة الدورات.'
+            'Manage courses and payments.',
+            'إدارة الدورات والمدفوعات.'
           )}
         </p>
       </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-dark-400">
+        <button
+          onClick={() => setActiveTab('courses')}
+          className={`px-6 py-3 font-medium text-sm transition-colors ${
+            activeTab === 'courses'
+              ? 'text-primary-400 border-b-2 border-primary-400'
+              : 'text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          {getText('Course Management', 'إدارة الدورات')}
+        </button>
+        <button
+          onClick={() => setActiveTab('payments')}
+          className={`px-6 py-3 font-medium text-sm transition-colors ${
+            activeTab === 'payments'
+              ? 'text-primary-400 border-b-2 border-primary-400'
+              : 'text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          {getText('Payment Management', 'إدارة المدفوعات')}
+        </button>
+      </div>
+
+      {/* Payment Management Tab */}
+      {activeTab === 'payments' && <AdminPaymentManagement />}
+
+      {/* Course Management Tab */}
+      {activeTab === 'courses' && (
+        <>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -357,6 +390,8 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ensureCsrfToken } from '../utils/csrf';
 import Header from './Header';
+import PaymentModal from './PaymentModal';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
@@ -22,6 +23,12 @@ interface Availability {
   is_booked?: boolean;
   booked_by?: number;
   booked_at?: string;
+  teacher?: number | {
+    id: number;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  };
 }
 
 interface Track {
@@ -69,7 +76,11 @@ const AvailabilityCalendar: React.FC = () => {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedAvailability, setSelectedAvailability] = useState<Availability | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [currencySymbol, setCurrencySymbol] = useState<string>('JOD');
+  const [loadingPrice, setLoadingPrice] = useState(false);
   const [pendingSlots, setPendingSlots] = useState<{ date: string; hour: number }[]>([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -736,7 +747,7 @@ const AvailabilityCalendar: React.FC = () => {
     }));
   };
 
-  // Handle click on availability to open edit modal
+  // Handle click on availability to open edit modal (for teachers) or payment modal (for students)
   const handleSlotClick = async (dateIdx: number, hourIdx: number) => {
     if (isDragging) return;
     
@@ -744,6 +755,66 @@ const AvailabilityCalendar: React.FC = () => {
       const block = getAvailabilityBlock(dateIdx, hourIdx);
       
       if (block) {
+        // Check if already booked - students can't book booked slots
+        if (block.is_booked) {
+          alert(getText('This slot is already booked.', 'هذا الموعد محجوز بالفعل.'));
+          return;
+        }
+
+        // For students: show payment modal
+        if (isStudent) {
+          // Fetch full availability details
+          try {
+            const response = await fetch(getApiEndpoint(`/${block.id}/`), {
+              credentials: 'include',
+            });
+            if (response.ok) {
+              const fullAvailability = await response.json();
+              setSelectedAvailability(fullAvailability);
+              
+              // Calculate price
+              setLoadingPrice(true);
+              try {
+                const priceResponse = await fetch(`${API_BASE_URL}/payments/payments/calculate_price/?availability_id=${fullAvailability.id}`, {
+                  credentials: 'include',
+                });
+                if (priceResponse.ok) {
+                  const priceData = await priceResponse.json();
+                  setPaymentAmount(parseFloat(priceData.total_amount));
+                  // Get currency from teacher's country or use default
+                  setCurrencySymbol(priceData.price_per_hour.includes('JOD') ? 'JOD' : 'USD'); // You can improve this
+                  
+                  // Update selectedAvailability with teacher info from priceData
+                  setSelectedAvailability({
+                    ...fullAvailability,
+                    teacher: {
+                      id: fullAvailability.teacher || 0,
+                      email: priceData.teacher_email || '',
+                      first_name: priceData.teacher_name?.split(' ')[0] || '',
+                      last_name: priceData.teacher_name?.split(' ').slice(1).join(' ') || '',
+                    }
+                  });
+                  
+                  setShowPaymentModal(true);
+                } else {
+                  const errorData = await priceResponse.json();
+                  alert(errorData.error || getText('Failed to calculate price.', 'فشل حساب السعر.'));
+                }
+              } catch (error) {
+                console.error('Error calculating price:', error);
+                alert(getText('Failed to calculate price. Please try again.', 'فشل حساب السعر. يرجى المحاولة مرة أخرى.'));
+              } finally {
+                setLoadingPrice(false);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching availability details:', error);
+            alert(getText('Failed to load availability details.', 'فشل تحميل تفاصيل التوفر.'));
+          }
+          return;
+        }
+        
+        // For teachers: show edit modal (existing logic)
         // Fetch full availability details to get grades
         try {
           const response = await fetch(getApiEndpoint(`/${block.id}/`), {
@@ -2274,6 +2345,42 @@ const AvailabilityCalendar: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Payment Modal for Students */}
+      {isStudent && showPaymentModal && selectedAvailability && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedAvailability(null);
+            setPaymentAmount(0);
+          }}
+          availability={{
+            id: selectedAvailability.id,
+            date: selectedAvailability.date,
+            start_hour: selectedAvailability.start_hour,
+            end_hour: selectedAvailability.end_hour,
+            title: selectedAvailability.title,
+            teacher: typeof selectedAvailability.teacher === 'object' 
+              ? selectedAvailability.teacher 
+              : {
+                  id: typeof selectedAvailability.teacher === 'number' ? selectedAvailability.teacher : 0,
+                  email: '',
+                  first_name: '',
+                  last_name: '',
+                },
+          }}
+          amount={paymentAmount}
+          currencySymbol={currencySymbol}
+          onPaymentSuccess={() => {
+            // Refresh availabilities after successful payment
+            fetchAvailabilities();
+            setShowPaymentModal(false);
+            setSelectedAvailability(null);
+            setPaymentAmount(0);
+          }}
+        />
       )}
 
       {/* Error Modal */}
