@@ -379,6 +379,78 @@ class WhyChooseUsSection(models.Model):
         return obj
 
 
+class AboutSection(models.Model):
+    title_en = models.CharField(max_length=200, default='About Us')
+    title_ar = models.CharField(max_length=200, default='من نحن')
+    subtitle_en = models.TextField(default='Learn more about our mission and vision')
+    subtitle_ar = models.TextField(default='تعرف على المزيد حول مهمتنا ورؤيتنا')
+    mission_title_en = models.CharField(max_length=200, default='Our Mission')
+    mission_title_ar = models.CharField(max_length=200, default='مهمتنا')
+    mission_content_en = models.TextField(default='We are dedicated to providing quality education and connecting students with expert teachers in a personalized learning environment. Our platform empowers learners to excel in their academic journey through innovative tools and comprehensive resources.')
+    mission_content_ar = models.TextField(default='نحن ملتزمون بتقديم تعليم عالي الجودة وربط الطلاب بالمعلمين الخبراء في بيئة تعليمية مخصصة. تمكّن منصتنا المتعلمين من التفوق في رحلتهم الأكاديمية من خلال أدوات مبتكرة وموارد شاملة.')
+    vision_title_en = models.CharField(max_length=200, default='Our Vision')
+    vision_title_ar = models.CharField(max_length=200, default='رؤيتنا')
+    vision_content_en = models.TextField(default='To become the leading educational platform that transforms how students learn and teachers teach, making quality education accessible to everyone.')
+    vision_content_ar = models.TextField(default='أن نصبح المنصة التعليمية الرائدة التي تحول طريقة تعلم الطلاب وطريقة تدريس المعلمين، مما يجعل التعليم عالي الجودة في متناول الجميع.')
+    why_choose_us_title_en = models.CharField(max_length=200, default='Why Choose Us')
+    why_choose_us_title_ar = models.CharField(max_length=200, default='لماذا تختارنا')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'About Section'
+        verbose_name_plural = 'About Section'
+    
+    def __str__(self):
+        return 'About Section'
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
+class PreviousExamsSection(models.Model):
+    title_en = models.CharField(max_length=200, default='Previous Exams')
+    title_ar = models.CharField(max_length=200, default='الامتحانات السابقة')
+    subtitle_en = models.TextField(default='Prepare for your exams with AI-powered predictions')
+    subtitle_ar = models.TextField(default='استعد لامتحاناتك مع توقعات مدعومة بالذكاء الاصطناعي')
+    available_for_all_title_en = models.CharField(max_length=200, default='Available for All Students')
+    available_for_all_title_ar = models.CharField(max_length=200, default='متاح لجميع الطلاب')
+    available_for_all_content_en = models.TextField(default='Previous exams are available for all grades and university students. After signing up, you will see previous exams in your dashboard that help you prepare well for your upcoming tests.')
+    available_for_all_content_ar = models.TextField(default='الامتحانات السابقة متاحة لجميع الصفوف وطلاب الجامعة. بعد التسجيل، سترى الامتحانات السابقة في لوحة التحكم الخاصة بك والتي تساعدك على الاستعداد جيداً لاختباراتك القادمة.')
+    ai_prediction_title_en = models.CharField(max_length=200, default='AI-Powered Question Prediction (Grade 12 Only)')
+    ai_prediction_title_ar = models.CharField(max_length=200, default='التنبؤ بالأسئلة المدعوم بالذكاء الاصطناعي (الصف الثاني عشر فقط)')
+    ai_prediction_content_en = models.TextField(default='Our advanced AI model is exclusively available for Grade 12 students across all tracks. The AI analyzes past exam patterns and curriculum to predict the most likely questions for all your subjects, helping you get ahead of your exams with intelligent question forecasting tailored to your track.')
+    ai_prediction_content_ar = models.TextField(default='نموذج الذكاء الاصطناعي المتقدم لدينا متاح حصرياً لطلاب الصف الثاني عشر في جميع المسارات. يحلل الذكاء الاصطناعي أنماط الامتحانات السابقة والمنهج الدراسي للتنبؤ بالأسئلة الأكثر احتمالاً لجميع موادك، مما يساعدك على التقدم في امتحاناتك مع التنبؤ الذكي بالأسئلة المصمم خصيصاً لمسارك.')
+    ai_note_en = models.TextField(default='The AI prediction feature is exclusively available for Grade 12 students. All other grades and university students have access to previous exam papers.')
+    ai_note_ar = models.TextField(default='ميزة التنبؤ بالذكاء الاصطناعي متاحة حصرياً لطلاب الصف الثاني عشر. جميع الصفوف الأخرى وطلاب الجامعة لديهم وصول إلى أوراق الامتحانات السابقة.')
+    real_time_practice_title_en = models.CharField(max_length=200, default='Real-Time Exam Practice')
+    real_time_practice_title_ar = models.CharField(max_length=200, default='ممارسة الامتحان في الوقت الفعلي')
+    real_time_practice_content_en = models.TextField(default='Practice with timed exams that simulate real testing conditions. This helps you build confidence, improve time management, and ensures you\'re well-prepared for your actual exam day.')
+    real_time_practice_content_ar = models.TextField(default='تدرب مع امتحانات مؤقتة تحاكي ظروف الاختبار الحقيقية. يساعدك هذا على بناء الثقة وتحسين إدارة الوقت وضمان استعدادك الجيد ليوم الامتحان الفعلي.')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Previous Exams Section'
+        verbose_name_plural = 'Previous Exams Section'
+    
+    def __str__(self):
+        return 'Previous Exams Section'
+    
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class Availability(models.Model):
     """Teacher availability time blocks"""
     COLOR_CHOICES = [

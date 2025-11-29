@@ -2,10 +2,10 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule,
-    TodoList, TodoItem, StudyTimer
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, AboutSection,
+    PreviousExamsSection, Course, Availability, Chapter, Section, Video, Quiz, Question, QuestionOption,
+    PrivateLessonPrice, ContactMessage, StudentTask, StudentNote, Enrollment, MaterialCompletion,
+    QuizAttempt, StudentSchedule, TodoList, TodoItem, StudyTimer
 )
 
 
@@ -239,6 +239,32 @@ class WhyChooseUsSectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = WhyChooseUsSection
         fields = ['title_en', 'title_ar', 'subtitle_en', 'subtitle_ar']
+
+
+class AboutSectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AboutSection
+        fields = [
+            'title_en', 'title_ar', 'subtitle_en', 'subtitle_ar',
+            'mission_title_en', 'mission_title_ar', 'mission_content_en', 'mission_content_ar',
+            'vision_title_en', 'vision_title_ar', 'vision_content_en', 'vision_content_ar',
+            'why_choose_us_title_en', 'why_choose_us_title_ar'
+        ]
+
+
+class PreviousExamsSectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PreviousExamsSection
+        fields = [
+            'title_en', 'title_ar', 'subtitle_en', 'subtitle_ar',
+            'available_for_all_title_en', 'available_for_all_title_ar',
+            'available_for_all_content_en', 'available_for_all_content_ar',
+            'ai_prediction_title_en', 'ai_prediction_title_ar',
+            'ai_prediction_content_en', 'ai_prediction_content_ar',
+            'ai_note_en', 'ai_note_ar',
+            'real_time_practice_title_en', 'real_time_practice_title_ar',
+            'real_time_practice_content_en', 'real_time_practice_content_ar'
+        ]
 
 
 class LoginSerializer(serializers.Serializer):

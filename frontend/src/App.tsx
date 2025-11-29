@@ -41,8 +41,6 @@ const HomePage: React.FC = () => {
             <Hero onSignUpClick={() => setShowSignUp(true)} />
             <Features />
             <WhyChooseUs onSignUpClick={() => setShowSignUp(true)} />
-            <PreviousExams />
-            <About />
           </main>
           <Footer />
         </>
@@ -87,6 +85,8 @@ const App: React.FC = () => {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/previous-exams" element={<PreviousExams />} />
             <Route
               path="/dashboard"
               element={

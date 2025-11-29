@@ -4,7 +4,8 @@ from .views import (
     CountryViewSet, GradeViewSet, TrackViewSet,
     MajorViewSet, SubjectViewSet, UserViewSet, PlatformSettingsViewSet,
     HeroSectionViewSet, FeatureViewSet, FeaturesSectionViewSet,
-    WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet,
+    WhyChooseUsReasonViewSet, WhyChooseUsSectionViewSet, AboutSectionViewSet,
+    PreviousExamsSectionViewSet, CourseViewSet, AdminCourseViewSet, AvailabilityViewSet,
     PrivateLessonPriceViewSet, StudentTaskViewSet, StudentNoteViewSet, StudentScheduleViewSet,
     TodoListViewSet, TodoItemViewSet, StudyTimerViewSet,
     manage_chapter, manage_section, manage_video, manage_section_quiz,
@@ -25,6 +26,8 @@ router.register(r'features', FeatureViewSet, basename='feature')
 router.register(r'features-section', FeaturesSectionViewSet, basename='features-section')
 router.register(r'why-choose-us-reasons', WhyChooseUsReasonViewSet, basename='why-choose-us-reason')
 router.register(r'why-choose-us-section', WhyChooseUsSectionViewSet, basename='why-choose-us-section')
+router.register(r'about-section', AboutSectionViewSet, basename='about-section')
+router.register(r'previous-exams-section', PreviousExamsSectionViewSet, basename='previous-exams-section')
 router.register(r'courses', CourseViewSet, basename='course')
 router.register(r'admin/courses', AdminCourseViewSet, basename='admin-course')
 router.register(r'availabilities', AvailabilityViewSet, basename='availability')

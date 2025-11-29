@@ -1,14 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import Header from './Header';
+import Footer from './Footer';
+
+const API_BASE_URL = 'http://localhost:8000/api';
+
+interface AboutSectionData {
+  title_en: string;
+  title_ar: string;
+  subtitle_en: string;
+  subtitle_ar: string;
+  mission_title_en: string;
+  mission_title_ar: string;
+  mission_content_en: string;
+  mission_content_ar: string;
+  vision_title_en: string;
+  vision_title_ar: string;
+  vision_content_en: string;
+  vision_content_ar: string;
+  why_choose_us_title_en: string;
+  why_choose_us_title_ar: string;
+}
 
 const About: React.FC = () => {
   const { language, platformName } = useLanguage();
+  const [sectionData, setSectionData] = useState<AboutSectionData | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/about-section/current/`)
+      .then(res => res.json())
+      .then(data => setSectionData(data))
+      .catch(err => {
+        console.error('Error fetching about section data:', err);
+      });
+  }, []);
+
+  if (!sectionData) {
+    return (
+      <div className="min-h-screen bg-dark-50 text-gray-100">
+        <Header />
+        <div className="py-20 bg-gradient-to-br from-dark-50 to-dark-100"></div>
+        <Footer />
+      </div>
+    );
+  }
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
   const replacePlatformName = (text: string) => text.replace(/{PLATFORM_NAME}/g, platformName);
 
   return (
-    <section id="about" className="py-20 bg-gradient-to-br from-dark-50 to-dark-100 relative overflow-hidden">
+    <div className="min-h-screen bg-dark-50 text-gray-100">
+      <Header />
+      <section id="about" className="py-20 bg-gradient-to-br from-dark-50 to-dark-100 relative overflow-hidden">
       {/* Background Decoration */}
       <div className="absolute inset-0">
         <div className="absolute top-0 right-0 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl"></div>
@@ -20,14 +63,11 @@ const About: React.FC = () => {
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             <span className="bg-gradient-to-r from-primary-400 to-accent-purple bg-clip-text text-transparent">
-              {getText('About Us', 'من نحن')}
+              {getText(sectionData.title_en, sectionData.title_ar)}
             </span>
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            {getText(
-              'Learn more about our mission and vision',
-              'تعرف على المزيد حول مهمتنا ورؤيتنا'
-            )}
+            {replacePlatformName(getText(sectionData.subtitle_en, sectionData.subtitle_ar))}
           </p>
         </div>
 
@@ -35,28 +75,22 @@ const About: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="bg-dark-200 rounded-2xl p-8 border border-dark-400 hover:border-primary-500/50 transition-all duration-300">
             <h3 className="text-2xl font-semibold text-white mb-4">
-              {getText('Our Mission', 'مهمتنا')}
+              {getText(sectionData.mission_title_en, sectionData.mission_title_ar)}
             </h3>
             <p className="text-gray-400 leading-relaxed mb-6">
-              {getText(
-                'We are dedicated to providing quality education and connecting students with expert teachers in a personalized learning environment. Our platform empowers learners to excel in their academic journey through innovative tools and comprehensive resources.',
-                'نحن ملتزمون بتقديم تعليم عالي الجودة وربط الطلاب بالمعلمين الخبراء في بيئة تعليمية مخصصة. تمكّن منصتنا المتعلمين من التفوق في رحلتهم الأكاديمية من خلال أدوات مبتكرة وموارد شاملة.'
-              )}
+              {replacePlatformName(getText(sectionData.mission_content_en, sectionData.mission_content_ar))}
             </p>
             <h3 className="text-2xl font-semibold text-white mb-4">
-              {getText('Our Vision', 'رؤيتنا')}
+              {getText(sectionData.vision_title_en, sectionData.vision_title_ar)}
             </h3>
             <p className="text-gray-400 leading-relaxed">
-              {getText(
-                'To become the leading educational platform that transforms how students learn and teachers teach, making quality education accessible to everyone.',
-                'أن نصبح المنصة التعليمية الرائدة التي تحول طريقة تعلم الطلاب وطريقة تدريس المعلمين، مما يجعل التعليم عالي الجودة في متناول الجميع.'
-              )}
+              {replacePlatformName(getText(sectionData.vision_content_en, sectionData.vision_content_ar))}
             </p>
           </div>
 
           <div className="bg-dark-200 rounded-2xl p-8 border border-dark-400 hover:border-primary-500/50 transition-all duration-300">
             <h3 className="text-2xl font-semibold text-white mb-4">
-              {getText('Why Choose Us', 'لماذا تختارنا')}
+              {getText(sectionData.why_choose_us_title_en, sectionData.why_choose_us_title_ar)}
             </h3>
             <ul className="space-y-4">
               <li className="flex items-start space-x-3 rtl:space-x-reverse">
@@ -108,6 +142,8 @@ const About: React.FC = () => {
         </div>
       </div>
     </section>
+      <Footer />
+    </div>
   );
 };
 

@@ -1934,10 +1934,175 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ user }) => {
           </div>
         ) : isExamsTab ? (
           <div className="py-6">
-            <div className="bg-dark-100 rounded-xl p-8 border border-dark-300 text-center">
-              <p className="text-gray-400">
-                {getText('Exams functionality coming soon.', 'ميزة الامتحانات قادمة قريباً.')}
-              </p>
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-gradient-to-br from-dark-200 to-dark-300 rounded-2xl p-8 md:p-12 border border-primary-500/30 shadow-xl mb-6">
+                {/* Header */}
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary-500 to-accent-purple rounded-full mb-4 shadow-lg">
+                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                    {getText('Previous Exams', 'الامتحانات السابقة')}
+                  </h3>
+                  <p className="text-lg text-gray-300">
+                    {getText('Prepare well for your exams', 'استعد جيداً لامتحاناتك')}
+                  </p>
+                </div>
+
+                {/* Main Information */}
+                <div className="space-y-6 mb-8">
+                  <div className="bg-dark-100 rounded-xl p-6 border border-dark-400">
+                    <div className="flex items-start space-x-4 rtl:space-x-reverse">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-purple rounded-lg flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xl font-semibold text-white mb-2">
+                          {getText('Available for All Students', 'متاح لجميع الطلاب')}
+                        </h4>
+                        <p className="text-gray-300 leading-relaxed">
+                          {getText(
+                            'Previous exams are available for all grades and university students. Access past exam papers to practice and prepare effectively for your upcoming tests.',
+                            'الامتحانات السابقة متاحة لجميع الصفوف وطلاب الجامعة. الوصول إلى أوراق الامتحانات السابقة للممارسة والتحضير بفعالية لاختباراتك القادمة.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {user.grade === 12 || (user.grade && parseInt(user.grade.toString()) === 12) ? (
+                    <div className="bg-dark-100 rounded-xl p-6 border border-primary-500/50">
+                      <div className="flex items-start space-x-4 rtl:space-x-reverse">
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-purple rounded-lg flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xl font-semibold text-white mb-2">
+                            {getText('AI-Powered Question Prediction (Grade 12 Only)', 'التنبؤ بالأسئلة المدعوم بالذكاء الاصطناعي (الصف الثاني عشر فقط)')}
+                          </h4>
+                          <p className="text-gray-300 leading-relaxed mb-3">
+                            {getText(
+                              'As a Grade 12 student, you have exclusive access to our advanced AI model that predicts exam questions. The AI analyzes past exam patterns and curriculum to forecast the most likely questions for all your subjects, tailored to your track.',
+                              'كطالب في الصف الثاني عشر، لديك وصول حصري إلى نموذج الذكاء الاصطناعي المتقدم لدينا الذي يتنبأ بأسئلة الامتحان. يحلل الذكاء الاصطناعي أنماط الامتحانات السابقة والمنهج الدراسي للتنبؤ بالأسئلة الأكثر احتمالاً لجميع موادك، مصممة خصيصاً لمسارك.'
+                            )}
+                          </p>
+                          <div className="bg-dark-200 rounded-lg p-4 mt-4">
+                            <p className="text-sm text-gray-400">
+                              <strong className="text-primary-400">{getText('Note:', 'ملاحظة:')}</strong>{' '}
+                              {getText(
+                                'The AI prediction feature is exclusively available for Grade 12 students across all tracks.',
+                                'ميزة التنبؤ بالذكاء الاصطناعي متاحة حصرياً لطلاب الصف الثاني عشر في جميع المسارات.'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-dark-100 rounded-xl p-6 border border-dark-400">
+                      <div className="flex items-start space-x-4 rtl:space-x-reverse">
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-purple rounded-lg flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-xl font-semibold text-white mb-2">
+                            {getText('AI Prediction Feature', 'ميزة التنبؤ بالذكاء الاصطناعي')}
+                          </h4>
+                          <p className="text-gray-300 leading-relaxed">
+                            {getText(
+                              'The AI-powered question prediction feature is exclusively available for Grade 12 students. However, you still have access to all previous exam papers to help you prepare well for your exams.',
+                              'ميزة التنبؤ بالأسئلة المدعومة بالذكاء الاصطناعي متاحة حصرياً لطلاب الصف الثاني عشر. ومع ذلك، لا يزال لديك وصول إلى جميع أوراق الامتحانات السابقة لمساعدتك على الاستعداد جيداً لامتحاناتك.'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-dark-100 rounded-xl p-6 border border-dark-400">
+                    <div className="flex items-start space-x-4 rtl:space-x-reverse">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-purple rounded-lg flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-xl font-semibold text-white mb-2">
+                          {getText('Real-Time Exam Practice', 'ممارسة الامتحان في الوقت الفعلي')}
+                        </h4>
+                        <p className="text-gray-300 leading-relaxed">
+                          {getText(
+                            'Practice with timed exams that simulate real testing conditions. This helps you build confidence, improve time management, and ensures you\'re well-prepared for your actual exam day.',
+                            'تدرب مع امتحانات مؤقتة تحاكي ظروف الاختبار الحقيقية. يساعدك هذا على بناء الثقة وتحسين إدارة الوقت وضمان استعدادك الجيد ليوم الامتحان الفعلي.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Benefits List */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="flex items-center space-x-3 rtl:space-x-reverse bg-dark-100 rounded-lg p-4 border border-dark-400">
+                    <svg className="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">
+                      {getText('All grades and university students', 'جميع الصفوف وطلاب الجامعة')}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3 rtl:space-x-reverse bg-dark-100 rounded-lg p-4 border border-dark-400">
+                    <svg className="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">
+                      {getText('Comprehensive exam preparation', 'تحضير شامل للامتحان')}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3 rtl:space-x-reverse bg-dark-100 rounded-lg p-4 border border-dark-400">
+                    <svg className="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">
+                      {getText('Actual exam timing', 'توقيت الامتحان الفعلي')}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3 rtl:space-x-reverse bg-dark-100 rounded-lg p-4 border border-dark-400">
+                    <svg className="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">
+                      {getText('Track-specific content', 'محتوى خاص بالمسار')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Call to Action */}
+                <div className="text-center pt-6 border-t border-dark-400">
+                  <p className="text-gray-300 mb-4">
+                    {getText(
+                      'Start practicing with previous exams to excel in your upcoming tests!',
+                      'ابدأ التدريب مع الامتحانات السابقة للتفوق في اختباراتك القادمة!'
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         ) : isTimerTab ? (

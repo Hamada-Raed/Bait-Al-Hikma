@@ -1,13 +1,60 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import Header from './Header';
+import Footer from './Footer';
+
+const API_BASE_URL = 'http://localhost:8000/api';
+
+interface PreviousExamsSectionData {
+  title_en: string;
+  title_ar: string;
+  subtitle_en: string;
+  subtitle_ar: string;
+  available_for_all_title_en: string;
+  available_for_all_title_ar: string;
+  available_for_all_content_en: string;
+  available_for_all_content_ar: string;
+  ai_prediction_title_en: string;
+  ai_prediction_title_ar: string;
+  ai_prediction_content_en: string;
+  ai_prediction_content_ar: string;
+  ai_note_en: string;
+  ai_note_ar: string;
+  real_time_practice_title_en: string;
+  real_time_practice_title_ar: string;
+  real_time_practice_content_en: string;
+  real_time_practice_content_ar: string;
+}
 
 const PreviousExams: React.FC = () => {
   const { language, platformName } = useLanguage();
+  const [sectionData, setSectionData] = useState<PreviousExamsSectionData | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/previous-exams-section/current/`)
+      .then(res => res.json())
+      .then(data => setSectionData(data))
+      .catch(err => {
+        console.error('Error fetching previous exams section data:', err);
+      });
+  }, []);
+
+  if (!sectionData) {
+    return (
+      <div className="min-h-screen bg-dark-50 text-gray-100">
+        <Header />
+        <div className="py-20 bg-dark-100"></div>
+        <Footer />
+      </div>
+    );
+  }
 
   const getText = (en: string, ar: string) => language === 'ar' ? ar : en;
 
   return (
-    <section id="previous-exams" className="py-20 bg-dark-100 relative overflow-hidden">
+    <div className="min-h-screen bg-dark-50 text-gray-100">
+      <Header />
+      <section id="previous-exams" className="py-20 bg-dark-100 relative overflow-hidden">
       {/* Background Decoration */}
       <div className="absolute inset-0">
         <div className="absolute top-0 left-0 w-96 h-96 bg-primary-500/10 rounded-full blur-3xl"></div>
@@ -19,38 +66,40 @@ const PreviousExams: React.FC = () => {
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
             <span className="bg-gradient-to-r from-primary-400 to-accent-purple bg-clip-text text-transparent">
-              {getText('Previous Exams', 'الامتحانات السابقة')}
+              {getText(sectionData.title_en, sectionData.title_ar)}
             </span>
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            {getText(
-              'Prepare for your exams with AI-powered predictions',
-              'استعد لامتحاناتك مع توقعات مدعومة بالذكاء الاصطناعي'
-            )}
+            {getText(sectionData.subtitle_en, sectionData.subtitle_ar)}
           </p>
         </div>
 
         {/* Main Content Card */}
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-dark-200 to-dark-300 rounded-2xl p-8 md:p-12 border border-primary-500/30 shadow-xl">
-            {/* Grade 12 Highlight */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary-500 to-accent-purple rounded-full mb-4 shadow-lg">
-                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                {getText('Grade 12 Students', 'طلاب الصف الثاني عشر')}
-              </h3>
-              <p className="text-lg text-gray-300 mb-2">
-                {getText('All Tracks', 'جميع المسارات')}
-              </p>
-            </div>
-
-            {/* AI Model Information */}
+            {/* Main Information */}
             <div className="space-y-6 mb-8">
               <div className="bg-dark-100 rounded-xl p-6 border border-dark-400">
+                <div className="flex items-start space-x-4 rtl:space-x-reverse">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-purple rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-xl font-semibold text-white mb-2">
+                      {getText(sectionData.available_for_all_title_en, sectionData.available_for_all_title_ar)}
+                    </h4>
+                    <p className="text-gray-300 leading-relaxed">
+                      {getText(sectionData.available_for_all_content_en, sectionData.available_for_all_content_ar)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-dark-100 rounded-xl p-6 border border-primary-500/50">
                 <div className="flex items-start space-x-4 rtl:space-x-reverse">
                   <div className="flex-shrink-0">
                     <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-accent-purple rounded-lg flex items-center justify-center">
@@ -61,14 +110,17 @@ const PreviousExams: React.FC = () => {
                   </div>
                   <div className="flex-1">
                     <h4 className="text-xl font-semibold text-white mb-2">
-                      {getText('AI-Powered Question Prediction', 'التنبؤ بالأسئلة المدعوم بالذكاء الاصطناعي')}
+                      {getText(sectionData.ai_prediction_title_en, sectionData.ai_prediction_title_ar)}
                     </h4>
-                    <p className="text-gray-300 leading-relaxed">
-                      {getText(
-                        'Our advanced AI model analyzes past exam patterns and curriculum to predict the most likely questions for all your subjects. Get ahead of your exams with intelligent question forecasting tailored to your track.',
-                        'يحلل نموذج الذكاء الاصطناعي المتقدم لدينا أنماط الامتحانات السابقة والمنهج الدراسي للتنبؤ بالأسئلة الأكثر احتمالاً لجميع موادك. تقدم في امتحاناتك مع التنبؤ الذكي بالأسئلة المصمم خصيصاً لمسارك.'
-                      )}
+                    <p className="text-gray-300 leading-relaxed mb-3">
+                      {getText(sectionData.ai_prediction_content_en, sectionData.ai_prediction_content_ar)}
                     </p>
+                    <div className="bg-dark-200 rounded-lg p-4 mt-4">
+                      <p className="text-sm text-gray-400">
+                        <strong className="text-primary-400">{getText('Note:', 'ملاحظة:')}</strong>{' '}
+                        {getText(sectionData.ai_note_en, sectionData.ai_note_ar)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -84,13 +136,10 @@ const PreviousExams: React.FC = () => {
                   </div>
                   <div className="flex-1">
                     <h4 className="text-xl font-semibold text-white mb-2">
-                      {getText('Real-Time Exam Simulation', 'محاكاة الامتحان في الوقت الفعلي')}
+                      {getText(sectionData.real_time_practice_title_en, sectionData.real_time_practice_title_ar)}
                     </h4>
                     <p className="text-gray-300 leading-relaxed">
-                      {getText(
-                        'Test your knowledge with actual exam conditions. Our platform provides timed exams that simulate the real testing environment, helping you build confidence and improve your time management skills. Practice under exam conditions to ensure you\'re well-prepared for the actual test day.',
-                        'اختبر معرفتك في ظروف الامتحان الفعلية. توفر منصتنا امتحانات مؤقتة تحاكي بيئة الاختبار الحقيقية، مما يساعدك على بناء الثقة وتحسين مهارات إدارة الوقت. تدرب في ظروف الامتحان لضمان استعدادك الجيد ليوم الاختبار الفعلي.'
-                      )}
+                      {getText(sectionData.real_time_practice_content_en, sectionData.real_time_practice_content_ar)}
                     </p>
                   </div>
                 </div>
@@ -104,7 +153,7 @@ const PreviousExams: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span className="text-gray-300">
-                  {getText('All subjects covered', 'جميع المواد مغطاة')}
+                  {getText('All grades and university students', 'جميع الصفوف وطلاب الجامعة')}
                 </span>
               </div>
               <div className="flex items-center space-x-3 rtl:space-x-reverse bg-dark-100 rounded-lg p-4 border border-dark-400">
@@ -112,7 +161,7 @@ const PreviousExams: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span className="text-gray-300">
-                  {getText('Track-specific predictions', 'تنبؤات خاصة بالمسار')}
+                  {getText('Comprehensive exam preparation', 'تحضير شامل للامتحان')}
                 </span>
               </div>
               <div className="flex items-center space-x-3 rtl:space-x-reverse bg-dark-100 rounded-lg p-4 border border-dark-400">
@@ -128,7 +177,7 @@ const PreviousExams: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span className="text-gray-300">
-                  {getText('Comprehensive preparation', 'تحضير شامل')}
+                  {getText('Access in your dashboard', 'الوصول من لوحة التحكم')}
                 </span>
               </div>
             </div>
@@ -146,6 +195,8 @@ const PreviousExams: React.FC = () => {
         </div>
       </div>
     </section>
+      <Footer />
+    </div>
   );
 };
 

@@ -18,16 +18,17 @@ from django.http import StreamingHttpResponse, Http404
 from django.conf import settings
 from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    Chapter, Section, Video, Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage,
-    StudentTask, StudentNote, Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule,
-    TodoList, TodoItem, StudyTimer
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, AboutSection,
+    PreviousExamsSection, Course, CourseApprovalRequest, Availability, Chapter, Section, Video,
+    Quiz, Question, QuestionOption, PrivateLessonPrice, ContactMessage, StudentTask, StudentNote,
+    Enrollment, MaterialCompletion, QuizAttempt, StudentSchedule, TodoList, TodoItem, StudyTimer
 )
 from .serializers import (
     CountrySerializer, GradeSerializer, TrackSerializer,
     MajorSerializer, SubjectSerializer, UserSerializer, PlatformSettingsSerializer,
     HeroSectionSerializer, FeatureSerializer, FeaturesSectionSerializer,
-    WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
+    WhyChooseUsReasonSerializer, WhyChooseUsSectionSerializer, AboutSectionSerializer,
+    PreviousExamsSectionSerializer, LoginSerializer, CourseSerializer, AvailabilitySerializer,
     PrivateLessonPriceSerializer, ContactMessageSerializer, StudentTaskSerializer, StudentNoteSerializer,
     StudentScheduleSerializer, TodoListSerializer, TodoItemSerializer, StudyTimerSerializer
 )
@@ -509,6 +510,36 @@ class WhyChooseUsSectionViewSet(viewsets.ReadOnlyModelViewSet):
         section_data = self.get_serializer(section).data
         section_data['reasons'] = WhyChooseUsReasonSerializer(reasons, many=True).data
         return Response(section_data)
+
+
+class AboutSectionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AboutSection.objects.all()
+    serializer_class = AboutSectionSerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        AboutSection.load()
+        return AboutSection.objects.filter(pk=1)
+    
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        section = AboutSection.load()
+        return Response(self.get_serializer(section).data)
+
+
+class PreviousExamsSectionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = PreviousExamsSection.objects.all()
+    serializer_class = PreviousExamsSectionSerializer
+    pagination_class = NoPagination
+    
+    def get_queryset(self):
+        PreviousExamsSection.load()
+        return PreviousExamsSection.objects.filter(pk=1)
+    
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        section = PreviousExamsSection.load()
+        return Response(self.get_serializer(section).data)
 
 
 class CourseViewSet(viewsets.ModelViewSet):

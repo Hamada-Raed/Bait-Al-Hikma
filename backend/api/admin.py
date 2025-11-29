@@ -1,8 +1,9 @@
 from django.contrib import admin
 from .models import (
     Country, Grade, Track, Major, Subject, MajorSubject, User, TeacherSubject, PlatformSettings,
-    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, Course, CourseApprovalRequest, Availability,
-    ContactMessage, Enrollment, MaterialCompletion, QuizAttempt, TodoList, TodoItem, StudyTimer
+    HeroSection, Feature, FeaturesSection, WhyChooseUsReason, WhyChooseUsSection, AboutSection,
+    PreviousExamsSection, Course, CourseApprovalRequest, Availability, ContactMessage, Enrollment,
+    MaterialCompletion, QuizAttempt, TodoList, TodoItem, StudyTimer
 )
 
 
@@ -116,6 +117,62 @@ class WhyChooseUsSectionAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         return not WhyChooseUsSection.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AboutSection)
+class AboutSectionAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'updated_at']
+    
+    fieldsets = (
+        ('Header', {
+            'fields': ('title_en', 'title_ar', 'subtitle_en', 'subtitle_ar')
+        }),
+        ('Mission', {
+            'fields': ('mission_title_en', 'mission_title_ar', 'mission_content_en', 'mission_content_ar')
+        }),
+        ('Vision', {
+            'fields': ('vision_title_en', 'vision_title_ar', 'vision_content_en', 'vision_content_ar')
+        }),
+        ('Why Choose Us', {
+            'fields': ('why_choose_us_title_en', 'why_choose_us_title_ar')
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        return not AboutSection.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PreviousExamsSection)
+class PreviousExamsSectionAdmin(admin.ModelAdmin):
+    list_display = ['title_en', 'updated_at']
+    
+    fieldsets = (
+        ('Header', {
+            'fields': ('title_en', 'title_ar', 'subtitle_en', 'subtitle_ar')
+        }),
+        ('Available for All Students', {
+            'fields': ('available_for_all_title_en', 'available_for_all_title_ar',
+                      'available_for_all_content_en', 'available_for_all_content_ar')
+        }),
+        ('AI Prediction (Grade 12 Only)', {
+            'fields': ('ai_prediction_title_en', 'ai_prediction_title_ar',
+                      'ai_prediction_content_en', 'ai_prediction_content_ar',
+                      'ai_note_en', 'ai_note_ar')
+        }),
+        ('Real-Time Practice', {
+            'fields': ('real_time_practice_title_en', 'real_time_practice_title_ar',
+                      'real_time_practice_content_en', 'real_time_practice_content_ar')
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        return not PreviousExamsSection.objects.exists()
     
     def has_delete_permission(self, request, obj=None):
         return False

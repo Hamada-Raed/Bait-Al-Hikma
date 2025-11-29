@@ -111,18 +111,18 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
             >
               {language === 'ar' ? 'الجلسات' : 'Sessions'}
             </a>
-            <a
-              href="#previous-exams"
+            <button
+              onClick={() => navigate('/previous-exams')}
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
             >
               {language === 'ar' ? 'الامتحانات السابقة' : 'Previous Exams'}
-            </a>
-            <a
-              href="#about"
+            </button>
+            <button
+              onClick={() => navigate('/about')}
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
             >
               {language === 'ar' ? 'من نحن' : 'About us'}
-            </a>
+            </button>
             <button
               onClick={() => navigate('/contact')}
               className="text-gray-300 hover:text-primary-400 transition-colors duration-200 font-medium px-3 py-2 rounded-lg hover:bg-dark-200"
@@ -335,20 +335,24 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
               >
                 {language === 'ar' ? 'الجلسات' : 'Sessions'}
               </a>
-              <a
-                href="#previous-exams"
-                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200"
-                onClick={() => setIsMenuOpen(false)}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  navigate('/previous-exams');
+                }}
+                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200 text-left rtl:text-right w-full"
               >
                 {language === 'ar' ? 'الامتحانات السابقة' : 'Previous Exams'}
-              </a>
-              <a
-                href="#about"
-                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200"
-                onClick={() => setIsMenuOpen(false)}
+              </button>
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  navigate('/about');
+                }}
+                className="text-gray-300 hover:text-primary-400 transition-colors px-4 py-2 rounded-lg hover:bg-dark-200 text-left rtl:text-right w-full"
               >
                 {language === 'ar' ? 'من نحن' : 'About us'}
-              </a>
+              </button>
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
