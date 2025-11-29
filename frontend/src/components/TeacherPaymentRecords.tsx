@@ -72,6 +72,9 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
   const [savingBankInfo, setSavingBankInfo] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     fetchPayments();
@@ -129,9 +132,10 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
         
         if (paymentInfoData) {
           setPaymentInfo(paymentInfoData);
+          // Initialize form with existing data (but NOT account number - security)
           setBankFormData({
             bank_name: paymentInfoData.bank_name || '',
-            account_number: paymentInfoData.account_number || '',
+            account_number: '', // Don't pre-fill account number for security
             account_holder_name: paymentInfoData.account_holder_name || '',
             iban: paymentInfoData.iban || '',
             branch_name: paymentInfoData.branch_name || '',
@@ -155,6 +159,64 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
     }
   };
 
+  const handlePasswordVerify = async () => {
+    const CORRECT_PASSWORD = '111111';
+    if (passwordInput === CORRECT_PASSWORD) {
+      setShowPasswordModal(false);
+      setPasswordInput('');
+      setPasswordError('');
+      
+      // Fetch latest payment info and use the data directly
+      try {
+        const response = await fetch(`${API_BASE_URL}/teacher-payment-info/`, {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const paymentInfoData = Array.isArray(data) ? (data.length > 0 ? data[0] : null) : data;
+          
+          console.log('Fetched payment info for edit:', paymentInfoData);
+          
+          if (paymentInfoData) {
+            // Prepare form data (but NOT account number for security - user must re-enter)
+            const formDataToSet = {
+              bank_name: paymentInfoData.bank_name || '',
+              account_number: '', // Security: Don't pre-fill account number, user must re-enter
+              account_holder_name: paymentInfoData.account_holder_name || '',
+              iban: paymentInfoData.iban || '',
+              branch_name: paymentInfoData.branch_name || '',
+              swift_code: paymentInfoData.swift_code || '',
+            };
+            
+            console.log('Setting form data (account number hidden for security):', {
+              ...formDataToSet,
+              account_number: '***HIDDEN - MUST RE-ENTER***'
+            });
+            
+            // Populate form with existing payment info
+            setBankFormData(formDataToSet);
+            setPaymentInfo(paymentInfoData);
+            
+            // Show the form after data is set
+            // Use setTimeout to ensure state is updated
+            setTimeout(() => {
+              setShowBankForm(true);
+            }, 0);
+          } else {
+            // No data, show empty form
+            setShowBankForm(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching payment info:', error);
+        // Still show form even on error
+        setShowBankForm(true);
+      }
+    } else {
+      setPasswordError(getText('Incorrect code. Please try again.', 'رمز غير صحيح. يرجى المحاولة مرة أخرى.'));
+    }
+  };
+
   const handleSaveBankInfo = async () => {
     // Validate required fields
     if (!bankFormData.bank_name || !bankFormData.bank_name.trim()) {
@@ -162,7 +224,9 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
       setShowSuccessMessage(true);
       return;
     }
-    if (!bankFormData.account_number || !bankFormData.account_number.trim()) {
+    // Account number is required only when creating new payment info
+    // When editing, it's optional (will keep existing if not provided)
+    if (!paymentInfo && (!bankFormData.account_number || !bankFormData.account_number.trim())) {
       setSuccessMessage(getText('Account number is required.', 'رقم الحساب مطلوب.'));
       setShowSuccessMessage(true);
       return;
@@ -182,20 +246,21 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
       // Prepare data - ensure we send all required fields with trimmed values
       const dataToSend: any = {
         bank_name: bankFormData.bank_name.trim(),
-        account_number: bankFormData.account_number.trim().replace(/\s/g, ''), // Remove spaces
         account_holder_name: bankFormData.account_holder_name.trim(),
       };
       
-      // Add optional fields only if they have values
-      if (bankFormData.iban && bankFormData.iban.trim()) {
-        dataToSend.iban = bankFormData.iban.trim();
+      // Only send account_number_encrypted if user provided a value
+      // When editing, if empty, we keep the existing encrypted value
+      if (bankFormData.account_number && bankFormData.account_number.trim()) {
+        dataToSend.account_number_encrypted = bankFormData.account_number.trim().replace(/\s/g, '');
       }
-      if (bankFormData.branch_name && bankFormData.branch_name.trim()) {
-        dataToSend.branch_name = bankFormData.branch_name.trim();
-      }
-      if (bankFormData.swift_code && bankFormData.swift_code.trim()) {
-        dataToSend.swift_code = bankFormData.swift_code.trim();
-      }
+      
+      // Include optional fields - send empty string if cleared, or value if provided
+      dataToSend.iban = bankFormData.iban && bankFormData.iban.trim() ? bankFormData.iban.trim() : '';
+      dataToSend.branch_name = bankFormData.branch_name && bankFormData.branch_name.trim() ? bankFormData.branch_name.trim() : '';
+      dataToSend.swift_code = bankFormData.swift_code && bankFormData.swift_code.trim() ? bankFormData.swift_code.trim() : '';
+
+      console.log('Sending bank info:', dataToSend);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -208,6 +273,9 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
       });
 
       if (response.ok) {
+        const savedData = await response.json();
+        // Update payment info state with saved data
+        setPaymentInfo(savedData);
         // Reload payment info from server to ensure we have the latest data
         await fetchPaymentInfo();
         setShowBankForm(false);
@@ -269,6 +337,66 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
 
   return (
     <div className="space-y-6">
+      {/* Password Verification Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
+          <div className="bg-dark-100 rounded-xl border border-dark-300 p-8 max-w-md w-full mx-4 shadow-2xl transform transition-all">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-500/20 mb-4">
+                <svg className="w-8 h-8 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">
+                {getText('Verification Required', 'التحقق مطلوب')}
+              </h3>
+              <p className="text-gray-300 mb-6">
+                {getText('Please enter the code sent to your email to edit payment information.', 'يرجى إدخال الرمز المرسل إلى بريدك الإلكتروني لتعديل معلومات الدفع.')}
+              </p>
+              <div className="space-y-4">
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setPasswordError('');
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handlePasswordVerify();
+                    }
+                  }}
+                  placeholder={getText('Enter verification code', 'أدخل رمز التحقق')}
+                  className="w-full px-4 py-3 bg-dark-200 border border-dark-300 rounded-lg text-white text-center text-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                  autoFocus
+                />
+                {passwordError && (
+                  <p className="text-red-400 text-sm">{passwordError}</p>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setPasswordInput('');
+                      setPasswordError('');
+                    }}
+                    className="flex-1 px-4 py-3 bg-dark-200 hover:bg-dark-300 text-white rounded-lg transition-colors"
+                  >
+                    {getText('Cancel', 'إلغاء')}
+                  </button>
+                  <button
+                    onClick={handlePasswordVerify}
+                    className="flex-1 px-4 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
+                  >
+                    {getText('Verify', 'التحقق')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Success/Error Message Modal */}
       {showSuccessMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm" onClick={() => setShowSuccessMessage(false)}>
@@ -389,7 +517,28 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
             {getText('Bank Information', 'معلومات البنك')}
           </h3>
           <button
-            onClick={() => setShowBankForm(!showBankForm)}
+            onClick={() => {
+              if (paymentInfo && !showBankForm) {
+                // Show password modal when editing existing info
+                setShowPasswordModal(true);
+                setPasswordInput('');
+                setPasswordError('');
+              } else if (showBankForm && paymentInfo) {
+                // Cancel editing - reset form to current payment info (but NOT account number)
+                setBankFormData({
+                  bank_name: paymentInfo.bank_name || '',
+                  account_number: '', // Don't reset account number for security
+                  account_holder_name: paymentInfo.account_holder_name || '',
+                  iban: paymentInfo.iban || '',
+                  branch_name: paymentInfo.branch_name || '',
+                  swift_code: paymentInfo.swift_code || '',
+                });
+                setShowBankForm(false);
+              } else {
+                // Cancel or Add new
+                setShowBankForm(!showBankForm);
+              }
+            }}
             className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"
           >
             {showBankForm ? getText('Cancel', 'إلغاء') : paymentInfo ? getText('Edit', 'تعديل') : getText('Add', 'إضافة')}
@@ -421,7 +570,8 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
                   onChange={handleAccountNumberChange}
                   maxLength={19} // 16 digits + 3 spaces
                   className="w-full px-3 py-2 bg-dark-200 border border-dark-300 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono tracking-wider"
-                  placeholder={getText('1234 5678 9012 3456', '1234 5678 9012 3456')}
+                  placeholder={paymentInfo ? getText('Re-enter account number for security', 'أعد إدخال رقم الحساب للأمان') : getText('1234 5678 9012 3456', '1234 5678 9012 3456')}
+                  required={!paymentInfo} // Required only when creating new, optional when editing
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   {getText('Format: 4 digits, space, 4 digits, space...', 'التنسيق: 4 أرقام، مسافة، 4 أرقام، مسافة...')}
@@ -489,15 +639,23 @@ const TeacherPaymentRecords: React.FC<TeacherPaymentRecordsProps> = ({ user, get
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-300">
               <div>
                 <span className="text-gray-400">{getText('Bank:', 'البنك:')} </span>
-                <span className="text-white">{paymentInfo.bank_name}</span>
+                <span className="text-white">{paymentInfo.bank_name || '-'}</span>
               </div>
               <div>
                 <span className="text-gray-400">{getText('Account Number:', 'رقم الحساب:')} </span>
-                <span className="text-white">****{paymentInfo.account_number?.slice(-4)}</span>
+                <span className="text-white">
+                  {paymentInfo.account_number && typeof paymentInfo.account_number === 'string'
+                    ? paymentInfo.account_number.startsWith('****')
+                      ? paymentInfo.account_number  // Already masked from backend
+                      : paymentInfo.account_number.length >= 4
+                        ? `****${paymentInfo.account_number.slice(-4)}`
+                        : '****'
+                    : '****'}
+                </span>
               </div>
               <div>
                 <span className="text-gray-400">{getText('Account Holder:', 'صاحب الحساب:')} </span>
-                <span className="text-white">{paymentInfo.account_holder_name}</span>
+                <span className="text-white">{paymentInfo.account_holder_name || '-'}</span>
               </div>
               {paymentInfo.iban && (
                 <div>

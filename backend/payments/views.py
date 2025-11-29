@@ -591,24 +591,60 @@ class TeacherPaymentInfoViewSet(viewsets.ModelViewSet):
             # If exists, update it instead
             # Build update_data with all fields (include existing values for fields not provided)
             update_data = {}
-            # First, copy all existing values
-            for field in ['bank_name', 'account_number', 'account_holder_name', 'iban', 'branch_name', 'swift_code']:
+            # First, copy all existing values (account_number will be handled separately)
+            for field in ['bank_name', 'account_holder_name', 'iban', 'branch_name', 'swift_code']:
                 update_data[field] = getattr(payment_info, field, None)
+            # For account_number, only copy if not being updated (to preserve existing encrypted value)
+            # If updating, new value will come from request.data and will be encrypted
             
             # Then, update with new values from request
             for key, value in request.data.items():
-                if value is not None and str(value).strip():  # Only update with non-empty values
-                    update_data[key] = value.strip() if isinstance(value, str) else value
+                if key in ['bank_name', 'account_number_encrypted', 'account_holder_name', 'iban', 'branch_name', 'swift_code']:
+                    # Handle account_number_encrypted (plain text from frontend)
+                    if key == 'account_number_encrypted':
+                        # Only update if new value provided (frontend sends this when user enters new account number)
+                        if value is not None and value.strip():
+                            update_data['account_number'] = value.strip().replace(' ', '')
+                    # For required fields, always update if provided
+                    elif key in ['bank_name', 'account_holder_name']:
+                        if value is not None:
+                            update_data[key] = value.strip() if isinstance(value, str) else value
+                    # For optional fields, update only if provided
+                    else:
+                        if value is not None:
+                            if isinstance(value, str) and value.strip():
+                                update_data[key] = value.strip()
+                            elif not isinstance(value, str):
+                                update_data[key] = value
+                            # If empty string, set to None (clear the field)
+                            elif isinstance(value, str) and not value.strip():
+                                update_data[key] = None
+            
+            # If account_number is not being updated, preserve existing encrypted value
+            if 'account_number' not in update_data:
+                update_data['account_number'] = payment_info.account_number
             
             serializer = self.get_serializer(payment_info, data=update_data, partial=False)  # Use partial=False to ensure all required fields are validated
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            updated_instance = serializer.save()
+            
+            # Log successful save
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Updated payment info for teacher {request.user.email}: bank_name={updated_instance.bank_name}, account_holder={updated_instance.account_holder_name}, encrypted_account_number length={len(updated_instance.account_number) if updated_instance.account_number else 0}")
+            
             return Response(serializer.data)
         except TeacherPaymentInfo.DoesNotExist:
             # Create new if doesn't exist
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            instance = self.perform_create(serializer)
+            
+            # Log successful creation
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Created payment info for teacher {request.user.email}: bank_name={instance.bank_name}, account_holder={instance.account_holder_name}, encrypted_account_number length={len(instance.account_number) if instance.account_number else 0}")
+            
             headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
@@ -616,7 +652,8 @@ class TeacherPaymentInfoViewSet(viewsets.ModelViewSet):
         """Automatically set teacher to current user"""
         if self.request.user.user_type != 'teacher':
             raise permissions.PermissionDenied("Only teachers can create payment info.")
-        serializer.save(teacher=self.request.user)
+        instance = serializer.save(teacher=self.request.user)
+        return instance
     
     def perform_update(self, serializer):
         """Ensure teacher can only update their own"""

@@ -10,6 +10,8 @@ class TeacherPaymentInfoSerializer(serializers.ModelSerializer):
     """Serializer for teacher bank information"""
     teacher_email = serializers.EmailField(source='teacher.email', read_only=True)
     teacher_name = serializers.SerializerMethodField()
+    account_number = serializers.SerializerMethodField()
+    account_number_encrypted = serializers.CharField(write_only=True, required=False)
     
     class Meta:
         model = TeacherPaymentInfo
@@ -18,12 +20,66 @@ class TeacherPaymentInfoSerializer(serializers.ModelSerializer):
             'bank_name', 'account_number', 'account_holder_name',
             'iban', 'branch_name', 'swift_code',
             'is_verified', 'verified_by', 'verified_at',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'account_number_encrypted'
         ]
         read_only_fields = ['teacher', 'verified_by', 'verified_at', 'created_at', 'updated_at']
     
     def get_teacher_name(self, obj):
         return f"{obj.teacher.first_name} {obj.teacher.last_name}".strip() or obj.teacher.email
+    
+    def get_account_number(self, obj):
+        """Return masked account number for display (never return full number for security)"""
+        # Always return masked - account number should never be shown fully, even to owner
+        # When editing, user must re-enter account number for security
+        masked = obj.get_masked_account_number()
+        return f"****{masked}" if masked else ''
+    
+    def validate(self, attrs):
+        """Handle account_number encryption and validation"""
+        # Check if account_number_encrypted is provided (from frontend)
+        account_number_provided = False
+        if 'account_number_encrypted' in attrs:
+            # Frontend sends plain account number in account_number_encrypted field
+            plain_account_number = attrs.pop('account_number_encrypted')
+            if plain_account_number and plain_account_number.strip():
+                # Will be encrypted in model's save() method
+                attrs['account_number'] = plain_account_number.strip().replace(' ', '')
+                account_number_provided = True
+        elif 'account_number' in attrs:
+            # Direct account_number field (check if it's plain text or already encrypted)
+            if attrs['account_number'] and attrs['account_number'].strip():
+                # Import is_encrypted to check
+                from .encryption import is_encrypted
+                if not is_encrypted(attrs['account_number']):
+                    # Plain text, will be encrypted in model save()
+                    attrs['account_number'] = attrs['account_number'].strip().replace(' ', '')
+                account_number_provided = True
+        
+        # Validate required fields
+        if not self.instance:  # Creating new
+            if not attrs.get('bank_name') or not str(attrs.get('bank_name', '')).strip():
+                raise serializers.ValidationError({'bank_name': "Bank name is required."})
+            if not account_number_provided or not attrs.get('account_number'):
+                raise serializers.ValidationError({'account_number': "Account number is required."})
+            if not attrs.get('account_holder_name') or not str(attrs.get('account_holder_name', '')).strip():
+                raise serializers.ValidationError({'account_holder_name': "Account holder name is required."})
+        else:  # Updating existing
+            # When updating, account_number is optional (if not provided, keep existing encrypted value)
+            # Only validate if account_number is being updated
+            if 'account_number' in attrs:
+                if account_number_provided:
+                    # Account number is being updated - validate it's not empty
+                    if not attrs['account_number'] or not str(attrs['account_number']).strip():
+                        raise serializers.ValidationError({'account_number': "Account number cannot be empty."})
+                # If account_number_provided is False, we'll keep the existing encrypted value
+            
+            # Ensure other required fields are not empty strings when updating
+            if 'bank_name' in attrs and (not attrs['bank_name'] or not str(attrs['bank_name']).strip()):
+                raise serializers.ValidationError({'bank_name': "Bank name cannot be empty."})
+            if 'account_holder_name' in attrs and (not attrs['account_holder_name'] or not str(attrs['account_holder_name']).strip()):
+                raise serializers.ValidationError({'account_holder_name': "Account holder name cannot be empty."})
+        
+        return attrs
     
     def validate_bank_name(self, value):
         """Ensure bank_name is provided and not empty"""
@@ -31,12 +87,6 @@ class TeacherPaymentInfoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Bank name is required.")
         return value.strip()
     
-    def validate_account_number(self, value):
-        """Ensure account_number is provided and not empty"""
-        if not value or not value.strip():
-            raise serializers.ValidationError("Account number is required.")
-        # Remove spaces for storage (frontend formats with spaces)
-        return value.strip().replace(' ', '')
     
     def validate_account_holder_name(self, value):
         """Ensure account_holder_name is provided and not empty"""

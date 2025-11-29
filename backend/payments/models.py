@@ -3,10 +3,10 @@ from django.conf import settings
 from decimal import Decimal
 import uuid
 
-
 # Import User and Availability from api app
 # We need to use get_user_model() for User since it's the custom user model
 from django.contrib.auth import get_user_model
+from .encryption import encrypt_account_number, decrypt_account_number, is_encrypted
 
 User = get_user_model()
 
@@ -74,6 +74,67 @@ class TeacherPaymentInfo(models.Model):
         verbose_name = 'Teacher Payment Information'
         verbose_name_plural = 'Teacher Payment Information'
         ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        """Encrypt account_number before saving if it's plain text"""
+        import logging
+        logger = logging.getLogger(__name__)
+        import re
+        
+        if self.account_number:
+            # Check if already encrypted using our helper function
+            if not is_encrypted(self.account_number):
+                # Additional check: if it looks like plain text account number (all digits or digits with spaces)
+                # Force encryption
+                account_clean = re.sub(r'\s+', '', str(self.account_number))
+                if account_clean.isdigit() or len(account_clean) >= 8:
+                    # This looks like a plain account number - MUST encrypt
+                    try:
+                        logger.warning(f"⚠️ Plain text account number detected! Forcing encryption. Teacher: {self.teacher.email if self.teacher_id else 'N/A'}")
+                        original = self.account_number
+                        self.account_number = encrypt_account_number(self.account_number)
+                        logger.info(f"✓ Account number encrypted successfully. Original length: {len(original)}, Encrypted length: {len(self.account_number)}")
+                        logger.info(f"Encrypted preview: {self.account_number[:50]}...")
+                    except Exception as e:
+                        # If encryption fails, log error and raise - NEVER save unencrypted
+                        logger.error(f"❌ CRITICAL: Failed to encrypt account number: {str(e)}")
+                        raise ValueError("Failed to encrypt account number. Please contact support.")
+                else:
+                    # Doesn't look like plain text, but not encrypted - still encrypt for safety
+                    try:
+                        logger.info(f"Encrypting account number (non-standard format). Teacher: {self.teacher.email if self.teacher_id else 'N/A'}")
+                        original = self.account_number
+                        self.account_number = encrypt_account_number(self.account_number)
+                        logger.info(f"Account number encrypted. Original length: {len(original)}, Encrypted length: {len(self.account_number)}")
+                    except Exception as e:
+                        logger.error(f"Failed to encrypt account number: {str(e)}")
+                        raise ValueError("Failed to encrypt account number. Please contact support.")
+            else:
+                logger.debug(f"Account number already encrypted, skipping encryption. Teacher: {self.teacher.email if self.teacher_id else 'N/A'}")
+        else:
+            # No account number provided - this should only happen if it's optional during update
+            logger.debug(f"No account number to encrypt. Teacher: {self.teacher.email if self.teacher_id else 'N/A'}")
+        
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        if is_new:
+            logger.info(f"✓ NEW payment info SAVED to database - ID: {self.pk}, Teacher: {self.teacher.email}, Bank: {self.bank_name}")
+        else:
+            logger.info(f"✓ UPDATED payment info SAVED to database - ID: {self.pk}, Teacher: {self.teacher.email}, Bank: {self.bank_name}")
+    
+    def get_decrypted_account_number(self):
+        """Get decrypted account number for display/editing"""
+        if self.account_number:
+            return decrypt_account_number(self.account_number)
+        return None
+    
+    def get_masked_account_number(self):
+        """Get last 4 digits for display"""
+        decrypted = self.get_decrypted_account_number()
+        if decrypted and len(decrypted) >= 4:
+            return decrypted[-4:]
+        return None
     
     def __str__(self):
         return f"{self.teacher.email} - {self.bank_name}"

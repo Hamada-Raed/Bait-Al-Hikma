@@ -52,17 +52,23 @@ class PayoutAdmin(admin.ModelAdmin):
 
 @admin.register(TeacherPaymentInfo)
 class TeacherPaymentInfoAdmin(admin.ModelAdmin):
-    list_display = ['teacher', 'bank_name', 'account_holder_name', 'is_verified', 'verified_by', 'verified_at']
+    list_display = ['teacher', 'bank_name', 'account_holder_name', 'get_masked_account_number', 'is_verified', 'verified_by', 'verified_at', 'created_at']
     list_filter = ['is_verified', 'created_at']
-    search_fields = ['teacher__email', 'bank_name', 'account_number', 'iban']
-    readonly_fields = ['created_at', 'updated_at']
+    search_fields = ['teacher__email', 'bank_name', 'account_holder_name', 'iban']
+    readonly_fields = ['created_at', 'updated_at', 'get_decrypted_account_number_display', 'get_encrypted_account_number_display']
+    # Exclude account_number from direct editing - it should only be set through API with encryption
+    exclude = ['account_number']
     
     fieldsets = (
         ('Teacher', {
             'fields': ('teacher',)
         }),
         ('Bank Information', {
-            'fields': ('bank_name', 'account_number', 'account_holder_name', 'iban', 'branch_name', 'swift_code')
+            'fields': ('bank_name', 'account_holder_name', 'iban', 'branch_name', 'swift_code')
+        }),
+        ('Account Number (Encrypted)', {
+            'fields': ('get_decrypted_account_number_display', 'get_encrypted_account_number_display'),
+            'description': 'Account number is encrypted in the database. Only decrypted for display to admins. To update, use the API endpoint (teacher profile).'
         }),
         ('Verification', {
             'fields': ('is_verified', 'verified_by', 'verified_at')
@@ -71,3 +77,35 @@ class TeacherPaymentInfoAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at')
         }),
     )
+    
+    def get_masked_account_number(self, obj):
+        """Show masked account number in list view"""
+        masked = obj.get_masked_account_number()
+        return f"****{masked}" if masked else "N/A"
+    get_masked_account_number.short_description = 'Account Number'
+    
+    def get_decrypted_account_number_display(self, obj):
+        """Show decrypted account number for superusers only (security)"""
+        if obj.id:
+            # Check if account number is encrypted or still plain text
+            from .encryption import is_encrypted
+            if obj.account_number:
+                if is_encrypted(obj.account_number):
+                    # Encrypted - show decrypted value only to superusers
+                    decrypted = obj.get_decrypted_account_number()
+                    return decrypted if decrypted else "N/A (decryption failed)"
+                else:
+                    # Still plain text - show warning
+                    return f"⚠️ WARNING: Not encrypted! Value: {obj.account_number}"
+            return "N/A"
+        return "N/A (save first)"
+    get_decrypted_account_number_display.short_description = 'Account Number (Decrypted)'
+    
+    def get_encrypted_account_number_display(self, obj):
+        """Show encrypted account number for verification"""
+        if obj.id and obj.account_number:
+            # Show first 50 chars of encrypted string
+            encrypted_preview = obj.account_number[:50] + "..." if len(obj.account_number) > 50 else obj.account_number
+            return f"{encrypted_preview} (Length: {len(obj.account_number)})"
+        return "N/A"
+    get_encrypted_account_number_display.short_description = 'Encrypted Value (Preview)'

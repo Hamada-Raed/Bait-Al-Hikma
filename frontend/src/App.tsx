@@ -6,6 +6,8 @@ import Header from './components/Header';
 import Hero from './components/Hero';
 import Features from './components/Features';
 import WhyChooseUs from './components/WhyChooseUs';
+import PreviousExams from './components/PreviousExams';
+import About from './components/About';
 import Footer from './components/Footer';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
@@ -39,6 +41,8 @@ const HomePage: React.FC = () => {
             <Hero onSignUpClick={() => setShowSignUp(true)} />
             <Features />
             <WhyChooseUs onSignUpClick={() => setShowSignUp(true)} />
+            <PreviousExams />
+            <About />
           </main>
           <Footer />
         </>
