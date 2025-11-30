@@ -55,10 +55,7 @@ const Header: React.FC<HeaderProps> = ({ onSignUpClick, onLoginClick }) => {
         <div className="flex items-center justify-between h-20">
           {/* Logo and Platform Name */}
           <button
-            onClick={user ? handleHomeClick : (e) => {
-              e.preventDefault();
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            onClick={handleHomeClick}
             className="flex items-center space-x-3 rtl:space-x-reverse cursor-pointer hover:opacity-80 transition-opacity"
           >
             <div className="flex-shrink-0">
