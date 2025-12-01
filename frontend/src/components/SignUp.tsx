@@ -3,6 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import { ensureCsrfToken } from '../utils/csrf';
 import { validatePassword, getPasswordRequirements, PasswordRequirement } from '../utils/passwordValidation';
+import { validateAge } from '../utils/ageValidation';
 
 interface SignUpProps {
   onBack?: () => void;
@@ -82,6 +83,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
   const [success, setSuccess] = useState(false);
   const [passwordRequirements, setPasswordRequirements] = useState<PasswordRequirement[]>([]);
   const [passwordTouched, setPasswordTouched] = useState(false);
+  const [ageValidation, setAgeValidation] = useState<{ isValid: boolean; message_en?: string; message_ar?: string }>({ isValid: true });
 
   // Fetch lookup data
   useEffect(() => {
@@ -125,6 +127,13 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     }
   }, [formData.country, userType]);
 
+  // Re-validate age when user type changes
+  useEffect(() => {
+    if (formData.birth_date && userType) {
+      setAgeValidation(validateAge(formData.birth_date, userType));
+    }
+  }, [userType, formData.birth_date]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -133,6 +142,11 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     // Update password requirements when password changes
     if (name === 'password') {
       setPasswordRequirements(getPasswordRequirements(value));
+    }
+
+    // Update age validation when birth date changes
+    if (name === 'birth_date') {
+      setAgeValidation(validateAge(value, userType));
     }
   };
 
@@ -176,6 +190,13 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     const passwordValidation = validatePassword(formData.password);
     if (!passwordValidation.isValid) {
       setError(passwordValidation.error || 'Password is not strong enough');
+      return false;
+    }
+
+    // Validate age requirements
+    const currentAgeValidation = validateAge(formData.birth_date, userType);
+    if (!currentAgeValidation.isValid) {
+      setError(language === 'ar' ? currentAgeValidation.message_ar! : currentAgeValidation.message_en!);
       return false;
     }
 
@@ -528,9 +549,23 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                       name="birth_date"
                       value={formData.birth_date}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                      className={`w-full px-4 py-3 bg-dark-300 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${formData.birth_date && !ageValidation.isValid
+                          ? 'border-red-500'
+                          : 'border-dark-400'
+                        }`}
                       required
                     />
+                    {/* Age Validation Message */}
+                    {formData.birth_date && !ageValidation.isValid && (
+                      <div className="mt-2 flex items-start space-x-2 rtl:space-x-reverse">
+                        <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <p className="text-red-400 text-sm">
+                          {language === 'ar' ? ageValidation.message_ar : ageValidation.message_en}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-gray-300 mb-2">{t('signup.country')}</label>
