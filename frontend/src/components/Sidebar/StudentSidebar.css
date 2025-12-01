@@ -1,0 +1,317 @@
+/* ============================================
+   STUDENT SIDEBAR - DARK THEME DESIGN
+   ============================================ */
+
+.student-sidebar {
+    width: 280px;
+    min-width: 280px;
+    height: 100vh;
+    background: #1f1f1f;
+    /* dark-100 */
+    border-right: 1px solid #333333;
+    /* dark-300 */
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+    transition: all 0.3s ease;
+}
+
+.student-sidebar.rtl {
+    border-right: none;
+    border-left: 1px solid #333333;
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    padding: 25px 20px;
+    border-bottom: 1px solid #333333;
+    /* dark-300 */
+    background: #1a1a1a;
+    /* dark-50 */
+}
+
+.sidebar-title {
+    font-size: 24px;
+    font-weight: 800;
+    color: #f3f4f6;
+    /* gray-100 */
+    margin: 0;
+    background: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Sidebar Navigation */
+.sidebar-nav {
+    flex: 1;
+    padding: 15px 0;
+}
+
+/* Section Button */
+.sidebar-section {
+    margin-bottom: 8px;
+}
+
+.sidebar-section-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    /* gray-400 */
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    text-align: left;
+}
+
+.student-sidebar.rtl .sidebar-section-btn {
+    text-align: right;
+}
+
+.sidebar-section-btn::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.student-sidebar.rtl .sidebar-section-btn::before {
+    left: auto;
+    right: 0;
+}
+
+.sidebar-section-btn:hover {
+    background: #2a2a2a;
+    /* dark-200 */
+    color: #f3f4f6;
+    /* gray-100 */
+}
+
+.sidebar-section-btn.active {
+    background: #2a2a2a;
+    /* dark-200 */
+    color: #38bdf8;
+    /* primary-400 */
+}
+
+.sidebar-section-btn.active::before {
+    opacity: 1;
+}
+
+.section-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.section-label {
+    flex: 1;
+}
+
+.expand-icon {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+    color: #6b7280;
+    /* gray-500 */
+}
+
+.expand-icon.expanded {
+    transform: rotate(0deg);
+}
+
+.student-sidebar.rtl .expand-icon {
+    transform: rotate(180deg);
+}
+
+.student-sidebar.rtl .expand-icon.expanded {
+    transform: rotate(180deg);
+}
+
+/* Submenu */
+.sidebar-submenu {
+    background: #1a1a1a;
+    /* dark-50 */
+    padding: 8px 0;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+
+    to {
+        opacity: 1;
+        max-height: 500px;
+    }
+}
+
+.sidebar-submenu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px 12px 52px;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    /* gray-400 */
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    position: relative;
+}
+
+.student-sidebar.rtl .sidebar-submenu-item {
+    padding: 12px 52px 12px 20px;
+    text-align: right;
+}
+
+.sidebar-submenu-item::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #6b7280;
+    /* gray-500 */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.student-sidebar.rtl .sidebar-submenu-item::before {
+    left: auto;
+    right: 20px;
+}
+
+.sidebar-submenu-item:hover {
+    background: #2a2a2a;
+    /* dark-200 */
+    color: #f3f4f6;
+    /* gray-100 */
+    padding-left: 56px;
+}
+
+.student-sidebar.rtl .sidebar-submenu-item:hover {
+    padding-left: 20px;
+    padding-right: 56px;
+}
+
+.sidebar-submenu-item:hover::before {
+    opacity: 1;
+}
+
+.sidebar-submenu-item.active {
+    background: rgba(14, 165, 233, 0.15);
+    /* primary-500 with opacity */
+    color: #38bdf8;
+    /* primary-400 */
+    padding-left: 56px;
+    border-left: 3px solid #0ea5e9;
+    /* primary-500 */
+}
+
+.student-sidebar.rtl .sidebar-submenu-item.active {
+    padding-left: 20px;
+    padding-right: 56px;
+    border-left: none;
+    border-right: 3px solid #0ea5e9;
+}
+
+.sidebar-submenu-item.active::before {
+    opacity: 1;
+    background: #0ea5e9;
+    /* primary-500 */
+}
+
+.submenu-icon {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.submenu-label {
+    flex: 1;
+}
+
+/* Scrollbar Styling */
+.student-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.student-sidebar::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    /* dark-50 */
+}
+
+.student-sidebar::-webkit-scrollbar-thumb {
+    background: #333333;
+    /* dark-300 */
+    border-radius: 3px;
+}
+
+.student-sidebar::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+    /* gray-600 */
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .student-sidebar {
+        width: 70px;
+        min-width: 70px;
+    }
+
+    .sidebar-title,
+    .section-label,
+    .submenu-label,
+    .expand-icon {
+        display: none;
+    }
+
+    .sidebar-section-btn,
+    .sidebar-submenu-item {
+        justify-content: center;
+        padding: 14px 10px;
+    }
+
+    .sidebar-submenu {
+        position: absolute;
+        left: 70px;
+        background: #1f1f1f;
+        border: 1px solid #333333;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        min-width: 200px;
+    }
+
+    .student-sidebar.rtl .sidebar-submenu {
+        left: auto;
+        right: 70px;
+    }
+
+    .sidebar-submenu .submenu-label {
+        display: block;
+    }
+}
