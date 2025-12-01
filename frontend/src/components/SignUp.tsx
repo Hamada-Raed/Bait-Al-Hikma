@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import { ensureCsrfToken } from '../utils/csrf';
+import { validatePassword, getPasswordRequirements, PasswordRequirement } from '../utils/passwordValidation';
 
 interface SignUpProps {
   onBack?: () => void;
@@ -50,7 +51,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [userType, setUserType] = useState<'school_student' | 'university_student' | 'teacher' | null>(null);
-  
+
   // Form data
   const [formData, setFormData] = useState({
     username: '',
@@ -79,6 +80,8 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [passwordRequirements, setPasswordRequirements] = useState<PasswordRequirement[]>([]);
+  const [passwordTouched, setPasswordTouched] = useState(false);
 
   // Fetch lookup data
   useEffect(() => {
@@ -126,6 +129,15 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setError('');
+
+    // Update password requirements when password changes
+    if (name === 'password') {
+      setPasswordRequirements(getPasswordRequirements(value));
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    setPasswordTouched(true);
   };
 
   const handleSubjectToggle = (subjectId: number) => {
@@ -146,20 +158,27 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
   };
 
   const validateStep2 = () => {
-    if (!formData.first_name || !formData.last_name || !formData.email || 
-        !formData.password || !formData.password_confirm || !formData.birth_date || !formData.country) {
+    if (!formData.first_name || !formData.last_name || !formData.email ||
+      !formData.password || !formData.password_confirm || !formData.birth_date || !formData.country) {
       setError(t('signup.required'));
       return false;
     }
-    
+
     // Email validation for university students - must end with .edu
     if (userType === 'university_student' && !formData.email.toLowerCase().endsWith('.edu')) {
-      setError(language === 'ar' 
+      setError(language === 'ar'
         ? 'يجب أن ينتهي البريد الإلكتروني بـ .edu للطلاب الجامعيين'
         : 'Email must end with .edu for university students');
       return false;
     }
-    
+
+    // Validate password strength using Zod
+    const passwordValidation = validatePassword(formData.password);
+    if (!passwordValidation.isValid) {
+      setError(passwordValidation.error || 'Password is not strong enough');
+      return false;
+    }
+
     if (formData.password !== formData.password_confirm) {
       setError(t('signup.passwordMismatch'));
       return false;
@@ -231,7 +250,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     try {
       // Get CSRF token before making POST request
       const csrfToken = await ensureCsrfToken();
-      
+
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
@@ -262,7 +281,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
     }
   };
 
-  const showTrackField = userType === 'school_student' && formData.grade && 
+  const showTrackField = userType === 'school_student' && formData.grade &&
     (parseInt(formData.grade) === 11 || parseInt(formData.grade) === 12);
 
   const getName = (item: Country | Grade | Track | Major | Subject) => {
@@ -343,9 +362,8 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
               {[1, 2, 3].map((s) => (
                 <React.Fragment key={s}>
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                    step >= s ? 'bg-primary-500 text-white' : 'bg-dark-300 text-gray-400'
-                  }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${step >= s ? 'bg-primary-500 text-white' : 'bg-dark-300 text-gray-400'
+                    }`}>
                     {s}
                   </div>
                   {s < 3 && (
@@ -374,11 +392,10 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                         setUserType(type.value as any);
                         setError('');
                       }}
-                      className={`p-6 rounded-xl border-2 transition-all ${
-                        userType === type.value
-                          ? 'border-primary-500 bg-primary-500/10'
-                          : 'border-dark-400 hover:border-primary-500/50'
-                      }`}
+                      className={`p-6 rounded-xl border-2 transition-all ${userType === type.value
+                        ? 'border-primary-500 bg-primary-500/10'
+                        : 'border-dark-400 hover:border-primary-500/50'
+                        }`}
                     >
                       <div className="text-4xl mb-2">{type.icon}</div>
                       <div className="text-white font-medium">{type.label}</div>
@@ -424,35 +441,34 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                     />
                   </div>
                 </div>
-                  <div>
-                    <label className="block text-gray-300 mb-2">
-                      {t('signup.email')}
-                      {userType === 'university_student' && (
-                        <span className="text-yellow-400 text-xs ml-2 rtl:mr-2">
-                          ({language === 'ar' ? 'يجب أن ينتهي بـ .edu' : 'must end with .edu'})
-                        </span>
-                      )}
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className={`w-full px-4 py-3 bg-dark-300 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${
-                        userType === 'university_student' && formData.email && !formData.email.toLowerCase().endsWith('.edu')
-                          ? 'border-red-500'
-                          : 'border-dark-400'
-                      }`}
-                      required
-                    />
-                    {userType === 'university_student' && formData.email && !formData.email.toLowerCase().endsWith('.edu') && (
-                      <p className="text-red-400 text-xs mt-1">
-                        {language === 'ar' 
-                          ? 'يجب أن ينتهي البريد الإلكتروني بـ .edu للطلاب الجامعيين'
-                          : 'Email must end with .edu for university students'}
-                      </p>
+                <div>
+                  <label className="block text-gray-300 mb-2">
+                    {t('signup.email')}
+                    {userType === 'university_student' && (
+                      <span className="text-yellow-400 text-xs ml-2 rtl:mr-2">
+                        ({language === 'ar' ? 'يجب أن ينتهي بـ .edu' : 'must end with .edu'})
+                      </span>
                     )}
-                  </div>
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 bg-dark-300 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${userType === 'university_student' && formData.email && !formData.email.toLowerCase().endsWith('.edu')
+                      ? 'border-red-500'
+                      : 'border-dark-400'
+                      }`}
+                    required
+                  />
+                  {userType === 'university_student' && formData.email && !formData.email.toLowerCase().endsWith('.edu') && (
+                    <p className="text-red-400 text-xs mt-1">
+                      {language === 'ar'
+                        ? 'يجب أن ينتهي البريد الإلكتروني بـ .edu للطلاب الجامعيين'
+                        : 'Email must end with .edu for university students'}
+                    </p>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-300 mb-2">{t('signup.password')}</label>
@@ -461,9 +477,36 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                       name="password"
                       value={formData.password}
                       onChange={handleInputChange}
+                      onBlur={handlePasswordBlur}
                       className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
                       required
                     />
+                    {/* Password Requirements Indicator */}
+                    {(passwordTouched || formData.password) && (
+                      <div className="mt-3 p-3 bg-dark-300 rounded-lg border border-dark-400">
+                        <div className="text-sm text-gray-400 mb-2 font-medium">
+                          {language === 'ar' ? 'متطلبات كلمة المرور:' : 'Password Requirements:'}
+                        </div>
+                        <div className="space-y-1">
+                          {passwordRequirements.map((req, index) => (
+                            <div key={index} className="flex items-center space-x-2 rtl:space-x-reverse text-sm">
+                              {req.met ? (
+                                <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                              ) : (
+                                <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              <span className={req.met ? 'text-green-500' : 'text-red-400'}>
+                                {language === 'ar' ? req.message_ar : req.message_en}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-gray-300 mb-2">{t('signup.passwordConfirm')}</label>
@@ -531,7 +574,7 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
             {step === 3 && (
               <div className="space-y-6">
                 <h2 className="text-xl font-semibold text-white mb-4">{t('signup.step3')}</h2>
-                
+
                 {userType === 'school_student' && (
                   <>
                     <div>
