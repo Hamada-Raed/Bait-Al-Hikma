@@ -14,13 +14,17 @@ class Command(BaseCommand):
             defaults={
                 'name_en': 'Palestine',
                 'name_ar': 'فلسطين',
+                'phone_code': '+972',
+                'flag': '🇵🇸',
                 'currency_code': 'ILS',
                 'currency_symbol': 'شيكل',  # Shekel in Arabic/Hebrew
                 'currency_name_en': 'Shakel'  # Shekel in English
             }
         )
-        # Update currency if country already exists
+        # Update currency, phone code, and flag if country already exists
         if not _:
+            palestine.phone_code = '+972'
+            palestine.flag = '🇵🇸'
             palestine.currency_code = 'ILS'
             palestine.currency_symbol = 'شيكل'  # Shekel in Arabic/Hebrew
             palestine.currency_name_en = 'Shakel'  # Shekel in English
@@ -31,13 +35,17 @@ class Command(BaseCommand):
             defaults={
                 'name_en': 'Jordan',
                 'name_ar': 'الأردن',
+                'phone_code': '+962',
+                'flag': '🇯🇴',
                 'currency_code': 'JOD',
                 'currency_symbol': 'د.أ',
                 'currency_name_en': 'Dinar'
             }
         )
-        # Update currency if country already exists
+        # Update currency, phone code, and flag if country already exists
         if not _:
+            jordan.phone_code = '+962'
+            jordan.flag = '🇯🇴'
             jordan.currency_code = 'JOD'
             jordan.currency_symbol = 'د.أ'
             jordan.currency_name_en = 'Dinar'

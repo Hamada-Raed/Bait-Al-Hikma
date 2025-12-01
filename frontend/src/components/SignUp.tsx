@@ -14,6 +14,8 @@ interface Country {
   name_en: string;
   name_ar: string;
   code: string;
+  phone_code: string;
+  flag: string;
 }
 
 interface Grade {
@@ -136,7 +138,29 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Handle phone number input - only allow numbers (no + needed as it's in the prefix box)
+    if (name === 'phone_number') {
+      // Allow only numbers
+      const cleaned = value.replace(/[^0-9]/g, '');
+      setFormData(prev => ({ ...prev, [name]: cleaned }));
+    } else if (name === 'country') {
+      // When country changes, just update the country
+      // We don't update the phone number field anymore as the code is displayed separately
+      setFormData(prev => ({ ...prev, [name]: value }));
+
+      const selectedCountry = countries.find(c => c.id === parseInt(value));
+      console.log('Country changed:', { selectedCountry, userType });
+    } else if (name === 'bio') {
+      // Validate bio word count (max 150 words)
+      const words = value.trim().split(/\s+/).filter(word => word.length > 0);
+      if (words.length <= 150) {
+        setFormData(prev => ({ ...prev, [name]: value }));
+      }
+      // If more than 150 words, don't update (silently reject)
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
     setError('');
 
     // Update password requirements when password changes
@@ -261,7 +285,10 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
       submitData.years_of_experience = parseInt(formData.years_of_experience);
       submitData.subjects = formData.subjects;
       if (formData.phone_number) {
-        submitData.phone_number = formData.phone_number;
+        // Combine country code and phone number
+        const selectedCountry = countries.find(c => c.id === parseInt(formData.country));
+        const phoneCode = selectedCountry?.phone_code || '';
+        submitData.phone_number = phoneCode + formData.phone_number;
       }
       if (formData.bio) {
         submitData.bio = formData.bio;
@@ -550,8 +577,8 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                       value={formData.birth_date}
                       onChange={handleInputChange}
                       className={`w-full px-4 py-3 bg-dark-300 border rounded-lg text-white focus:outline-none focus:border-primary-500 ${formData.birth_date && !ageValidation.isValid
-                          ? 'border-red-500'
-                          : 'border-dark-400'
+                        ? 'border-red-500'
+                        : 'border-dark-400'
                         }`}
                       required
                     />
@@ -689,14 +716,28 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                       <label className="block text-gray-300 mb-2">
                         {getText('Phone Number', 'رقم الهاتف')}
                       </label>
-                      <input
-                        type="tel"
-                        name="phone_number"
-                        value={formData.phone_number}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                        placeholder={getText('Enter phone number', 'أدخل رقم الهاتف')}
-                      />
+                      <div className="flex items-center gap-2">
+                        {/* Country Code Display with Flag */}
+                        {formData.country && countries.find(c => c.id === parseInt(formData.country)) && (
+                          <div className="flex items-center gap-2 px-4 py-3 bg-dark-400 border border-dark-500 rounded-lg">
+                            <span className="text-2xl">
+                              {countries.find(c => c.id === parseInt(formData.country))?.flag || '🏳️'}
+                            </span>
+                            <span className="text-white font-medium">
+                              {countries.find(c => c.id === parseInt(formData.country))?.phone_code || '+1'}
+                            </span>
+                          </div>
+                        )}
+                        {/* Phone Number Input */}
+                        <input
+                          type="tel"
+                          name="phone_number"
+                          value={formData.phone_number}
+                          onChange={handleInputChange}
+                          className="flex-1 px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                          placeholder={getText('Enter phone number', 'أدخل رقم الهاتف')}
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-gray-300 mb-2">
@@ -710,6 +751,14 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
                         className="w-full px-4 py-3 bg-dark-300 border border-dark-400 rounded-lg text-white focus:outline-none focus:border-primary-500"
                         placeholder={getText('Tell us about yourself...', 'أخبرنا عن نفسك...')}
                       />
+                      <div className="mt-1 text-right">
+                        <span className={`text-xs ${formData.bio.trim().split(/\s+/).filter(w => w.length > 0).length > 150
+                          ? 'text-red-400'
+                          : 'text-gray-400'
+                          }`}>
+                          {formData.bio.trim().split(/\s+/).filter(w => w.length > 0).length}/150 {getText('words', 'كلمة')}
+                        </span>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-gray-300 mb-2">{t('signup.subjects')}</label>
@@ -767,8 +816,8 @@ const SignUp: React.FC<SignUpProps> = ({ onBack }) => {
             </p>
           </div>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 

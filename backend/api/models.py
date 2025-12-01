@@ -5,6 +5,8 @@ class Country(models.Model):
     name_en = models.CharField(max_length=100)
     name_ar = models.CharField(max_length=100)
     code = models.CharField(max_length=3, unique=True)
+    phone_code = models.CharField(max_length=10, default='+1', help_text='Phone country code (e.g., +972, +962)')
+    flag = models.CharField(max_length=10, default='🏳️', help_text='Country flag emoji (e.g., 🇵🇸, 🇯🇴)')
     currency_code = models.CharField(max_length=3, default='USD', help_text='ISO 4217 currency code')
     currency_symbol = models.CharField(max_length=10, default='$', help_text='Currency symbol or Arabic name (e.g., "شيكل")')
     currency_name_en = models.CharField(max_length=50, blank=True, null=True, help_text='Currency name in English (e.g., "Shakel", "Dinar")')

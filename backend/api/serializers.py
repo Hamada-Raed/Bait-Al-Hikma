@@ -126,7 +126,7 @@ class SubjectIdsListField(serializers.ListField):
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
-        fields = ['id', 'name_en', 'name_ar', 'code', 'currency_code', 'currency_symbol', 'currency_name_en']
+        fields = ['id', 'name_en', 'name_ar', 'code', 'phone_code', 'flag', 'currency_code', 'currency_symbol', 'currency_name_en']
 
 
 class GradeSerializer(serializers.ModelSerializer):
