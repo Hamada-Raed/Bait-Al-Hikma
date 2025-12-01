@@ -78,7 +78,7 @@ const Dashboard: React.FC = () => {
       <Header />
 
       {/* Dashboard Content */}
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${user.user_type === 'teacher' || user.is_staff ? '' : 'py-8'}`}>
+      <main className={`max-w-9xl mx-auto px-4 sm:px-6 lg:px-8 ${user.user_type === 'teacher' || user.is_staff ? '' : 'py-8'}`}>
         {user.is_staff || user.is_superuser ? (
           <AdminDashboard />
         ) : user.user_type === 'school_student' || user.user_type === 'university_student' ? (
