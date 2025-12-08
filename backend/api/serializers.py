@@ -346,6 +346,25 @@ class UserSerializer(serializers.ModelSerializer):
                 return pricing_list
         return []
     
+    def to_internal_value(self, data):
+        """
+        Convert 'subjects' field to 'subjects_ids' if present in the incoming data.
+        This handles the case where the frontend sends 'subjects' instead of 'subjects_ids'.
+        """
+        # Make a mutable copy of the data if it's a QueryDict
+        if hasattr(data, '_mutable'):
+            data._mutable = True
+        
+        # If 'subjects' is present but 'subjects_ids' is not, copy it over
+        if 'subjects' in data and 'subjects_ids' not in data:
+            # Handle both dict and QueryDict
+            if hasattr(data, 'getlist'):
+                data['subjects_ids'] = data.getlist('subjects')
+            else:
+                data['subjects_ids'] = data.get('subjects')
+        
+        return super().to_internal_value(data)
+    
     def validate(self, attrs):
         # Only validate password match if both are provided (for signup)
         if 'password' in attrs and 'password_confirm' in attrs:
